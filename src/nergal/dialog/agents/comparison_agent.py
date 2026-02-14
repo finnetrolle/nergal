@@ -8,14 +8,16 @@ import json
 import logging
 from typing import Any
 
-from nergal.dialog.base import AgentResult, AgentType, BaseAgent
+from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
+from nergal.dialog.constants import COMPARISON_KEYWORDS
+from nergal.dialog.base import AgentResult, AgentType
 from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage, MessageRole
 
 logger = logging.getLogger(__name__)
 
 
-class ComparisonAgent(BaseAgent):
+class ComparisonAgent(BaseSpecializedAgent):
     """Agent for structured comparison of alternatives.
     
     This agent creates comparison matrices, evaluates options
@@ -28,12 +30,12 @@ class ComparisonAgent(BaseAgent):
     - Weighted scoring of alternatives
     """
     
-    # Comparison keywords
-    COMPARISON_KEYWORDS = [
-        "сравни", "разница", "отличия", "против", "vs", "или",
-        "что лучше", "какой выбрать", "преимущества", "недостатки",
-        "плюсы", "минусы", "за и против", "выбрать между",
-    ]
+    # Configure base class behavior
+    _keywords = COMPARISON_KEYWORDS
+    _context_keys = ["search_results", "previous_step_output"]
+    _base_confidence = 0.3
+    _keyword_boost = 0.2
+    _context_boost = 0.2
     
     def __init__(
         self,
@@ -98,7 +100,7 @@ class ComparisonAgent(BaseAgent):
     async def can_handle(self, message: str, context: dict[str, Any]) -> float:
         """Determine if this agent can handle the message.
         
-        Higher confidence for comparison requests.
+        Extends base class logic with additional pattern matching.
         
         Args:
             message: User message to analyze.
@@ -107,22 +109,20 @@ class ComparisonAgent(BaseAgent):
         Returns:
             Confidence score (0.0 to 1.0).
         """
-        message_lower = message.lower()
+        # Use base class keyword matching
+        confidence = await super().can_handle(message, context)
         
-        # Check for comparison keywords
-        for keyword in self.COMPARISON_KEYWORDS:
-            if keyword in message_lower:
-                return 0.9
+        message_lower = message.lower()
         
         # Check for "or" patterns indicating choice
         if " или " in message_lower and "?" in message:
-            return 0.8
+            confidence = max(confidence, 0.8)
         
         # Check for vs pattern
         if " vs " in message_lower or " vs. " in message_lower:
-            return 0.9
+            confidence = max(confidence, 0.9)
         
-        return 0.2
+        return confidence
     
     async def process(
         self,

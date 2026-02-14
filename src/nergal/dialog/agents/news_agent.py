@@ -10,7 +10,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from nergal.dialog.base import AgentResult, AgentType, BaseAgent
+from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
+from nergal.dialog.constants import NEWS_KEYWORDS, CREDIBLE_SOURCES, SOURCE_BIAS
+from nergal.dialog.base import AgentResult, AgentType
 from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage, MessageRole
 
@@ -55,7 +57,7 @@ class NewsCluster:
     summary: str = ""
 
 
-class NewsAgent(BaseAgent):
+class NewsAgent(BaseSpecializedAgent):
     """Agent for aggregating and processing news from multiple sources.
     
     This agent specializes in:
@@ -72,38 +74,12 @@ class NewsAgent(BaseAgent):
     - Event timeline construction
     """
     
-    # News-related keywords
-    NEWS_KEYWORDS = [
-        "новости", "пресса", "сми", "газета", "журнал",
-        "news", "press", "media", "newspaper", "journal",
-        "сообщается", "источники", "репортаж", "корреспондент",
-        "reported", "sources", "coverage", "breaking",
-        "заявил", "объявил", "опубликовал", "анонс",
-        "announced", "stated", "published", "revealed",
-        "скандал", "событие", "происшествие", "чрезвычайное",
-        "scandal", "event", "incident", "emergency",
-        "политика", "экономика", "финансы", "технологии",
-        "politics", "economy", "finance", "technology",
-    ]
-    
-    # High-credibility source patterns
-    CREDIBLE_SOURCES = [
-        "reuters", "associated press", "bbc", "the guardian",
-        "the new york times", "washington post", "the economist",
-        "bloomberg", "financial times", "the wall street journal",
-        "nature", "science", "the lancet",
-        "тасс", "риа новости", "интерфакс", "коммерсант",
-        "ведомости", "рбк", "медуза", "дождь",
-    ]
-    
-    # Source categories by bias tendency
-    SOURCE_BIAS = {
-        "left": ["the guardian", "the new york times", "cnn", "msnbc", "huffpost"],
-        "center": ["reuters", "associated press", "bbc", "the economist", "bloomberg"],
-        "right": ["fox news", "the wall street journal", "breitbart", "daily mail"],
-        "russia_state": ["тасс", "риа новости", "россия сегодня"],
-        "russia_independent": ["медуза", "дождь", "новая газета", "коммерсант"],
-    }
+    # Configure base class behavior - use centralized constants
+    _keywords = NEWS_KEYWORDS
+    _context_keys = ["search_results", "sources"]
+    _base_confidence = 0.25
+    _keyword_boost = 0.2
+    _context_boost = 0.35
     
     def __init__(
         self,

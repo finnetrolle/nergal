@@ -7,14 +7,16 @@ key points, and adapts detail level to user needs.
 import logging
 from typing import Any
 
-from nergal.dialog.base import AgentResult, AgentType, BaseAgent
+from nergal.dialog.agents.base_specialized import ContextAwareAgent
+from nergal.dialog.constants import SUMMARY_KEYWORDS
+from nergal.dialog.base import AgentResult, AgentType
 from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage, MessageRole
 
 logger = logging.getLogger(__name__)
 
 
-class SummaryAgent(BaseAgent):
+class SummaryAgent(ContextAwareAgent):
     """Agent for summarizing and condensing information.
     
     This agent creates TL;DR summaries, extracts key points,
@@ -27,12 +29,12 @@ class SummaryAgent(BaseAgent):
     - Adjust detail level
     """
     
-    # Summary-related keywords
-    SUMMARY_KEYWORDS = [
-        "кратко", "сократи", "резюме", "суть", "главное",
-        "основное", "tldr", "tl;dr", "summary", "в двух словах",
-        "выдели главное", "перечисли основные", "итог",
-    ]
+    # Configure base class behavior
+    _keywords = SUMMARY_KEYWORDS
+    _required_context_keys = ["search_results", "previous_step_output"]
+    _base_confidence = 0.3
+    _keyword_boost = 0.2
+    _context_boost = 0.4
     
     def __init__(
         self,
@@ -84,46 +86,13 @@ class SummaryAgent(BaseAgent):
 **Вывод:**
 [Итоговое заключение]"""
 
-    async def can_handle(self, message: str, context: dict[str, Any]) -> float:
-        """Determine if this agent can handle the message.
-        
-        Higher confidence for summary requests or when there's
-        accumulated context to summarize.
-        
-        Args:
-            message: User message to analyze.
-            context: Current dialog context.
-            
-        Returns:
-            Confidence score (0.0 to 1.0).
-        """
-        message_lower = message.lower()
-        
-        # Check for summary keywords
-        for keyword in self.SUMMARY_KEYWORDS:
-            if keyword in message_lower:
-                return 0.9
-        
-        # Check if there's accumulated context to summarize
-        agent_results = context.get("agent_results", {})
-        if len(agent_results) >= 2:
-            # Multiple sources might need summarization
-            return 0.6
-        
-        # Long content in context
-        accumulated_context = context.get("accumulated_context", {})
-        if accumulated_context:
-            return 0.5
-        
-        return 0.2
-    
     async def process(
         self,
         message: str,
         context: dict[str, Any],
         history: list[LLMMessage],
     ) -> AgentResult:
-        """Process the message by summarizing available information.
+        """Process the message by summarizing content.
         
         Args:
             message: User message to process.
@@ -133,137 +102,82 @@ class SummaryAgent(BaseAgent):
         Returns:
             AgentResult with summary.
         """
-        # Gather content to summarize
-        content_to_summarize = self._gather_content(message, context, history)
+        # Get content to summarize from context
+        content_to_summarize = self._get_content_to_summarize(context)
         
         if not content_to_summarize:
             return AgentResult(
-                response="Нет информации для резюмирования.",
+                response="Нет содержимого для резюмирования. Сначала получите информацию через поиск или другой агент.",
                 agent_type=self.agent_type,
                 confidence=0.3,
-                metadata={"summarized": False}
+                metadata={"error": "no_content"},
             )
         
-        # Determine summary type
-        summary_type = self._determine_summary_type(message)
-        
         # Generate summary
-        summary = await self._generate_summary(
-            content_to_summarize, summary_type, message
-        )
+        summary = await self._generate_summary(message, content_to_summarize)
         
         return AgentResult(
             response=summary,
             agent_type=self.agent_type,
             confidence=0.9,
             metadata={
-                "summarized": True,
-                "summary_type": summary_type,
                 "content_length": len(content_to_summarize),
-            }
+                "max_points": self._default_max_points,
+            },
         )
     
-    def _gather_content(
-        self,
-        message: str,
-        context: dict[str, Any],
-        history: list[LLMMessage],
-    ) -> str:
-        """Gather content to summarize from various sources.
+    def _get_content_to_summarize(self, context: dict[str, Any]) -> str:
+        """Extract content to summarize from context.
         
         Args:
-            message: User message.
             context: Dialog context.
-            history: Message history.
             
         Returns:
-            Combined content to summarize.
+            Content string to summarize.
         """
-        content_parts = []
+        # Check for search results
+        if "search_results" in context:
+            return context["search_results"]
         
-        # Get content from previous agent results
-        agent_results = context.get("agent_results", {})
-        for agent_type, result in agent_results.items():
-            if isinstance(result, dict):
-                response = result.get("response", "")
-            else:
-                response = getattr(result, "response", "")
-            
-            if response:
-                content_parts.append(f"[{agent_type}]\n{response}")
+        # Check for previous step output
+        if "previous_step_output" in context:
+            return context["previous_step_output"]
         
-        # Get accumulated context
-        accumulated = context.get("accumulated_context", {})
-        if accumulated:
-            for key, value in accumulated.items():
-                if isinstance(value, str):
-                    content_parts.append(f"[{key}]\n{value}")
+        # Check in metadata
+        if "previous_step_metadata" in context:
+            metadata = context["previous_step_metadata"]
+            if "search_results" in metadata:
+                return metadata["search_results"]
         
-        # Include recent history if relevant
-        if history:
-            recent = history[-3:]  # Last 3 messages
-            for msg in recent:
-                if msg.role == MessageRole.ASSISTANT:
-                    content_parts.append(f"[history]\n{msg.content[:500]}")
-        
-        return "\n\n---\n\n".join(content_parts)
-    
-    def _determine_summary_type(self, message: str) -> str:
-        """Determine the type of summary needed.
-        
-        Args:
-            message: User message.
-            
-        Returns:
-            Summary type identifier.
-        """
-        message_lower = message.lower()
-        
-        if any(kw in message_lower for kw in ["tldr", "tl;dr", "в двух словах"]):
-            return "tldr"
-        elif any(kw in message_lower for kw in ["пункты", "список", "перечисли"]):
-            return "bullet_points"
-        elif any(kw in message_lower for kw in ["подробно", "детально"]):
-            return "detailed"
-        elif any(kw in message_lower for kw in ["вывод", "итог", "заключение"]):
-            return "conclusion"
-        else:
-            return "standard"
+        return ""
     
     async def _generate_summary(
         self,
+        message: str,
         content: str,
-        summary_type: str,
-        original_message: str,
     ) -> str:
         """Generate summary of content.
         
         Args:
+            message: Original user message.
             content: Content to summarize.
-            summary_type: Type of summary to generate.
-            original_message: Original user message.
             
         Returns:
-            Generated summary.
+            Summary text.
         """
-        type_instructions = {
-            "tldr": "Создай максимально краткий TL;DR в 1-2 предложения.",
-            "bullet_points": f"Выдели до {self._default_max_points} ключевых пунктов в виде списка.",
-            "detailed": "Создай подробное резюме с сохранением важных деталей.",
-            "conclusion": "Сделай итоговое заключение на основе информации.",
-            "standard": "Создай краткое резюме с ключевыми пунктами.",
-        }
+        # Truncate very long content
+        max_content_length = 4000
+        if len(content) > max_content_length:
+            content = content[:max_content_length] + "\n...[обрезано]"
         
-        instruction = type_instructions.get(summary_type, type_instructions["standard"])
-        
-        prompt = f"""{instruction}
+        prompt = f"""Создай краткое резюме следующего содержимого.
 
-Исходный запрос: {original_message}
+Запрос пользователя: {message}
 
-Информация для резюмирования:
-{content[:4000]}
+Содержимое для резюмирования:
+{content}
 
-Создай структурированное резюме."""
+Создай структурированное резюме с ключевыми пунктами (максимум {self._default_max_points} пунктов)."""
         
         messages = [
             LLMMessage(role=MessageRole.SYSTEM, content=self.system_prompt),
@@ -273,51 +187,31 @@ class SummaryAgent(BaseAgent):
         response = await self.llm_provider.generate(messages, max_tokens=800)
         return response.content
     
-    async def create_tldr(self, text: str) -> str:
-        """Create a TL;DR for given text.
-        
-        Args:
-            text: Text to summarize.
-            
-        Returns:
-            TL;DR summary.
-        """
-        prompt = f"""Создай TL;DR для следующего текста в 1-2 предложения:
-
-{text[:2000]}"""
-        
-        messages = [
-            LLMMessage(role=MessageRole.SYSTEM, content=self.system_prompt),
-            LLMMessage(role=MessageRole.USER, content=prompt),
-        ]
-        
-        response = await self.llm_provider.generate(messages, max_tokens=150)
-        return response.content
-    
     async def extract_key_points(
         self,
-        text: str,
-        max_points: int = 5,
+        content: str,
+        max_points: int | None = None,
     ) -> list[str]:
-        """Extract key points from text.
+        """Extract key points from content.
         
         Args:
-            text: Text to analyze.
-            max_points: Maximum number of points.
+            content: Content to analyze.
+            max_points: Maximum number of points to extract.
             
         Returns:
             List of key points.
         """
-        prompt = f"""Выдели до {max_points} ключевых пунктов из текста.
-
-Формат ответа - JSON массив строк:
-["пункт 1", "пункт 2", ...]
+        max_points = max_points or self._default_max_points
+        
+        prompt = f"""Извлеки ключевые пункты из текста.
 
 Текст:
-{text[:2000]}"""
+{content[:2000]}
+
+Верни список из максимум {max_points} ключевых пунктов в формате JSON:
+["пункт1", "пункт2", ...]"""
         
         messages = [
-            LLMMessage(role=MessageRole.SYSTEM, content=self.system_prompt),
             LLMMessage(role=MessageRole.USER, content=prompt),
         ]
         
@@ -334,41 +228,8 @@ class SummaryAgent(BaseAgent):
             pass
         
         # Fallback: split by newlines
-        lines = response.content.strip().split("\n")
-        points = [line.lstrip("•-* ").strip() for line in lines if line.strip()]
-        return points[:max_points]
-    
-    async def adjust_detail_level(
-        self,
-        text: str,
-        target_length: str = "medium",
-    ) -> str:
-        """Adjust the detail level of text.
-        
-        Args:
-            text: Original text.
-            target_length: Target length (short, medium, long).
-            
-        Returns:
-            Adjusted text.
-        """
-        length_instructions = {
-            "short": "Сократи до 2-3 предложений, оставив только суть.",
-            "medium": "Создай средний по объёму текст с ключевыми деталями.",
-            "long": "Расширь текст, добавив пояснения и примеры.",
-        }
-        
-        instruction = length_instructions.get(target_length, length_instructions["medium"])
-        
-        prompt = f"""{instruction}
-
-Исходный текст:
-{text[:2000]}"""
-        
-        messages = [
-            LLMMessage(role=MessageRole.SYSTEM, content=self.system_prompt),
-            LLMMessage(role=MessageRole.USER, content=prompt),
-        ]
-        
-        response = await self.llm_provider.generate(messages, max_tokens=1000)
-        return response.content
+        return [
+            line.strip().lstrip("•-1234567890. ")
+            for line in response.content.split("\n")
+            if line.strip()
+        ][:max_points]

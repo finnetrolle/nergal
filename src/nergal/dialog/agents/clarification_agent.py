@@ -8,14 +8,16 @@ import json
 import logging
 from typing import Any
 
-from nergal.dialog.base import AgentResult, AgentType, BaseAgent
+from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
+from nergal.dialog.constants import CLARIFICATION_KEYWORDS
+from nergal.dialog.base import AgentResult, AgentType
 from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage, MessageRole
 
 logger = logging.getLogger(__name__)
 
 
-class ClarificationAgent(BaseAgent):
+class ClarificationAgent(BaseSpecializedAgent):
     """Agent for clarifying ambiguous user queries.
     
     This agent determines if a user's question is ambiguous and
@@ -27,12 +29,12 @@ class ClarificationAgent(BaseAgent):
     - Interpret user responses to clarifications
     """
     
-    # Ambiguity indicators
-    AMBIGUITY_INDICATORS = [
-        "настроить", "проблема", "ошибка", "не работает",
-        "лучше", "оптимальный", "правильный", "нужно",
-        "сделать", "изменить", "проверить", "понять",
-    ]
+    # Configure base class behavior
+    _keywords = CLARIFICATION_KEYWORDS
+    _context_keys = []
+    _base_confidence = 0.2
+    _keyword_boost = 0.15
+    _context_boost = 0.3
     
     def __init__(
         self,
@@ -95,32 +97,16 @@ class ClarificationAgent(BaseAgent):
         if context.get("needs_clarification"):
             return 0.95
         
-        # Check for ambiguity indicators
-        message_lower = message.lower()
-        indicator_count = sum(
-            1 for indicator in self.AMBIGUITY_INDICATORS
-            if indicator in message_lower
-        )
-        
-        if indicator_count >= 2:
-            return 0.7
-        elif indicator_count == 1:
-            return 0.5
-        
-        # Short questions might need clarification
-        words = message.split()
-        if len(words) <= 3 and "?" in message:
-            return 0.6
-        
-        return 0.2
-    
+        # Use base class keyword matching
+        return await super().can_handle(message, context)
+
     async def process(
         self,
         message: str,
         context: dict[str, Any],
         history: list[LLMMessage],
     ) -> AgentResult:
-        """Process the message and determine if clarification is needed.
+        """Process the message by checking for ambiguity.
         
         Args:
             message: User message to process.
@@ -128,47 +114,24 @@ class ClarificationAgent(BaseAgent):
             history: Message history.
             
         Returns:
-            AgentResult with clarification question or confirmation.
+            AgentResult with clarification if needed.
         """
-        # Check if we already have clarification count
-        clarification_count = context.get("clarification_count", 0)
-        
-        if clarification_count >= self._max_clarifications:
-            # Max clarifications reached, proceed without
-            return AgentResult(
-                response="Продолжаю с текущей информацией.",
-                agent_type=self.agent_type,
-                confidence=0.5,
-                metadata={
-                    "clarification_needed": False,
-                    "max_reached": True,
-                }
-            )
-        
-        # Analyze for ambiguity
-        analysis = await self._analyze_query(message, history)
+        # Analyze message for ambiguity
+        analysis = await self._analyze_message(message, context)
         
         if not analysis.get("clarification_needed", False):
             return AgentResult(
                 response="Запрос понятен, уточнение не требуется.",
                 agent_type=self.agent_type,
-                confidence=0.8,
+                confidence=0.5,
                 metadata={
                     "clarification_needed": False,
                     "reason": analysis.get("reason", ""),
-                }
+                },
             )
         
-        # Generate clarification question
-        question = analysis.get("question", "Уточните, пожалуйста, ваш запрос.")
-        options = analysis.get("options", [])
-        
-        # Format response with options if available
-        if options:
-            options_text = "\n".join(f"• {opt}" for opt in options)
-            response = f"{question}\n\nВарианты:\n{options_text}"
-        else:
-            response = question
+        # Format clarification response
+        response = self._format_clarification_response(analysis)
         
         return AgentResult(
             response=response,
@@ -176,108 +139,74 @@ class ClarificationAgent(BaseAgent):
             confidence=0.9,
             metadata={
                 "clarification_needed": True,
-                "question": question,
-                "options": options,
+                "question": analysis.get("question", ""),
+                "options": analysis.get("options", []),
                 "reason": analysis.get("reason", ""),
-            }
+            },
         )
     
-    async def _analyze_query(
+    async def _analyze_message(
         self,
         message: str,
-        history: list[LLMMessage],
+        context: dict[str, Any],
     ) -> dict[str, Any]:
-        """Analyze query for ambiguity using LLM.
+        """Analyze message for ambiguity.
         
         Args:
             message: User message to analyze.
-            history: Conversation history for context.
+            context: Dialog context.
             
         Returns:
-            Analysis result with clarification details.
+            Analysis result dictionary.
         """
-        # Build context from recent history
-        recent_context = ""
-        if history:
-            recent_messages = history[-3:]  # Last 3 messages
-            recent_context = "\n".join([
-                f"{'Пользователь' if msg.role == MessageRole.USER else 'Ассистент'}: {msg.content[:100]}"
-                for msg in recent_messages
-            ])
-        
-        analysis_prompt = f"""Проанализируй запрос пользователя на наличие неопределенности.
+        prompt = f"""Проанализируй запрос на наличие неопределенности.
 
-{"Контекст разговора:" + chr(10) + recent_context if recent_context else ""}
+Запрос: {message}
 
-Запрос пользователя: {message}
+Определи:
+1. Ясен ли запрос или требует уточнения
+2. Если требует — сформулируй уточняющий вопрос
+3. Если возможно — предложи варианты ответа"""
 
-Нужно ли уточнение? Отвечай в JSON формате."""
-        
         messages = [
             LLMMessage(role=MessageRole.SYSTEM, content=self.system_prompt),
-            LLMMessage(role=MessageRole.USER, content=analysis_prompt),
+            LLMMessage(role=MessageRole.USER, content=prompt),
         ]
         
+        response = await self.llm_provider.generate(messages, max_tokens=300)
+        
+        # Parse JSON response
         try:
-            response = await self.llm_provider.generate(messages, max_tokens=300)
-            return self._parse_analysis_response(response.content)
-        except Exception as e:
-            logger.warning(f"Clarification analysis failed: {e}")
-            return {"clarification_needed": False, "reason": str(e)}
+            start = response.content.find("{")
+            end = response.content.rfind("}") + 1
+            if start != -1 and end > start:
+                return json.loads(response.content[start:end])
+        except json.JSONDecodeError:
+            pass
+        
+        # Default: no clarification needed
+        return {
+            "clarification_needed": False,
+            "reason": "Не удалось проанализировать запрос",
+        }
     
-    def _parse_analysis_response(self, response: str) -> dict[str, Any]:
-        """Parse LLM response for analysis result.
+    def _format_clarification_response(self, analysis: dict[str, Any]) -> str:
+        """Format clarification response for user.
         
         Args:
-            response: Raw LLM response.
+            analysis: Analysis result dictionary.
             
         Returns:
-            Parsed analysis dictionary.
+            Formatted response string.
         """
-        try:
-            # Find JSON in response
-            start_idx = response.find("{")
-            end_idx = response.rfind("}") + 1
-            
-            if start_idx != -1 and end_idx > start_idx:
-                json_str = response[start_idx:end_idx]
-                return json.loads(json_str)
-        except json.JSONDecodeError as e:
-            logger.debug(f"Failed to parse clarification response: {e}")
+        question = analysis.get("question", "Уточните, пожалуйста, ваш запрос.")
+        options = analysis.get("options", [])
         
-        return {"clarification_needed": False, "reason": "Failed to parse response"}
-    
-    async def interpret_response(
-        self,
-        user_response: str,
-        clarification_context: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Interpret user's response to a clarification question.
+        response = f"🤔 {question}"
         
-        Args:
-            user_response: User's answer to clarification.
-            clarification_context: Context from original clarification.
-            
-        Returns:
-            Interpreted response with clarified intent.
-        """
-        options = clarification_context.get("options", [])
+        if options:
+            response += "\n\nВарианты:\n"
+            for i, option in enumerate(options[:4], 1):
+                response += f"{i}. {option}\n"
         
-        if not options:
-            return {"interpreted": True, "clarification": user_response}
-        
-        # Check if user selected one of the options
-        user_response_lower = user_response.lower().strip()
-        
-        for i, option in enumerate(options, 1):
-            if (user_response_lower == str(i) or
-                user_response_lower == option.lower() or
-                option.lower() in user_response_lower):
-                return {
-                    "interpreted": True,
-                    "selected_option": i - 1,
-                    "clarification": option,
-                }
-        
-        # User provided custom response
-        return {"interpreted": True, "clarification": user_response}
+        return response

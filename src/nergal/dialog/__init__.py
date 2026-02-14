@@ -39,7 +39,11 @@ from nergal.dialog.styles import StyleType, get_style_prompt
 
 # Import specialized agents from agents subpackage
 from nergal.dialog.agents import (
+    # Base classes
+    BaseSpecializedAgent,
+    ContextAwareAgent,
     # Information gathering agents
+    WebSearchAgent,
     KnowledgeBaseAgent,
     TechDocsAgent,
     CodeAnalysisAgent,
@@ -65,6 +69,8 @@ __all__ = [
     "PlanExecutionResult",
     # Core agents
     "BaseAgent",
+    "BaseSpecializedAgent",
+    "ContextAwareAgent",
     "DefaultAgent",
     "DispatcherAgent",
     "AgentRegistry",
@@ -83,6 +89,7 @@ __all__ = [
     "StyleType",
     "get_style_prompt",
     # Information gathering agents
+    "WebSearchAgent",
     "KnowledgeBaseAgent",
     "TechDocsAgent",
     "CodeAnalysisAgent",

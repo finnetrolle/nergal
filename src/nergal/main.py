@@ -8,7 +8,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 from nergal.config import get_settings
 from nergal.dialog import DialogManager
-from nergal.dialog.web_search_agent import WebSearchAgent
+from nergal.dialog.agents.web_search_agent import WebSearchAgent
 from nergal.llm import create_llm_provider
 from nergal.stt import AudioTooLongError, convert_ogg_to_wav, create_stt_provider
 from nergal.stt.base import BaseSTTProvider

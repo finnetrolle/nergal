@@ -7,6 +7,7 @@ domain or task.
 Base classes and types are imported from base.py.
 
 Available agents:
+- WebSearchAgent: Search the web for information
 - KnowledgeBaseAgent: Search corporate knowledge base
 - ClarificationAgent: Clarify ambiguous queries
 - AnalysisAgent: Analyze and synthesize information
@@ -31,6 +32,12 @@ from nergal.dialog.base import (
     PlanStep,
 )
 
+# Import base specialized agent class
+from nergal.dialog.agents.base_specialized import (
+    BaseSpecializedAgent,
+    ContextAwareAgent,
+)
+
 # Import specialized agents
 from nergal.dialog.agents.analysis_agent import AnalysisAgent
 from nergal.dialog.agents.clarification_agent import ClarificationAgent
@@ -43,6 +50,7 @@ from nergal.dialog.agents.metrics_agent import MetricsAgent
 from nergal.dialog.agents.news_agent import NewsAgent, NewsCluster, NewsSource
 from nergal.dialog.agents.summary_agent import SummaryAgent
 from nergal.dialog.agents.tech_docs_agent import TechDocsAgent
+from nergal.dialog.agents.web_search_agent import WebSearchAgent
 
 __all__ = [
     # Base classes and types
@@ -51,10 +59,13 @@ __all__ = [
     "AgentResult",
     "AgentType",
     "BaseAgent",
+    "BaseSpecializedAgent",
+    "ContextAwareAgent",
     "ExecutionPlan",
     "PlanStep",
     
     # Information gathering agents
+    "WebSearchAgent",
     "KnowledgeBaseAgent",
     "TechDocsAgent",
     "CodeAnalysisAgent",
