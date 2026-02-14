@@ -1,7 +1,12 @@
 """Agent system for handling different types of user requests.
 
-This module provides a base class for agents and a registry for managing them.
+This module provides base classes and registry for managing agents.
 Agents are responsible for handling specific types of user requests.
+
+Individual agents are in separate modules:
+- default_agent.py - DefaultAgent for general conversations
+- dispatcher_agent.py - DispatcherAgent for routing messages
+- web_search_agent.py - WebSearchAgent for web search queries
 """
 
 from abc import ABC, abstractmethod
@@ -9,7 +14,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
 
-from nergal.dialog.styles import StyleType, get_style_prompt
+from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage, LLMResponse
 
 
@@ -20,7 +25,56 @@ class AgentType(str, Enum):
     FAQ = "faq"
     SMALL_TALK = "small_talk"
     TASK = "task"
+    WEB_SEARCH = "web_search"
+    FACT_CHECK = "fact_check"
+    ANALYSIS = "analysis"
+    DISPATCHER = "dispatcher"
     UNKNOWN = "unknown"
+
+
+@dataclass
+class PlanStep:
+    """A single step in an execution plan.
+
+    Attributes:
+        agent_type: Type of agent to execute.
+        description: Human-readable description of what this step does.
+        input_transform: Optional transformation to apply to input (e.g., use previous output).
+        is_optional: Whether this step can be skipped if agent is unavailable.
+    """
+
+    agent_type: AgentType
+    description: str
+    input_transform: str | None = None  # "original", "previous", or custom instruction
+    is_optional: bool = False
+
+
+@dataclass
+class ExecutionPlan:
+    """A plan for executing multiple agents in sequence.
+
+    The dispatcher creates execution plans to process complex requests
+    that require multiple agents working together.
+
+    Attributes:
+        steps: List of steps to execute in order.
+        reasoning: Explanation of why this plan was chosen.
+        missing_agents: List of agent types that would be useful but are not available.
+        missing_agents_reason: Explanation of what each missing agent would do.
+    """
+
+    steps: list[PlanStep]
+    reasoning: str
+    missing_agents: list[AgentType] = field(default_factory=list)
+    missing_agents_reason: dict[str, str] = field(default_factory=dict)
+
+    def get_agent_types(self) -> list[AgentType]:
+        """Get list of all agent types needed for this plan."""
+        return [step.agent_type for step in self.steps]
+
+    def has_missing_agents(self) -> bool:
+        """Check if plan requires agents that are not available."""
+        return len(self.missing_agents) > 0
 
 
 @dataclass
@@ -140,39 +194,6 @@ class BaseAgent(ABC):
         """
         messages = await self.build_messages(message, history)
         return await self.llm_provider.generate(messages, **kwargs)
-
-
-class DefaultAgent(BaseAgent):
-    """Default agent for handling general requests."""
-
-    @property
-    def agent_type(self) -> AgentType:
-        """Return the type of this agent."""
-        return AgentType.DEFAULT
-
-    @property
-    def system_prompt(self) -> str:
-        """Return the system prompt for this agent based on the configured style."""
-        return get_style_prompt(self._style_type)
-
-    async def can_handle(self, message: str, context: dict[str, Any]) -> float:
-        """Default agent can handle any message with low confidence."""
-        return 0.1
-
-    async def process(
-        self,
-        message: str,
-        context: dict[str, Any],
-        history: list[LLMMessage],
-    ) -> AgentResult:
-        """Process the message using default behavior."""
-        response = await self.generate_response(message, history)
-        return AgentResult(
-            response=response.content,
-            agent_type=self.agent_type,
-            confidence=0.1,
-            metadata={"model": response.model, "usage": response.usage},
-        )
 
 
 class AgentRegistry:

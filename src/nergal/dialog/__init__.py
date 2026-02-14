@@ -27,22 +27,30 @@ from nergal.dialog.agents import (
     AgentResult,
     AgentType,
     BaseAgent,
-    DefaultAgent,
+    ExecutionPlan,
+    PlanStep,
 )
 from nergal.dialog.context import ContextManager, DialogContext, DialogState, UserInfo
-from nergal.dialog.manager import DialogManager, ProcessResult
+from nergal.dialog.default_agent import DefaultAgent
+from nergal.dialog.dispatcher_agent import DispatcherAgent
+from nergal.dialog.manager import DialogManager, PlanExecutionResult, ProcessResult
 from nergal.dialog.styles import StyleType, get_style_prompt
 
 __all__ = [
     # Manager
     "DialogManager",
     "ProcessResult",
+    "PlanExecutionResult",
     # Agents
     "BaseAgent",
     "DefaultAgent",
+    "DispatcherAgent",
     "AgentRegistry",
     "AgentResult",
     "AgentType",
+    # Plan
+    "ExecutionPlan",
+    "PlanStep",
     # Context
     "DialogContext",
     "DialogState",

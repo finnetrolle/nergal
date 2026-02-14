@@ -4,6 +4,7 @@ This module provides an agent that can search the web for information
 and synthesize responses using the LLM.
 """
 
+import json
 import logging
 import re
 from typing import Any
@@ -15,11 +16,46 @@ from nergal.dialog.constants import (
     SEARCH_PATTERNS,
     TIME_RELATED_WORDS,
 )
-from nergal.dialog.styles import StyleType, get_style_prompt
+from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage, MessageRole
 from nergal.web_search import BaseSearchProvider, SearchError, SearchRequest
 
 logger = logging.getLogger(__name__)
+
+SEARCH_QUERY_GENERATION_PROMPT = """You are a search query generator. Your task is to analyze the user's question and generate optimal search queries for finding relevant information.
+
+Rules:
+1. Generate ONLY ONE search query unless the question asks for clearly DIFFERENT information
+2. Each query must search for UNIQUE, NON-OVERLAPPING information - never generate synonyms or rephrasings of the same query
+3. Queries should be concise and focused
+4. Queries should be in the same language as the user's question
+5. Return ONLY a JSON array of strings, nothing else
+
+CRITICAL: Do NOT generate multiple queries for the same topic. One well-formed query is sufficient.
+
+Examples:
+User: "What's the weather like in Moscow and St. Petersburg?"
+Output: ["weather Moscow today", "weather St. Petersburg today"]
+( TWO queries because TWO different cities - this is correct)
+
+User: "Какая погода будет в Питере завтра утром?"
+Output: ["погода Санкт-Петербург завтра утром"]
+(ONE query is enough - do NOT add "прогноз погоды Питер завтра" or similar)
+
+User: "Сравни iPhone 15 и Samsung Galaxy S24"
+Output: ["iPhone 15 vs Samsung Galaxy S24 сравнение"]
+(ONE query is enough - search engines handle comparisons)
+
+User: "Who won the Champions League in 2024?"
+Output: ["Champions League 2024 winner"]
+(ONE query is enough)
+
+User: "Какие новости в России и в мире сегодня?"
+Output: ["новости Россия сегодня", "мировые новости сегодня"]
+(TWO queries because TWO different topics - domestic vs world news)
+
+Now generate search queries for this user question:
+{question}"""
 
 
 class WebSearchAgent(BaseAgent):
@@ -54,23 +90,125 @@ class WebSearchAgent(BaseAgent):
     @property
     def agent_type(self) -> AgentType:
         """Return the type of this agent."""
-        return AgentType.TASK
+        return AgentType.WEB_SEARCH
 
     @property
     def system_prompt(self) -> str:
-        """Return the system prompt for this agent."""
-        base_prompt = get_style_prompt(self._style_type)
+        """Return the system prompt for this agent.
+
+        Note: This agent is an intermediate step, so it uses a neutral prompt.
+        The style is applied only at the final step by DefaultAgent.
+        """
         return (
-            f"{base_prompt}\n\n"
-            "You have access to web search results to answer the user's question. "
-            "Use the provided search results to give accurate, up-to-date information. "
-            "Always cite your sources by mentioning where you found the information. "
-            "If the search results don't contain relevant information, say so honestly. "
-            "Synthesize information from multiple sources when possible."
+            "You are a search assistant. Your task is to analyze web search results "
+            "and extract relevant information to answer the user's question. "
+            "Be factual and objective. Focus on accuracy rather than style. "
+            "Include source links when available. "
+            "If the search results don't contain relevant information, state that clearly."
         )
 
-    def _extract_search_query(self, message: str) -> str:
-        """Extract search query from user message.
+    def _deduplicate_queries(self, queries: list[str]) -> list[str]:
+        """Remove duplicate or very similar search queries.
+
+        This method ensures that we don't search for essentially the same
+        information multiple times.
+
+        Args:
+            queries: List of search queries.
+
+        Returns:
+            Deduplicated list of search queries.
+        """
+        if len(queries) <= 1:
+            return queries
+
+        unique_queries = []
+        seen_normalized = set()
+
+        for query in queries:
+            # Normalize query for comparison: lowercase, remove extra spaces
+            normalized = ' '.join(query.lower().split())
+
+            # Check if this normalized query is similar to any we've seen
+            is_duplicate = False
+            for seen in seen_normalized:
+                # Check for high overlap - if one query contains most of another
+                seen_words = set(seen.split())
+                query_words = set(normalized.split())
+
+                # Calculate Jaccard similarity
+                if seen_words and query_words:
+                    intersection = len(seen_words & query_words)
+                    union = len(seen_words | query_words)
+                    similarity = intersection / union if union > 0 else 0
+
+                    # If similarity > 0.7, consider it a duplicate
+                    if similarity > 0.7:
+                        is_duplicate = True
+                        logger.debug(
+                            f"Query '{query}' is similar to '{seen}' (similarity: {similarity:.2f}), skipping"
+                        )
+                        break
+
+            if not is_duplicate:
+                unique_queries.append(query)
+                seen_normalized.add(normalized)
+
+        if len(unique_queries) < len(queries):
+            logger.info(
+                f"Deduplicated queries: {len(queries)} -> {len(unique_queries)}"
+            )
+
+        return unique_queries if unique_queries else queries[:1]
+
+    async def _generate_search_queries(self, message: str) -> list[str]:
+        """Generate optimal search queries using LLM.
+
+        This method uses the LLM to analyze the user's question and
+        generate one or more targeted search queries.
+
+        Args:
+            message: User's message.
+
+        Returns:
+            List of search queries.
+        """
+        prompt = SEARCH_QUERY_GENERATION_PROMPT.format(question=message)
+
+        messages = [
+            LLMMessage(role=MessageRole.USER, content=prompt),
+        ]
+
+        try:
+            response = await self.llm_provider.generate(messages)
+            content = response.content.strip()
+
+            # Try to extract JSON from the response
+            # Sometimes LLM adds extra text, so we try to find JSON array
+            json_match = re.search(r'\[.*?\]', content, re.DOTALL)
+            if json_match:
+                content = json_match.group(0)
+
+            queries = json.loads(content)
+
+            if isinstance(queries, list) and all(isinstance(q, str) for q in queries):
+                # Deduplicate queries to avoid searching for the same thing twice
+                queries = self._deduplicate_queries(queries)
+                logger.info(f"Generated {len(queries)} search queries: {queries}")
+                return queries
+
+            logger.warning(f"Invalid query format from LLM: {content}")
+            return [self._fallback_extract_query(message)]
+
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.warning(f"Failed to parse LLM query response: {e}")
+            return [self._fallback_extract_query(message)]
+        except Exception as e:
+            logger.error(f"Error generating search queries: {e}")
+            return [self._fallback_extract_query(message)]
+
+    def _fallback_extract_query(self, message: str) -> str:
+        """Fallback method to extract search query from user message.
 
         Args:
             message: User's message.
@@ -135,6 +273,9 @@ class WebSearchAgent(BaseAgent):
     ) -> AgentResult:
         """Process the message by searching the web.
 
+        This method first uses the LLM to generate optimal search queries,
+        then performs the searches and synthesizes a response.
+
         Args:
             message: User message to process.
             context: Current dialog context.
@@ -144,36 +285,54 @@ class WebSearchAgent(BaseAgent):
             AgentResult containing the response.
         """
         try:
-            search_query = self._extract_search_query(message)
-            logger.info(f"Performing web search for: {search_query}")
+            # Step 1: Generate search queries using LLM
+            search_queries = await self._generate_search_queries(message)
 
-            request = SearchRequest(query=search_query, count=self.max_search_results)
-            results = await self.search_provider.search(request)
+            if not search_queries:
+                search_queries = [self._fallback_extract_query(message)]
 
-            if results.is_empty():
+            logger.info(f"Performing web searches for: {search_queries}")
+
+            # Step 2: Execute all searches and collect results
+            all_results = await self._execute_multiple_searches(search_queries)
+
+            if not all_results:
                 response = await self._generate_no_results_response(
-                    message, search_query, history
+                    message, search_queries, history
                 )
                 return AgentResult(
                     response=response,
                     agent_type=self.agent_type,
                     confidence=0.5,
-                    metadata={"search_query": search_query, "results_count": 0},
+                    metadata={"search_queries": search_queries, "results_count": 0},
                 )
 
-            formatted_results = results.to_text(max_results=self.max_search_results)
+            # Step 3: Generate response with combined results
+            formatted_results = self._format_multiple_results(all_results)
             response = await self._generate_response_with_results(
-                message, search_query, formatted_results, history
+                message, search_queries, formatted_results, history
             )
+
+            # Collect all unique sources
+            all_sources = []
+            seen_links = set()
+            for query, results in all_results:
+                for r in results.results[:3]:
+                    if r.link not in seen_links:
+                        all_sources.append(r.link)
+                        seen_links.add(r.link)
 
             return AgentResult(
                 response=response,
                 agent_type=self.agent_type,
                 confidence=0.9,
                 metadata={
-                    "search_query": search_query,
-                    "results_count": len(results.results),
-                    "sources": [r.link for r in results.results[:3]],
+                    "search_queries": search_queries,
+                    "results_count": sum(len(r.results) for _, r in all_results),
+                    "sources": all_sources[:5],
+                    # Store formatted results for subsequent agents
+                    "search_results": formatted_results,
+                    "original_message": message,
                 },
             )
 
@@ -189,11 +348,76 @@ class WebSearchAgent(BaseAgent):
                 confidence=0.3,
                 metadata={"error": str(e), "error_type": type(e).__name__},
             )
+        except Exception as e:
+            # Catch any other errors (e.g., LLM provider errors during response generation)
+            logger.error(
+                f"Unexpected error in web search agent for query '{message}': {type(e).__name__}: {e}",
+                exc_info=True,
+            )
+            return AgentResult(
+                response="Произошла ошибка при обработке вашего запроса. Попробуйте позже или переформулируйте вопрос.",
+                agent_type=self.agent_type,
+                confidence=0.1,
+                metadata={"error": str(e), "error_type": type(e).__name__},
+            )
+
+    async def _execute_multiple_searches(
+        self, queries: list[str]
+    ) -> list[tuple[str, Any]]:
+        """Execute multiple search queries and return results.
+
+        Args:
+            queries: List of search queries to execute.
+
+        Returns:
+            List of (query, results) tuples.
+        """
+        all_results = []
+
+        for query in queries:
+            try:
+                request = SearchRequest(
+                    query=query,
+                    count=self.max_search_results,
+                )
+                results = await self.search_provider.search(request)
+
+                if not results.is_empty():
+                    all_results.append((query, results))
+                    logger.debug(f"Found {len(results.results)} results for: {query}")
+                else:
+                    logger.debug(f"No results for query: {query}")
+
+            except SearchError as e:
+                logger.warning(f"Search failed for query '{query}': {e}")
+                continue
+
+        return all_results
+
+    def _format_multiple_results(
+        self, all_results: list[tuple[str, Any]]
+    ) -> str:
+        """Format results from multiple searches.
+
+        Args:
+            all_results: List of (query, results) tuples.
+
+        Returns:
+            Formatted string with all search results.
+        """
+        formatted_parts = []
+
+        for query, results in all_results:
+            formatted_parts.append(f"=== Results for: {query} ===")
+            formatted_parts.append(results.to_text(max_results=self.max_search_results))
+            formatted_parts.append("")
+
+        return "\n".join(formatted_parts)
 
     async def _generate_response_with_results(
         self,
         message: str,
-        search_query: str,
+        search_queries: list[str],
         formatted_results: str,
         history: list[LLMMessage],
     ) -> str:
@@ -201,15 +425,16 @@ class WebSearchAgent(BaseAgent):
 
         Args:
             message: Original user message.
-            search_query: Search query used.
+            search_queries: List of search queries used.
             formatted_results: Formatted search results.
             history: Conversation history.
 
         Returns:
             Generated response.
         """
+        queries_str = ", ".join(search_queries)
         search_context = (
-            f"Search query: {search_query}\n\n"
+            f"Search queries: {queries_str}\n\n"
             f"Search results:\n{formatted_results}\n\n"
             "Based on these search results, answer the user's question. "
             "Be helpful and cite sources when appropriate."
@@ -228,21 +453,22 @@ class WebSearchAgent(BaseAgent):
     async def _generate_no_results_response(
         self,
         message: str,
-        search_query: str,
+        search_queries: list[str],
         history: list[LLMMessage],
     ) -> str:
         """Generate response when no search results found.
 
         Args:
             message: Original user message.
-            search_query: Search query used.
+            search_queries: List of search queries used.
             history: Conversation history.
 
         Returns:
             Generated response.
         """
+        queries_str = ", ".join(search_queries)
         no_results_context = (
-            f"You searched for '{search_query}' but found no relevant results. "
+            f"You searched for '{queries_str}' but found no relevant results. "
             "Apologize to the user and suggest they try a different search query "
             "or provide what information you can from your training data."
         )
