@@ -89,3 +89,44 @@ TIME_RELATED_WORDS = [
     "recent",
     "latest",
 ]
+
+# Keywords that indicate news aggregation request
+NEWS_KEYWORDS = [
+    # Direct news requests
+    "новости",
+    "news",
+    "пресса",
+    "сми",
+    "press",
+    "media",
+    # Source comparison
+    "сравни источники",
+    "compare sources",
+    "что пишут",
+    "what do they write",
+    "сколько источников",
+    "multiple sources",
+    # News analysis
+    "агрегация",
+    "aggregation",
+    "обзор прессы",
+    "press review",
+    "итоги дня",
+    "daily summary",
+    # Source verification
+    "достоверность",
+    "credibility",
+    "проверь источник",
+    "verify source",
+    "предвзятость",
+    "bias",
+]
+
+# Patterns for news aggregation intent
+NEWS_PATTERNS = [
+    r"(?:новости|news)\s+(?:про|о|about|on)\s+(.+)",
+    r"(?:что|what)\s+(?:пишут|do they write|говорят|do they say)\s+(?:про|о|about)?\s*(.+)",
+    r"(?:сравни|compare)\s+(?:источники|sources)\s+(?:про|о|about)?\s*(.+)",
+    r"(?:агрегация|aggregate)\s+(.+)",
+    r"(?:сколько|how many)\s+(?:источников|sources)\s+(.+)",
+]

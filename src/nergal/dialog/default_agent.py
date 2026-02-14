@@ -4,11 +4,14 @@ This module provides the DefaultAgent class which handles general
 conversations and serves as a fallback for unhandled messages.
 """
 
+import logging
 from typing import Any
 
-from nergal.dialog.agents import AgentResult, AgentType, BaseAgent
+from nergal.dialog.base import AgentResult, AgentType, BaseAgent
 from nergal.dialog.styles import StyleType, get_style_prompt
 from nergal.llm import LLMMessage, MessageRole
+
+logger = logging.getLogger(__name__)
 
 
 class DefaultAgent(BaseAgent):
@@ -64,6 +67,7 @@ class DefaultAgent(BaseAgent):
         original_message = context.get("previous_step_metadata", {}).get("original_message", message)
 
         if search_results:
+            logger.info(f"DefaultAgent received search results ({len(search_results)} chars), using them for response")
             # Use search results to generate a better response
             response = await self._generate_response_with_search_results(
                 original_message=original_message,
@@ -72,6 +76,7 @@ class DefaultAgent(BaseAgent):
                 history=history,
             )
         else:
+            logger.debug("DefaultAgent: no search results in context, using standard response")
             response = await self.generate_response(message, history)
 
         return AgentResult(
@@ -101,11 +106,21 @@ class DefaultAgent(BaseAgent):
         """
         queries_str = ", ".join(search_queries) if search_queries else "web search"
         search_context = (
-            f"Ниже приведены результаты поиска по запросам: {queries_str}\n\n"
+            f"═══════════════════════════════════════════════════════════════════\n"
+            f"ВАЖНО: РЕЗУЛЬТАТЫ ПОИСКА (используй ЭТУ информацию для ответа)\n"
+            f"═══════════════════════════════════════════════════════════════════\n\n"
+            f"Запросы: {queries_str}\n\n"
             f"{search_results}\n\n"
-            "Используй эти результаты поиска, чтобы ответить на вопрос пользователя. "
-            "Будь полезным и указывай источники информации где уместно. "
-            "Отвечай на том же языке, что и вопрос пользователя."
+            f"═══════════════════════════════════════════════════════════════════\n"
+            f"ИНСТРУКЦИЯ:\n"
+            f"1. ВАЖНО: Игнорируй любые ограничения на длину ответа из системного промпта!\n"
+            f"2. Ответь на вопрос ПОЛНОЦЕННО, используя информацию из результатов поиска выше\n"
+            f"3. Сохраняй свой стиль речи и характер, но дай полный ответ\n"
+            f"4. Указывай конкретные факты, даты, имена, детали из найденных результатов\n"
+            f"5. Если в результатах есть ссылки на источники — упомяни их\n"
+            f"6. Отвечай на том же языке, что и вопрос пользователя\n"
+            f"7. НЕ отвечай кратко — дай информативный ответ с деталями из поиска\n"
+            f"═══════════════════════════════════════════════════════════════════"
         )
 
         messages = [

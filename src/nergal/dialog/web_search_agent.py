@@ -9,7 +9,7 @@ import logging
 import re
 from typing import Any
 
-from nergal.dialog.agents import AgentResult, AgentType, BaseAgent
+from nergal.dialog.base import AgentResult, AgentType, BaseAgent
 from nergal.dialog.constants import (
     FILLER_WORDS,
     SEARCH_KEYWORDS,

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from nergal.dialog.agents import (
+from nergal.dialog.base import (
     AgentRegistry,
     AgentResult,
     AgentType,
@@ -350,6 +350,11 @@ class DialogManager:
                         accumulated_context["search_results"] = step_result.metadata["search_results"]
                         accumulated_context["search_queries"] = step_result.metadata.get("search_queries", [])
                         accumulated_context["sources"] = step_result.metadata.get("sources", [])
+                        logger.info(
+                            f"Stored search results for next agent: "
+                            f"{len(step_result.metadata['search_results'])} chars, "
+                            f"queries: {step_result.metadata.get('search_queries', [])}"
+                        )
                     # Also store full metadata for any other data
                     accumulated_context["previous_step_metadata"] = step_result.metadata
 

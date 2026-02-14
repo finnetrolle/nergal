@@ -22,7 +22,8 @@ Example usage:
     print(result.response)
 """
 
-from nergal.dialog.agents import (
+from nergal.dialog.base import (
+    AgentCategory,
     AgentRegistry,
     AgentResult,
     AgentType,
@@ -36,18 +37,40 @@ from nergal.dialog.dispatcher_agent import DispatcherAgent
 from nergal.dialog.manager import DialogManager, PlanExecutionResult, ProcessResult
 from nergal.dialog.styles import StyleType, get_style_prompt
 
+# Import specialized agents from agents subpackage
+from nergal.dialog.agents import (
+    # Information gathering agents
+    KnowledgeBaseAgent,
+    TechDocsAgent,
+    CodeAnalysisAgent,
+    MetricsAgent,
+    NewsAgent,
+    NewsCluster,
+    NewsSource,
+    # Processing agents
+    AnalysisAgent,
+    FactCheckAgent,
+    ComparisonAgent,
+    SummaryAgent,
+    ClarificationAgent,
+    # Specialized agents
+    ExpertiseAgent,
+    ExpertiseDomain,
+)
+
 __all__ = [
     # Manager
     "DialogManager",
     "ProcessResult",
     "PlanExecutionResult",
-    # Agents
+    # Core agents
     "BaseAgent",
     "DefaultAgent",
     "DispatcherAgent",
     "AgentRegistry",
     "AgentResult",
     "AgentType",
+    "AgentCategory",
     # Plan
     "ExecutionPlan",
     "PlanStep",
@@ -59,4 +82,21 @@ __all__ = [
     # Styles
     "StyleType",
     "get_style_prompt",
+    # Information gathering agents
+    "KnowledgeBaseAgent",
+    "TechDocsAgent",
+    "CodeAnalysisAgent",
+    "MetricsAgent",
+    "NewsAgent",
+    "NewsCluster",
+    "NewsSource",
+    # Processing agents
+    "AnalysisAgent",
+    "FactCheckAgent",
+    "ComparisonAgent",
+    "SummaryAgent",
+    "ClarificationAgent",
+    # Specialized agents
+    "ExpertiseAgent",
+    "ExpertiseDomain",
 ]

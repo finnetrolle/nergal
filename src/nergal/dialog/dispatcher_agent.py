@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Any
 
-from nergal.dialog.agents import (
+from nergal.dialog.base import (
     AgentRegistry,
     AgentResult,
     AgentType,
@@ -23,10 +23,28 @@ logger = logging.getLogger(__name__)
 
 # Agent descriptions for the dispatcher prompt
 AGENT_DESCRIPTIONS: dict[AgentType, str] = {
+    # Core agents
     AgentType.DEFAULT: "общий агент для обычных разговоров, приветствий, простых вопросов, личных бесед, финального формирования ответа пользователю",
+    
+    # Information gathering agents
     AgentType.WEB_SEARCH: "агент для поиска информации в интернете, актуальных новостей, фактов, погоды, курсов валют",
-    AgentType.FACT_CHECK: "агент для проверки фактов на достоверность, верификации информации из поиска",
-    AgentType.ANALYSIS: "агент для анализа данных, сравнения информации, выявления закономерностей",
+    AgentType.KNOWLEDGE_BASE: "агент для поиска по корпоративной базе знаний, внутренней документации, регламентам, стандартам компании",
+    AgentType.TECH_DOCS: "агент для поиска по технической документации библиотек и фреймворков, API справочники, примеры кода",
+    AgentType.CODE_ANALYSIS: "агент для анализа кодовой базы, поиска использования функций, объяснения работы кода, архитектурного анализа",
+    AgentType.METRICS: "агент для получения метрик производительности, статистики, KPI, количественных данных из систем мониторинга",
+    AgentType.NEWS: "агент для агрегации новостей из нескольких источников, сравнения информации, выявления консенсуса и противоречий, отслеживания ссылок и оценки достоверности источников",
+    
+    # Processing agents
+    AgentType.ANALYSIS: "агент для анализа данных, сравнения информации, выявления закономерностей, синтеза выводов",
+    AgentType.FACT_CHECK: "агент для проверки фактов на достоверность, верификации информации из поиска, оценки надёжности источников",
+    AgentType.COMPARISON: "агент для структурированного сравнения альтернатив, создания сравнительных таблиц, взвешенной оценки",
+    AgentType.SUMMARY: "агент для резюмирования длинных текстов, выделения ключевых пунктов, создания TL;DR",
+    AgentType.CLARIFICATION: "агент для уточнения неоднозначных запросов, генерации уточняющих вопросов, дисамбигуации",
+    
+    # Specialized agents
+    AgentType.EXPERTISE: "агент для экспертных знаний в специфических доменах: безопасность, юридические вопросы, финансы, архитектура",
+    
+    # Legacy agents (kept for backward compatibility)
     AgentType.FAQ: "агент для ответов на часто задаваемые вопросы",
     AgentType.SMALL_TALK: "агент для легких разговоров и светской беседы",
     AgentType.TASK: "агент для выполнения конкретных задач",
@@ -316,15 +334,47 @@ class DispatcherAgent(BaseAgent):
             Corresponding AgentType enum value.
         """
         mapping = {
+            # Core agents
             "default": AgentType.DEFAULT,
+            
+            # Information gathering agents
             "web_search": AgentType.WEB_SEARCH,
             "websearch": AgentType.WEB_SEARCH,
             "search": AgentType.WEB_SEARCH,
+            "knowledge_base": AgentType.KNOWLEDGE_BASE,
+            "knowledge": AgentType.KNOWLEDGE_BASE,
+            "kb": AgentType.KNOWLEDGE_BASE,
+            "tech_docs": AgentType.TECH_DOCS,
+            "techdocs": AgentType.TECH_DOCS,
+            "documentation": AgentType.TECH_DOCS,
+            "code_analysis": AgentType.CODE_ANALYSIS,
+            "code": AgentType.CODE_ANALYSIS,
+            "codeanalysis": AgentType.CODE_ANALYSIS,
+            "metrics": AgentType.METRICS,
+            "stats": AgentType.METRICS,
+            "statistics": AgentType.METRICS,
+            
+            # Processing agents
             "fact_check": AgentType.FACT_CHECK,
             "factcheck": AgentType.FACT_CHECK,
             "fact-check": AgentType.FACT_CHECK,
             "analysis": AgentType.ANALYSIS,
             "analyze": AgentType.ANALYSIS,
+            "comparison": AgentType.COMPARISON,
+            "compare": AgentType.COMPARISON,
+            "summary": AgentType.SUMMARY,
+            "summarize": AgentType.SUMMARY,
+            "tldr": AgentType.SUMMARY,
+            "clarification": AgentType.CLARIFICATION,
+            "clarify": AgentType.CLARIFICATION,
+            
+            # Specialized agents
+            "expertise": AgentType.EXPERTISE,
+            "expert": AgentType.EXPERTISE,
+            "security": AgentType.EXPERTISE,
+            "legal": AgentType.EXPERTISE,
+            
+            # Legacy agents
             "faq": AgentType.FAQ,
             "small_talk": AgentType.SMALL_TALK,
             "smalltalk": AgentType.SMALL_TALK,

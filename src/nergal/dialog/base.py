@@ -18,18 +18,68 @@ from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage, LLMResponse
 
 
-class AgentType(str, Enum):
-    """Types of agents available in the system."""
+class AgentCategory(str, Enum):
+    """Categories for grouping agents by their purpose."""
+    
+    CORE = "core"                    # Core agents for basic functionality
+    INFORMATION = "information"       # Agents that retrieve/gather information
+    PROCESSING = "processing"         # Agents that process/analyze information
+    SPECIALIZED = "specialized"       # Domain-specific agents
 
+
+class AgentType(str, Enum):
+    """Types of agents available in the system.
+    
+    Agents are organized by category:
+    - Core: default, dispatcher
+    - Information: web_search, knowledge_base, tech_docs, code_analysis, metrics, news
+    - Processing: analysis, fact_check, comparison, summary, clarification
+    - Specialized: expertise
+    """
+    
+    # Core agents
     DEFAULT = "default"
+    DISPATCHER = "dispatcher"
+    
+    # Information gathering agents
+    WEB_SEARCH = "web_search"
+    KNOWLEDGE_BASE = "knowledge_base"
+    TECH_DOCS = "tech_docs"
+    CODE_ANALYSIS = "code_analysis"
+    METRICS = "metrics"
+    NEWS = "news"  # News aggregation and processing agent
+    
+    # Processing/analysis agents
+    ANALYSIS = "analysis"
+    FACT_CHECK = "fact_check"
+    COMPARISON = "comparison"
+    SUMMARY = "summary"
+    CLARIFICATION = "clarification"
+    
+    # Specialized agents
+    EXPERTISE = "expertise"
+    
+    # Legacy/deprecated - kept for backward compatibility
     FAQ = "faq"
     SMALL_TALK = "small_talk"
     TASK = "task"
-    WEB_SEARCH = "web_search"
-    FACT_CHECK = "fact_check"
-    ANALYSIS = "analysis"
-    DISPATCHER = "dispatcher"
     UNKNOWN = "unknown"
+    
+    @classmethod
+    def get_category(cls, agent_type: "AgentType") -> AgentCategory:
+        """Get the category for an agent type."""
+        if agent_type in (cls.DEFAULT, cls.DISPATCHER):
+            return AgentCategory.CORE
+        elif agent_type in (cls.WEB_SEARCH, cls.KNOWLEDGE_BASE, cls.TECH_DOCS,
+                           cls.CODE_ANALYSIS, cls.METRICS, cls.NEWS):
+            return AgentCategory.INFORMATION
+        elif agent_type in (cls.ANALYSIS, cls.FACT_CHECK, cls.COMPARISON,
+                           cls.SUMMARY, cls.CLARIFICATION):
+            return AgentCategory.PROCESSING
+        elif agent_type == cls.EXPERTISE:
+            return AgentCategory.SPECIALIZED
+        else:
+            return AgentCategory.CORE
 
 
 @dataclass
