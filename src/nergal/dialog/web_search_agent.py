@@ -354,11 +354,20 @@ class WebSearchAgent(BaseAgent):
                 f"Unexpected error in web search agent for query '{message}': {type(e).__name__}: {e}",
                 exc_info=True,
             )
+            # Check if it's a timeout error
+            error_name = type(e).__name__
+            if "Timeout" in error_name or "timeout" in str(e).lower():
+                return AgentResult(
+                    response="Превышено время ожидания ответа. Попробуйте упростить запрос или повторить позже.",
+                    agent_type=self.agent_type,
+                    confidence=0.1,
+                    metadata={"error": str(e), "error_type": error_name},
+                )
             return AgentResult(
                 response="Произошла ошибка при обработке вашего запроса. Попробуйте позже или переформулируйте вопрос.",
                 agent_type=self.agent_type,
                 confidence=0.1,
-                metadata={"error": str(e), "error_type": type(e).__name__},
+                metadata={"error": str(e), "error_type": error_name},
             )
 
     async def _execute_multiple_searches(

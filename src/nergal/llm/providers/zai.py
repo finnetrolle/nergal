@@ -43,7 +43,7 @@ class ZaiProvider(BaseLLMProvider):
         api_key: str,
         model: str = ZAI_DEFAULT_MODEL,
         base_url: str | None = None,
-        timeout: float = 60.0,
+        timeout: float = 120.0,
         **kwargs: Any,
     ) -> None:
         """Initialize Z.ai provider.

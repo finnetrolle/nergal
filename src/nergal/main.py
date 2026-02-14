@@ -10,6 +10,8 @@ from nergal.config import get_settings
 from nergal.dialog import DialogManager
 from nergal.dialog.web_search_agent import WebSearchAgent
 from nergal.llm import create_llm_provider
+from nergal.stt import AudioTooLongError, convert_ogg_to_wav, create_stt_provider
+from nergal.stt.base import BaseSTTProvider
 from nergal.web_search.zai_mcp_http import ZaiMcpHttpSearchProvider
 
 
@@ -52,6 +54,7 @@ class BotApplication:
         """Initialize the bot application."""
         self._dialog_manager: DialogManager | None = None
         self._web_search_provider: ZaiMcpHttpSearchProvider | None = None
+        self._stt_provider: BaseSTTProvider | None = None
         self._settings = get_settings()
         self._logger = logging.getLogger(__name__)
 
@@ -75,6 +78,28 @@ class BotApplication:
         if self._web_search_provider is None and self._settings.web_search.enabled:
             self._web_search_provider = self._create_web_search_provider()
         return self._web_search_provider
+
+    @property
+    def stt_provider(self) -> BaseSTTProvider | None:
+        """Get or create the STT provider instance."""
+        if self._stt_provider is None and self._settings.stt.enabled:
+            self._stt_provider = self._create_stt_provider()
+        return self._stt_provider
+
+    def _create_stt_provider(self) -> BaseSTTProvider:
+        """Create a new STT provider instance."""
+        provider = create_stt_provider(
+            provider_type=self._settings.stt.provider,
+            model=self._settings.stt.model,
+            device=self._settings.stt.device,
+            compute_type=self._settings.stt.compute_type,
+            api_key=self._settings.stt.api_key or None,
+        )
+        self._logger.info(
+            f"Initialized STT provider: {provider.provider_name}, "
+            f"model: {self._settings.stt.model}"
+        )
+        return provider
 
     def _create_web_search_provider(self) -> ZaiMcpHttpSearchProvider:
         """Create a new web search provider instance."""
@@ -178,6 +203,96 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(result.response)
 
 
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle incoming voice messages using STT and dialog manager."""
+    logger = logging.getLogger(__name__)
+
+    if not (update.message and update.message.voice):
+        return
+
+    app = BotApplication.get_instance()
+    settings = app._settings
+
+    # Check if STT is enabled
+    if not settings.stt.enabled:
+        await update.message.reply_text(
+            "Голосовые сообщения не поддерживаются. Пожалуйста, напишите текстом."
+        )
+        return
+
+    stt = app.stt_provider
+    if stt is None:
+        await update.message.reply_text(
+            "Ошибка: STT провайдер не инициализирован. Пожалуйста, напишите текстом."
+        )
+        return
+
+    # Send typing action to show the bot is processing
+    if update.effective_chat:
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action="typing",
+        )
+
+    try:
+        # Download the voice message
+        voice = update.message.voice
+        new_file = await voice.get_file()
+        audio_bytes = await new_file.download_as_bytearray()
+
+        # Convert OGG to WAV and check duration
+        try:
+            wav_audio, duration = convert_ogg_to_wav(
+                bytes(audio_bytes),
+                max_duration_seconds=settings.stt.max_duration_seconds,
+            )
+            logger.info(f"Converted voice message: {duration:.1f}s")
+        except AudioTooLongError as e:
+            await update.message.reply_text(
+                f"Голосовое сообщение слишком длинное ({e.duration_seconds:.0f}с). "
+                f"Максимум {e.max_seconds}с. Пожалуйста, запишите короче или напишите текстом."
+            )
+            return
+
+        # Transcribe the audio
+        transcription = await stt.transcribe(
+            wav_audio,
+            language=settings.stt.language,
+        )
+
+        if not transcription.strip():
+            await update.message.reply_text(
+                "Не удалось распознать речь в сообщении. Пожалуйста, попробуйте ещё раз или напишите текстом."
+            )
+            return
+
+        logger.info(f"Transcription: {transcription[:100]}...")
+
+        # Process the transcribed text through dialog manager
+        user_info = {
+            "first_name": update.effective_user.first_name if update.effective_user else None,
+            "last_name": update.effective_user.last_name if update.effective_user else None,
+            "username": update.effective_user.username if update.effective_user else None,
+            "language_code": update.effective_user.language_code if update.effective_user else None,
+        }
+        user_id = update.effective_user.id if update.effective_user else 0
+
+        result = await app.dialog_manager.process_message(
+            user_id=user_id,
+            message=transcription,
+            user_info=user_info,
+        )
+
+        await update.message.reply_text(result.response)
+
+    except Exception as e:
+        logger.error(f"Error processing voice message: {e}", exc_info=True)
+        await update.message.reply_text(
+            "Произошла ошибка при обработке голосового сообщения. "
+            "Пожалуйста, попробуйте ещё раз или напишите текстом."
+        )
+
+
 def main() -> None:
     """Start the bot."""
     settings = get_settings()
@@ -193,6 +308,11 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # Add voice message handler if STT is enabled
+    if settings.stt.enabled:
+        application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+        logging.getLogger(__name__).info("Voice message handler registered")
 
     logging.getLogger(__name__).info("Starting bot...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)

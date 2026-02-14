@@ -8,6 +8,26 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from nergal.dialog.styles import StyleType
 
 
+class STTSettings(BaseSettings):
+    """Speech-to-Text provider settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="STT_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    enabled: bool = Field(default=True, description="Enable voice message processing")
+    provider: str = Field(default="local", description="STT provider (local, openai)")
+    api_key: str = Field(default="", description="API key for STT provider (not needed for local)")
+    model: str = Field(default="base", description="STT model (whisper-1 for API, base/small/medium for local)")
+    language: str = Field(default="ru", description="Language code for transcription")
+    max_duration_seconds: int = Field(default=60, description="Maximum audio duration in seconds (1 minute)")
+    device: str = Field(default="cpu", description="Device for local Whisper (cpu, cuda)")
+    compute_type: str = Field(default="int8", description="Compute type for local Whisper (int8, float16, float32)")
+
+
 class LLMSettings(BaseSettings):
     """LLM provider settings."""
 
@@ -24,7 +44,7 @@ class LLMSettings(BaseSettings):
     base_url: str | None = Field(default=None, description="Optional custom API endpoint")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: int | None = Field(default=None, description="Maximum tokens to generate")
-    timeout: float = Field(default=60.0, description="Request timeout in seconds")
+    timeout: float = Field(default=120.0, description="Request timeout in seconds")
 
 
 class WebSearchSettings(BaseSettings):
@@ -70,6 +90,9 @@ class Settings(BaseSettings):
 
     # Web search settings (nested)
     web_search: WebSearchSettings = Field(default_factory=WebSearchSettings)
+
+    # STT settings (nested)
+    stt: STTSettings = Field(default_factory=STTSettings)
 
 
 @lru_cache
