@@ -60,82 +60,115 @@ docker-compose up -d prometheus grafana loki promtail alertmanager
 - **Alertmanager**: http://localhost:9093
 - **Bot Metrics**: http://localhost:8000/metrics
 
-## Metrics Available
+---
 
-All metrics are defined in [`src/nergal/monitoring/metrics.py`](src/nergal/monitoring/metrics.py).
+## Complete Metrics Reference
 
-### Bot Metrics
+All metrics are defined in [`src/nergal/monitoring/metrics.py`](../src/nergal/monitoring/metrics.py).
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `bot_messages_total` | Counter | Total messages processed (labels: `status`, `agent_type`) |
-| `bot_message_duration_seconds` | Histogram | Message processing time |
-| `bot_errors_total` | Counter | Total errors (labels: `error_type`, `component`) |
-| `bot_active_users` | Gauge | Active users in last hour |
+### 📊 Overview Dashboard Metrics
+
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `bot_messages_total` | Counter | Total messages processed | `status`, `agent_type` |
+| `bot_active_users` | Gauge | Unique users active in last hour | - |
+| `bot_errors_total` | Counter | Total errors encountered | `error_type`, `component` |
+| `system_cpu_percent` | Gauge | System CPU usage percentage | - |
+| `system_memory_percent` | Gauge | System memory usage percentage | - |
+| `system_disk_percent` | Gauge | System disk usage percentage | `path` |
+
+### 💬 Message Processing Metrics
+
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `bot_messages_total` | Counter | Total messages processed | `status` (`success`/`error`), `agent_type` |
+| `bot_message_duration_seconds` | Histogram | Time spent processing messages | `agent_type` |
+
+**Buckets**: `0.1s`, `0.25s`, `0.5s`, `1s`, `2.5s`, `5s`, `10s`, `30s`, `60s`, `120s`
 
 ```promql
 # Example queries
 rate(bot_messages_total[5m])                           # Messages per second
-histogram_quantile(0.95, bot_message_duration_seconds) # p95 latency
-sum by (agent_type) (bot_messages_total)               # By agent
+histogram_quantile(0.95, rate(bot_message_duration_seconds_bucket[5m])) # p95 latency
+sum by (agent_type) (rate(bot_messages_total[5m]))     # By agent type
+sum by (status) (increase(bot_messages_total[1h]))     # Success/error count per hour
 ```
 
-### LLM Metrics
+### 🧠 LLM Provider Metrics
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `bot_llm_requests_total` | Counter | LLM API requests (labels: `provider`, `model`, `status`) |
-| `bot_llm_request_duration_seconds` | Histogram | LLM request latency |
-| `bot_llm_tokens_total` | Counter | Token usage (labels: `provider`, `model`, `type`) |
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `bot_llm_requests_total` | Counter | LLM API requests | `provider`, `model`, `status` |
+| `bot_llm_request_duration_seconds` | Histogram | LLM request latency | `provider`, `model` |
+| `bot_llm_tokens_total` | Counter | Token usage | `provider`, `model`, `type` |
+
+**Duration Buckets**: `0.5s`, `1s`, `2s`, `5s`, `10s`, `20s`, `30s`, `60s`, `120s`
+
+**Token Types**: `prompt` (input tokens), `completion` (output tokens)
 
 ```promql
 # Example queries
 rate(bot_llm_requests_total[5m])                       # Requests per second
-sum by (model) (bot_llm_tokens_total)                  # Tokens by model
-histogram_quantile(0.95, bot_llm_request_duration_seconds) # p95 LLM latency
+sum by (model) (rate(bot_llm_tokens_total[5m]))        # Tokens by model
+histogram_quantile(0.95, rate(bot_llm_request_duration_seconds_bucket[5m])) # p95 LLM latency
+sum(increase(bot_llm_tokens_total{type="prompt"}[1h])) # Prompt tokens per hour
+sum(increase(bot_llm_tokens_total{type="completion"}[1h])) # Completion tokens per hour
 ```
 
-### Web Search Metrics
+### 🔍 Web Search Metrics
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `bot_web_search_requests_total` | Counter | Web search requests (labels: `status`) |
-| `bot_web_search_duration_seconds` | Histogram | Web search latency |
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `bot_web_search_requests_total` | Counter | Web search requests | `status` |
+| `bot_web_search_duration_seconds` | Histogram | Web search latency | - |
+
+**Buckets**: `0.5s`, `1s`, `2s`, `5s`, `10s`, `20s`, `30s`
 
 ```promql
 # Example queries
-rate(bot_web_search_requests_total[5m])  # Searches per second
-sum(bot_web_search_requests_total) by (status)  # By status
+rate(bot_web_search_requests_total[5m])                # Searches per second
+sum by (status) (bot_web_search_requests_total)        # By status
+histogram_quantile(0.95, rate(bot_web_search_duration_seconds_bucket[5m])) # p95 search latency
 ```
 
-### STT Metrics
+### 🎤 Speech-to-Text (STT) Metrics
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `bot_stt_requests_total` | Counter | Speech-to-text requests (labels: `provider`, `status`) |
-| `bot_stt_duration_seconds` | Histogram | STT processing time |
-| `bot_stt_audio_duration_seconds` | Histogram | Processed audio duration |
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `bot_stt_requests_total` | Counter | STT requests | `provider`, `status` |
+| `bot_stt_duration_seconds` | Histogram | STT processing time | `provider` |
+| `bot_stt_audio_duration_seconds` | Histogram | Duration of processed audio | `provider` |
+
+**Processing Duration Buckets**: `0.5s`, `1s`, `2s`, `5s`, `10s`, `20s`, `30s`, `60s`
+
+**Audio Duration Buckets**: `5s`, `10s`, `20s`, `30s`, `45s`, `60s`, `90s`, `120s`
 
 ```promql
 # Example queries
-rate(bot_stt_requests_total[5m])           # STT requests per second
-avg(bot_stt_audio_duration_seconds)        # Average audio length
+rate(bot_stt_requests_total[5m])                       # STT requests per second
+sum by (provider) (rate(bot_stt_requests_total[5m]))   # By provider
+histogram_quantile(0.95, rate(bot_stt_duration_seconds_bucket[5m])) # p95 STT latency
+avg(bot_stt_audio_duration_seconds)                    # Average audio length
+sum by (status) (increase(bot_stt_requests_total[1h])) # Success/error per hour
 ```
 
-### System Metrics
+### 💾 System Metrics
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `system_cpu_percent` | Gauge | CPU usage percentage |
-| `system_memory_percent` | Gauge | Memory usage percentage |
-| `system_disk_percent` | Gauge | Disk usage percentage (label: `path`) |
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `system_cpu_percent` | Gauge | CPU usage percentage | - |
+| `system_memory_percent` | Gauge | Memory usage percentage | - |
+| `system_disk_percent` | Gauge | Disk usage percentage | `path` |
 
 ```promql
 # Example queries
-system_cpu_percent          # Current CPU usage
-system_memory_percent       # Current memory usage
-system_disk_percent{path="/"}  # Root disk usage
+system_cpu_percent                                     # Current CPU usage
+system_memory_percent                                  # Current memory usage
+system_disk_percent{path="/"}                          # Root disk usage
+avg_over_time(system_cpu_percent[1h])                  # Average CPU over hour
 ```
+
+---
 
 ## Using Metrics in Code
 
@@ -216,9 +249,73 @@ from nergal.monitoring.metrics import track_user_activity
 track_user_activity(user_id=123456789)
 ```
 
+---
+
+## Grafana Dashboard
+
+### Pre-built Dashboard
+
+A comprehensive dashboard is available at [`monitoring/grafana/dashboards/nergal-bot-overview.json`](../monitoring/grafana/dashboards/nergal-bot-overview.json).
+
+### Dashboard Sections
+
+#### 📊 Overview
+- **Messages (1h)** - Total messages processed in the last hour
+- **Active Users** - Unique users with activity in the last hour
+- **Web Searches (1h)** - Web search requests in the last hour
+- **Errors (1h)** - Total errors in the last hour (color-coded by severity)
+- **Memory** - Current memory usage with thresholds
+- **Bot Status** - Bot health status indicator
+
+#### 💬 Message Processing
+- **Message Rate** - Messages per second by status and agent type
+- **Message Processing Latency** - p50, p95, p99 latency percentiles
+
+#### 🧠 LLM Provider
+- **LLM Request Rate** - Requests per second by provider/model/status
+- **LLM Request Latency** - p50, p95 latency percentiles
+- **Token Usage Rate** - Tokens per second (prompt vs completion)
+
+#### 🔍 Web Search
+- **Web Search Request Rate** - Searches per second by status
+- **Web Search Latency** - p50, p95 latency percentiles
+
+#### 🎤 Speech-to-Text (STT)
+- **STT Requests (1h)** - Total STT requests in the last hour
+- **STT Success (1h)** - Successful STT requests
+- **STT Request Rate** - Requests per second by provider and status
+- **STT Processing Latency** - p50, p95 latency percentiles
+- **Audio Duration Processed** - Duration of audio being processed
+- **STT by Provider** - Breakdown by provider
+
+#### ❌ Errors
+- **Errors by Type** - Bar chart of errors by type/component (1h buckets)
+- **Error Logs** - Live error logs from Loki
+
+#### 📊 Token Usage & System Resources
+- **Tokens per Hour** - Bar chart of hourly token usage
+- **Token Usage (Last Hour)** - Stat panel with prompt/completion/total tokens
+- **CPU & Memory Usage** - Time series of system resources
+- **Disk Usage** - Disk usage by path with threshold lines
+
+### Dashboard Features
+
+- **Auto-refresh**: Every 30 seconds
+- **Time range**: Last 6 hours (adjustable)
+- **Smooth graphs**: Line interpolation for better visualization
+- **Color coding**: Consistent colors across all panels
+  - Green: Success/healthy
+  - Yellow: Warning/moderate
+  - Orange: Elevated concern
+  - Red: Error/critical
+  - Blue: Information/prompt tokens
+  - Purple: Completion tokens/memory
+
+---
+
 ## Alerting Rules
 
-Alert rules are defined in [`monitoring/alerts.yml`](monitoring/alerts.yml).
+Alert rules are defined in [`monitoring/alerts.yml`](../monitoring/alerts.yml).
 
 ### Critical Alerts
 
@@ -238,6 +335,8 @@ Alert rules are defined in [`monitoring/alerts.yml`](monitoring/alerts.yml).
 | `LLMRequestLatencyHigh` | p95 latency >30s for 5m | High LLM latency |
 | `HighCPUUsage` | CPU >80% for 5m | High CPU usage |
 | `HighMemoryUsage` | Memory >85% for 5m | High memory usage |
+
+---
 
 ## Configuring Alert Notifications
 
@@ -292,13 +391,15 @@ receivers:
         send_resolved: true
 ```
 
+---
+
 ## Structured Logging
 
 The bot uses `structlog` for structured JSON logging when `MONITORING_JSON_LOGS=true`.
 
 ### Configuration
 
-Logging is configured in [`src/nergal/monitoring/logging_config.py`](src/nergal/monitoring/logging_config.py):
+Logging is configured in [`src/nergal/monitoring/logging_config.py`](../src/nergal/monitoring/logging_config.py):
 
 ```python
 from nergal.monitoring.logging_config import setup_logging
@@ -347,9 +448,11 @@ setup_logging(
 {service="nergal-bot"} |= "LLM request"
 ```
 
+---
+
 ## Health Check Endpoint
 
-The bot provides health checks via [`src/nergal/monitoring/health.py`](src/nergal/monitoring/health.py):
+The bot provides health checks via [`src/nergal/monitoring/health.py`](../src/nergal/monitoring/health.py).
 
 ### Components Checked
 
@@ -396,46 +499,7 @@ Components:
 Uptime: 3d 14h 22m
 ```
 
-## Grafana Dashboards
-
-### Pre-built Dashboard
-
-A pre-built dashboard is available at [`monitoring/grafana/dashboards/nergal-bot-overview.json`](monitoring/grafana/dashboards/nergal-bot-overview.json) with:
-
-- Message rate and latency graphs
-- LLM request metrics
-- Token usage visualization
-- Error tracking
-- System resource usage
-- Live error logs
-
-### Dashboard Panels
-
-1. **Message Overview**
-   - Messages per minute
-   - Processing latency (p50, p95, p99)
-   - Active users gauge
-
-2. **LLM Metrics**
-   - Requests per minute by provider/model
-   - Token usage over time
-   - Request latency distribution
-
-3. **Error Tracking**
-   - Error rate over time
-   - Errors by type and component
-   - Recent error logs
-
-4. **System Resources**
-   - CPU usage
-   - Memory usage
-   - Disk usage
-
-### Creating Custom Dashboards
-
-1. Open Grafana → Dashboards → New Dashboard
-2. Add Prometheus queries using the metrics above
-3. Save and optionally export to `monitoring/grafana/dashboards/`
+---
 
 ## Monitoring Without Docker
 
@@ -455,9 +519,11 @@ python -m nergal.main
 
 4. Configure external Prometheus to scrape this endpoint
 
+---
+
 ## Prometheus Configuration
 
-The Prometheus configuration is in [`monitoring/prometheus.yml`](monitoring/prometheus.yml):
+The Prometheus configuration is in [`monitoring/prometheus.yml`](../monitoring/prometheus.yml):
 
 ```yaml
 global:
@@ -485,6 +551,8 @@ alerting:
     - static_configs:
         - targets: ['alertmanager:9093']
 ```
+
+---
 
 ## Troubleshooting
 
@@ -541,6 +609,8 @@ If monitoring stack uses too much memory:
 2. Verify Prometheus is accessible from Grafana
 3. Check provisioning in `monitoring/grafana/provisioning/`
 
+---
+
 ## Best Practices
 
 1. **Set up alerting early** - Don't wait for issues to happen
@@ -550,6 +620,8 @@ If monitoring stack uses too much memory:
 5. **Keep dashboards updated** - Add new metrics as features are added
 6. **Use labels consistently** - Makes querying easier
 7. **Set appropriate retention** - Balance storage vs. history needs
+
+---
 
 ## Security Considerations
 
@@ -565,6 +637,8 @@ If monitoring stack uses too much memory:
 4. **Secure Alertmanager** - Don't expose web UI publicly
 5. **Rotate credentials** - Regularly update API keys and passwords
 6. **Limit log access** - Logs may contain sensitive information
+
+---
 
 ## Metrics Server API
 
@@ -586,8 +660,11 @@ bot_message_duration_seconds_bucket{agent_type="default",le="0.25"} 200
 ...
 ```
 
+---
+
 ## Related Documentation
 
 - [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guide with monitoring setup
 - [AGENT_ARCHITECTURE.md](AGENT_ARCHITECTURE.md) - Agent system architecture
 - [LLM_PROVIDERS.md](LLM_PROVIDERS.md) - LLM provider configuration
+- [STT.md](STT.md) - Speech-to-text configuration
