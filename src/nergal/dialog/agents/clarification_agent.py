@@ -117,7 +117,7 @@ class ClarificationAgent(BaseSpecializedAgent):
             AgentResult with clarification if needed.
         """
         # Analyze message for ambiguity
-        analysis = await self._analyze_message(message, context)
+        analysis, tokens_used = await self._analyze_message(message, context)
         
         if not analysis.get("clarification_needed", False):
             return AgentResult(
@@ -128,6 +128,7 @@ class ClarificationAgent(BaseSpecializedAgent):
                     "clarification_needed": False,
                     "reason": analysis.get("reason", ""),
                 },
+                tokens_used=tokens_used,
             )
         
         # Format clarification response
@@ -143,13 +144,14 @@ class ClarificationAgent(BaseSpecializedAgent):
                 "options": analysis.get("options", []),
                 "reason": analysis.get("reason", ""),
             },
+            tokens_used=tokens_used,
         )
     
     async def _analyze_message(
         self,
         message: str,
         context: dict[str, Any],
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], int | None]:
         """Analyze message for ambiguity.
         
         Args:
@@ -157,7 +159,7 @@ class ClarificationAgent(BaseSpecializedAgent):
             context: Dialog context.
             
         Returns:
-            Analysis result dictionary.
+            Tuple of (analysis result dictionary, tokens used or None).
         """
         prompt = f"""Проанализируй запрос на наличие неопределенности.
 
@@ -175,12 +177,18 @@ class ClarificationAgent(BaseSpecializedAgent):
         
         response = await self.llm_provider.generate(messages, max_tokens=300)
         
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        
         # Parse JSON response
         try:
             start = response.content.find("{")
             end = response.content.rfind("}") + 1
             if start != -1 and end > start:
-                return json.loads(response.content[start:end])
+                return json.loads(response.content[start:end]), tokens_used
         except json.JSONDecodeError:
             pass
         
@@ -188,7 +196,7 @@ class ClarificationAgent(BaseSpecializedAgent):
         return {
             "clarification_needed": False,
             "reason": "Не удалось проанализировать запрос",
-        }
+        }, tokens_used
     
     def _format_clarification_response(self, analysis: dict[str, Any]) -> str:
         """Format clarification response for user.

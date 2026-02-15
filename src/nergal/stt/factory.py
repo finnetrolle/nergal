@@ -13,6 +13,7 @@ def create_stt_provider(
     device: str = "cpu",
     compute_type: str = "int8",
     api_key: str | None = None,
+    timeout: float = 60.0,
 ) -> BaseSTTProvider:
     """Create an STT provider instance based on configuration.
 
@@ -22,6 +23,7 @@ def create_stt_provider(
         device: Device for local Whisper ("cpu" or "cuda").
         compute_type: Compute type for local Whisper ("int8", "float16", "float32").
         api_key: API key for cloud providers (not needed for local).
+        timeout: Timeout in seconds for transcription.
 
     Returns:
         Configured STT provider instance.
@@ -37,6 +39,7 @@ def create_stt_provider(
             model=model,
             device=device,
             compute_type=compute_type,
+            timeout=timeout,
         )
     elif provider_type == "openai":
         # OpenAI provider would be implemented here

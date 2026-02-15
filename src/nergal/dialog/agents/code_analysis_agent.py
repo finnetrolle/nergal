@@ -150,13 +150,14 @@ class CodeAnalysisAgent(BaseAgent):
         code_results = await self._search_code(message, context)
         
         # Generate response
+        tokens_used = None
         if code_results:
-            response = await self._generate_code_response(
+            response, tokens_used = await self._generate_code_response(
                 message, code_results, query_type
             )
             confidence = 0.9
         else:
-            response = await self._generate_general_response(message, query_type)
+            response, tokens_used = await self._generate_general_response(message, query_type)
             confidence = 0.6
         
         return AgentResult(
@@ -167,7 +168,8 @@ class CodeAnalysisAgent(BaseAgent):
                 "query_type": query_type,
                 "files_found": len(code_results) if code_results else 0,
                 "files": [r.get("file") for r in code_results] if code_results else [],
-            }
+            },
+            tokens_used=tokens_used,
         )
     
     def _determine_query_type(self, message: str) -> str:
@@ -226,7 +228,7 @@ class CodeAnalysisAgent(BaseAgent):
         message: str,
         code_results: list[dict[str, Any]],
         query_type: str,
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate response based on code search results.
         
         Args:
@@ -235,7 +237,7 @@ class CodeAnalysisAgent(BaseAgent):
             query_type: Type of query.
             
         Returns:
-            Generated response.
+            Tuple of (generated response, tokens used or None).
         """
         # Format code results
         code_context = "\n\n".join([
@@ -260,13 +262,18 @@ class CodeAnalysisAgent(BaseAgent):
         ]
         
         response = await self.llm_provider.generate(messages, max_tokens=1200)
-        return response.content
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        return response.content, tokens_used
     
     async def _generate_general_response(
         self,
         message: str,
         query_type: str,
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate general response when no code found.
         
         Args:
@@ -274,7 +281,7 @@ class CodeAnalysisAgent(BaseAgent):
             query_type: Type of query.
             
         Returns:
-            Generated response.
+            Tuple of (generated response, tokens used or None).
         """
         prompt = f"""Ответь на вопрос по коду, используя свои знания.
 
@@ -288,7 +295,12 @@ class CodeAnalysisAgent(BaseAgent):
         ]
         
         response = await self.llm_provider.generate(messages, max_tokens=1000)
-        return response.content
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        return response.content, tokens_used
     
     def add_code_connector(self, name: str, connector: Any) -> None:
         """Add a code repository connector.

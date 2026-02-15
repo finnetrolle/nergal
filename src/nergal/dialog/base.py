@@ -137,6 +137,7 @@ class AgentResult:
     metadata: dict[str, Any] = field(default_factory=dict)
     should_handoff: bool = False
     handoff_agent: AgentType | None = None
+    tokens_used: int | None = None  # Total tokens (prompt + completion)
 
 
 class BaseAgent(ABC):

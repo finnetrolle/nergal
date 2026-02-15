@@ -1,5 +1,6 @@
 """Main entry point for the Telegram bot."""
 
+import asyncio
 import logging
 import re
 import time
@@ -111,6 +112,7 @@ class BotApplication:
             device=self._settings.stt.device,
             compute_type=self._settings.stt.compute_type,
             api_key=self._settings.stt.api_key or None,
+            timeout=self._settings.stt.timeout,
         )
         self._logger.info(
             "Initialized STT provider",
@@ -166,6 +168,52 @@ class BotApplication:
             self._logger.info("Web search agent registered and enabled")
 
         return manager
+
+    async def initialize_memory(self) -> None:
+        """Initialize the memory service and database connection."""
+        try:
+            from nergal.database.connection import create_pool
+            from nergal.memory.service import MemoryService
+            
+            # Create database connection pool
+            await create_pool(self._settings.database)
+            self._logger.info(
+                "Database connection pool created",
+                host=self._settings.database.host,
+                database=self._settings.database.name,
+            )
+            
+            # Initialize memory service in dialog manager
+            memory_service = MemoryService()
+            self.dialog_manager.set_memory_service(memory_service)
+            await self.dialog_manager.initialize_memory()
+            
+            self._logger.info(
+                "Memory service initialized",
+                long_term_enabled=self._settings.memory.long_term_enabled,
+                extraction_enabled=self._settings.memory.long_term_extraction_enabled,
+            )
+        except Exception as e:
+            self._logger.error(
+                "Failed to initialize memory service",
+                error=str(e),
+                exc_info=True,
+            )
+            # Continue without memory - it's not critical for bot operation
+            self._logger.warning("Bot will continue without persistent memory")
+
+    async def shutdown_memory(self) -> None:
+        """Shutdown the memory service and close database connections."""
+        try:
+            from nergal.database.connection import close_pool
+            
+            await close_pool()
+            self._logger.info("Database connections closed")
+        except Exception as e:
+            self._logger.error(
+                "Error during memory shutdown",
+                error=str(e),
+            )
 
     def start_metrics_server(self) -> None:
         """Start the Prometheus metrics server."""
@@ -374,11 +422,23 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
             return
 
-        # Transcribe the audio
-        transcription = await stt.transcribe(
-            wav_audio,
-            language=settings.stt.language,
-        )
+        # Transcribe the audio with timeout handling
+        try:
+            transcription = await stt.transcribe(
+                wav_audio,
+                language=settings.stt.language,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "Voice transcription timed out",
+                user_id=user_id,
+                timeout_seconds=settings.stt.timeout,
+            )
+            await update.message.reply_text(
+                "Превышено время ожидания расшифровки голосового сообщения. "
+                "Пожалуйста, попробуйте ещё раз или напишите текстом."
+            )
+            return
 
         if not transcription.strip():
             await update.message.reply_text(
@@ -442,6 +502,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 def main() -> None:
     """Start the bot."""
+    import asyncio
+    
     settings = get_settings()
 
     # Configure logging with monitoring settings
@@ -466,12 +528,27 @@ def main() -> None:
     # Pre-initialize components for health checks
     _ = app.dialog_manager  # Initialize dialog manager
 
-    # Mark components as healthy
+    # Initialize memory service (async, in event loop)
+    async def post_init(application: Application) -> None:
+        """Initialize async resources after application is ready."""
+        await app.initialize_memory()
+        
+        # Mark components as healthy
+        from nergal.monitoring import HealthStatus, get_health_checker
+        checker = get_health_checker()
+        checker.mark_healthy("bot", "Bot application initialized")
+        checker.mark_healthy("memory", "Memory service initialized")
+
+    async def post_shutdown(application: Application) -> None:
+        """Cleanup async resources on shutdown."""
+        await app.shutdown_memory()
+
+    # Mark components as healthy (initial)
     from nergal.monitoring import HealthStatus, get_health_checker
     checker = get_health_checker()
     checker.mark_healthy("bot", "Bot application initialized")
 
-    application = Application.builder().token(settings.telegram_bot_token).build()
+    application = Application.builder().token(settings.telegram_bot_token).post_init(post_init).post_shutdown(post_shutdown).build()
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))

@@ -149,7 +149,8 @@ class FactCheckAgent(BaseAgent):
                 response="Нет информации для проверки фактов.",
                 agent_type=self.agent_type,
                 confidence=0.3,
-                metadata={"verified": False, "reason": "no_info"}
+                metadata={"verified": False, "reason": "no_info"},
+                tokens_used=None,
             )
         
         # Perform verification
@@ -169,7 +170,8 @@ class FactCheckAgent(BaseAgent):
                 "result": verification_result.get("result"),
                 "sources_checked": verification_result.get("sources_checked", 0),
                 "reliability_score": verification_result.get("reliability_score"),
-            }
+            },
+            tokens_used=None,  # No LLM call in this agent's response generation
         )
     
     def _extract_info_to_verify(

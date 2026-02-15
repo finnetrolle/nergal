@@ -1220,7 +1220,7 @@
       },
       "targets": [
         {
-          "expr": "{job=\"nergal-bot\"} |= `error` or `ERROR` or `exception`",
+          "expr": "{job=\"nergal-bot\"} |~ \"(?i)(error|exception)\"",
           "refId": "A"
         }
       ],

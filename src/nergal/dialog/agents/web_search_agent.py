@@ -181,7 +181,11 @@ class WebSearchAgent(BaseAgent):
 
         try:
             response = await self.llm_provider.generate(messages)
-            content = response.content.strip()
+            content = response.content.strip() if response.content else ""
+
+            if not content:
+                logger.warning("LLM returned empty response for query generation")
+                return [self._fallback_extract_query(message)]
 
             # Try to extract JSON from the response
             # Sometimes LLM adds extra text, so we try to find JSON array
@@ -204,7 +208,7 @@ class WebSearchAgent(BaseAgent):
             logger.warning(f"Failed to parse LLM query response: {e}")
             return [self._fallback_extract_query(message)]
         except Exception as e:
-            logger.error(f"Error generating search queries: {e}")
+            logger.error(f"Error generating search queries: {type(e).__name__}: {e}", exc_info=True)
             return [self._fallback_extract_query(message)]
 
     def _fallback_extract_query(self, message: str) -> str:
@@ -297,7 +301,7 @@ class WebSearchAgent(BaseAgent):
             all_results = await self._execute_multiple_searches(search_queries)
 
             if not all_results:
-                response = await self._generate_no_results_response(
+                response, tokens_used = await self._generate_no_results_response(
                     message, search_queries, history
                 )
                 return AgentResult(
@@ -305,11 +309,12 @@ class WebSearchAgent(BaseAgent):
                     agent_type=self.agent_type,
                     confidence=0.5,
                     metadata={"search_queries": search_queries, "results_count": 0},
+                    tokens_used=tokens_used,
                 )
 
             # Step 3: Generate response with combined results
             formatted_results = self._format_multiple_results(all_results)
-            response = await self._generate_response_with_results(
+            response, tokens_used = await self._generate_response_with_results(
                 message, search_queries, formatted_results, history
             )
 
@@ -334,6 +339,7 @@ class WebSearchAgent(BaseAgent):
                     "search_results": formatted_results,
                     "original_message": message,
                 },
+                tokens_used=tokens_used,
             )
 
         except SearchError as e:
@@ -342,11 +348,17 @@ class WebSearchAgent(BaseAgent):
                 exc_info=True,
             )
             response = await self.generate_response(message, history)
+            tokens_used = None
+            if response.usage:
+                tokens_used = response.usage.get("total_tokens") or (
+                    response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+                )
             return AgentResult(
                 response=f"{response.content}\n\n_(Примечание: Не удалось выполнить поиск в сети)_",
                 agent_type=self.agent_type,
                 confidence=0.3,
                 metadata={"error": str(e), "error_type": type(e).__name__},
+                tokens_used=tokens_used,
             )
         except Exception as e:
             # Catch any other errors (e.g., LLM provider errors during response generation)
@@ -362,12 +374,14 @@ class WebSearchAgent(BaseAgent):
                     agent_type=self.agent_type,
                     confidence=0.1,
                     metadata={"error": str(e), "error_type": error_name},
+                    tokens_used=None,
                 )
             return AgentResult(
                 response="Произошла ошибка при обработке вашего запроса. Попробуйте позже или переформулируйте вопрос.",
                 agent_type=self.agent_type,
                 confidence=0.1,
                 metadata={"error": str(e), "error_type": error_name},
+                tokens_used=None,
             )
 
     async def _execute_multiple_searches(
@@ -429,7 +443,7 @@ class WebSearchAgent(BaseAgent):
         search_queries: list[str],
         formatted_results: str,
         history: list[LLMMessage],
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate response using LLM with search results.
 
         Args:
@@ -439,7 +453,7 @@ class WebSearchAgent(BaseAgent):
             history: Conversation history.
 
         Returns:
-            Generated response.
+            Tuple of (generated response, tokens used or None).
         """
         queries_str = ", ".join(search_queries)
         search_context = (
@@ -457,14 +471,19 @@ class WebSearchAgent(BaseAgent):
         ]
 
         response = await self.llm_provider.generate(messages)
-        return response.content
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        return response.content, tokens_used
 
     async def _generate_no_results_response(
         self,
         message: str,
         search_queries: list[str],
         history: list[LLMMessage],
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate response when no search results found.
 
         Args:
@@ -473,7 +492,7 @@ class WebSearchAgent(BaseAgent):
             history: Conversation history.
 
         Returns:
-            Generated response.
+            Tuple of (generated response, tokens used or None).
         """
         queries_str = ", ".join(search_queries)
         no_results_context = (
@@ -490,4 +509,9 @@ class WebSearchAgent(BaseAgent):
         ]
 
         response = await self.llm_provider.generate(messages)
-        return response.content
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        return response.content, tokens_used

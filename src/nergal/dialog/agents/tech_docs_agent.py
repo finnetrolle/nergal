@@ -168,13 +168,14 @@ class TechDocsAgent(BaseAgent):
         doc_results = await self._search_docs(message, technology, context)
         
         # Generate response
+        tokens_used = None
         if doc_results:
-            response = await self._generate_doc_response(
+            response, tokens_used = await self._generate_doc_response(
                 message, doc_results, technology
             )
             confidence = 0.9
         else:
-            response = await self._generate_general_response(message, technology)
+            response, tokens_used = await self._generate_general_response(message, technology)
             confidence = 0.6
         
         return AgentResult(
@@ -185,7 +186,8 @@ class TechDocsAgent(BaseAgent):
                 "technology": technology,
                 "docs_found": len(doc_results) if doc_results else 0,
                 "sources": [r.get("source") for r in doc_results] if doc_results else [],
-            }
+            },
+            tokens_used=tokens_used,
         )
     
     def _detect_technology(self, message: str) -> str | None:
@@ -256,7 +258,7 @@ class TechDocsAgent(BaseAgent):
         message: str,
         doc_results: list[dict[str, Any]],
         technology: str | None,
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate response based on documentation results.
         
         Args:
@@ -265,7 +267,7 @@ class TechDocsAgent(BaseAgent):
             technology: Detected technology.
             
         Returns:
-            Generated response.
+            Tuple of (generated response, tokens used or None).
         """
         # Combine documentation content
         docs_content = "\n\n".join([
@@ -290,13 +292,18 @@ class TechDocsAgent(BaseAgent):
         ]
         
         response = await self.llm_provider.generate(messages, max_tokens=1200)
-        return response.content
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        return response.content, tokens_used
     
     async def _generate_general_response(
         self,
         message: str,
         technology: str | None,
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate general response when no docs found.
         
         Args:
@@ -304,7 +311,7 @@ class TechDocsAgent(BaseAgent):
             technology: Detected technology.
             
         Returns:
-            Generated response.
+            Tuple of (generated response, tokens used or None).
         """
         tech_hint = f" для {technology}" if technology else ""
         
@@ -320,7 +327,12 @@ class TechDocsAgent(BaseAgent):
         ]
         
         response = await self.llm_provider.generate(messages, max_tokens=1000)
-        return response.content
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        return response.content, tokens_used
     
     def add_doc_connector(self, technology: str, connector: Any) -> None:
         """Add a documentation connector for a technology.

@@ -21,6 +21,7 @@ class LocalWhisperProvider(BaseSTTProvider):
         model: str = "base",
         device: str = "cpu",
         compute_type: str = "int8",
+        timeout: float = 60.0,
     ):
         """Initialize the local Whisper provider.
 
@@ -29,10 +30,12 @@ class LocalWhisperProvider(BaseSTTProvider):
             device: Device to run on ( "cpu" or "cuda").
             compute_type: Computation type ( "int8", "float16", "float32").
                          Use "int8" for CPU, "float16" for GPU.
+            timeout: Timeout in seconds for transcription.
         """
         self._model_name = model
         self._device = device
         self._compute_type = compute_type
+        self._timeout = timeout
         self._model: WhisperModel | None = None
         self._logger = logging.getLogger(__name__)
 
@@ -76,6 +79,7 @@ class LocalWhisperProvider(BaseSTTProvider):
 
         Raises:
             RuntimeError: If transcription fails.
+            asyncio.TimeoutError: If transcription times out.
         """
         loop = asyncio.get_event_loop()
 
@@ -99,5 +103,12 @@ class LocalWhisperProvider(BaseSTTProvider):
                 self._logger.error(f"Transcription failed: {e}")
                 raise RuntimeError(f"Transcription failed: {e}") from e
 
-        # Run in thread pool to avoid blocking the event loop
-        return await loop.run_in_executor(None, _transcribe)
+        # Run in thread pool to avoid blocking the event loop with timeout
+        try:
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, _transcribe),
+                timeout=self._timeout
+            )
+        except asyncio.TimeoutError:
+            self._logger.error(f"Transcription timed out after {self._timeout}s")
+            raise

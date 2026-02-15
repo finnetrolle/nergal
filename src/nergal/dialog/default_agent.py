@@ -53,6 +53,8 @@ class DefaultAgent(BaseAgent):
 
         If search results are available in the context (from a previous web_search step),
         they will be used to provide a more informed response.
+        
+        If memory context is available, it will be used to personalize the response.
 
         Args:
             message: User message to process.
@@ -74,17 +76,88 @@ class DefaultAgent(BaseAgent):
                 search_results=search_results,
                 search_queries=context.get("search_queries", []),
                 history=history,
+                context=context,
             )
         else:
             logger.debug("DefaultAgent: no search results in context, using standard response")
-            response = await self.generate_response(message, history)
+            response = await self._generate_response_with_memory(message, history, context)
+
+        # Calculate total tokens from usage
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
 
         return AgentResult(
             response=response.content,
             agent_type=self.agent_type,
             confidence=0.1,
             metadata={"model": response.model, "usage": response.usage},
+            tokens_used=tokens_used,
         )
+
+    async def _generate_response_with_memory(
+        self,
+        message: str,
+        history: list[LLMMessage],
+        context: dict[str, Any],
+    ) -> Any:
+        """Generate response with memory context if available.
+
+        Args:
+            message: User message to process.
+            history: Conversation history.
+            context: Current dialog context.
+
+        Returns:
+            LLMResponse with the generated answer.
+        """
+        messages = [LLMMessage(role=MessageRole.SYSTEM, content=self.system_prompt)]
+        
+        # Add memory context if available
+        memory_context = self._build_memory_context(context)
+        if memory_context:
+            messages.append(LLMMessage(
+                role=MessageRole.SYSTEM,
+                content=f"Информация о пользователе для персонализации ответа:\n{memory_context}",
+            ))
+        
+        # Add conversation history
+        messages.extend(history)
+        
+        # Add current message
+        messages.append(LLMMessage(role=MessageRole.USER, content=message))
+
+        return await self.llm_provider.generate(messages)
+
+    def _build_memory_context(self, context: dict[str, Any]) -> str | None:
+        """Build memory context string from context data.
+
+        Args:
+            context: Current dialog context.
+
+        Returns:
+            Formatted memory context string or None if no memory available.
+        """
+        memory = context.get("memory", {})
+        if not memory:
+            return None
+        
+        parts = []
+        
+        # Add profile summary
+        profile_summary = memory.get("profile_summary", "")
+        if profile_summary and profile_summary != "Информация о пользователе отсутствует.":
+            parts.append(f"Профиль: {profile_summary}")
+        
+        # Add recent conversation summary if available
+        recent_messages = memory.get("recent_messages", [])
+        if recent_messages:
+            # Just note that we have context, don't duplicate history
+            parts.append(f"Контекст беседы: {len(recent_messages)} предыдущих сообщений")
+        
+        return "\n".join(parts) if parts else None
 
     async def _generate_response_with_search_results(
         self,
@@ -92,6 +165,7 @@ class DefaultAgent(BaseAgent):
         search_results: str,
         search_queries: list[str],
         history: list[LLMMessage],
+        context: dict[str, Any] | None = None,
     ) -> Any:
         """Generate response using search results from previous agent.
 
@@ -100,6 +174,7 @@ class DefaultAgent(BaseAgent):
             search_results: Formatted search results from web search agent.
             search_queries: List of search queries that were used.
             history: Conversation history.
+            context: Current dialog context (optional).
 
         Returns:
             LLMResponse with the generated answer.

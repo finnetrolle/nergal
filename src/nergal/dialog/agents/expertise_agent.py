@@ -247,7 +247,7 @@ class ExpertiseAgent(BaseAgent):
         relevant_context = self._gather_domain_context(message, context)
         
         # Generate expert response
-        response = await self._generate_expert_response(
+        response, tokens_used = await self._generate_expert_response(
             message, relevant_context, self._current_domain
         )
         
@@ -258,7 +258,8 @@ class ExpertiseAgent(BaseAgent):
             metadata={
                 "domain": self._current_domain,
                 "detected_domain": detected_domain,
-            }
+            },
+            tokens_used=tokens_used,
         )
     
     def _detect_domain(self, message: str) -> str:
@@ -320,7 +321,7 @@ class ExpertiseAgent(BaseAgent):
         message: str,
         relevant_context: str,
         domain: str,
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate expert response.
         
         Args:
@@ -329,7 +330,7 @@ class ExpertiseAgent(BaseAgent):
             domain: Expertise domain.
             
         Returns:
-            Expert response.
+            Tuple of (expert response, tokens used or None).
         """
         domain_prompt = self.DOMAIN_PROMPTS.get(
             domain,
@@ -350,16 +351,21 @@ class ExpertiseAgent(BaseAgent):
         ]
         
         response = await self.llm_provider.generate(messages, max_tokens=1200)
-        return response.content
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        return response.content, tokens_used
     
-    async def get_security_assessment(self, topic: str) -> str:
+    async def get_security_assessment(self, topic: str) -> tuple[str, int | None]:
         """Get security assessment for a topic.
         
         Args:
             topic: Topic to assess.
             
         Returns:
-            Security assessment.
+            Tuple of (security assessment, tokens used or None).
         """
         self._current_domain = ExpertiseDomain.SECURITY
         return await self._generate_expert_response(
@@ -368,14 +374,14 @@ class ExpertiseAgent(BaseAgent):
             ExpertiseDomain.SECURITY
         )
     
-    async def get_legal_analysis(self, topic: str) -> str:
+    async def get_legal_analysis(self, topic: str) -> tuple[str, int | None]:
         """Get legal analysis for a topic.
         
         Args:
             topic: Topic to analyze.
             
         Returns:
-            Legal analysis.
+            Tuple of (legal analysis, tokens used or None).
         """
         self._current_domain = ExpertiseDomain.LEGAL
         return await self._generate_expert_response(
@@ -384,14 +390,14 @@ class ExpertiseAgent(BaseAgent):
             ExpertiseDomain.LEGAL
         )
     
-    async def get_architecture_review(self, description: str) -> str:
+    async def get_architecture_review(self, description: str) -> tuple[str, int | None]:
         """Get architecture review.
         
         Args:
             description: Architecture description.
             
         Returns:
-            Architecture review.
+            Tuple of (architecture review, tokens used or None).
         """
         self._current_domain = ExpertiseDomain.ARCHITECTURE
         return await self._generate_expert_response(

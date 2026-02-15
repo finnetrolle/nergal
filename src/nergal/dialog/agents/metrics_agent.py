@@ -143,13 +143,14 @@ class MetricsAgent(BaseAgent):
         metrics_data = await self._fetch_metrics(message, metrics_type, context)
         
         # Generate response
+        tokens_used = None
         if metrics_data:
-            response = await self._generate_metrics_response(
+            response, tokens_used = await self._generate_metrics_response(
                 message, metrics_data, metrics_type
             )
             confidence = 0.9
         else:
-            response = await self._generate_no_data_response(message, metrics_type)
+            response, tokens_used = await self._generate_no_data_response(message, metrics_type)
             confidence = 0.5
         
         return AgentResult(
@@ -160,7 +161,8 @@ class MetricsAgent(BaseAgent):
                 "metrics_type": metrics_type,
                 "data_available": bool(metrics_data),
                 "sources": list(metrics_data.keys()) if metrics_data else [],
-            }
+            },
+            tokens_used=tokens_used,
         )
     
     def _determine_metrics_type(self, message: str) -> str:
@@ -225,7 +227,7 @@ class MetricsAgent(BaseAgent):
         message: str,
         metrics_data: dict[str, Any],
         metrics_type: str,
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate response based on metrics data.
         
         Args:
@@ -234,7 +236,7 @@ class MetricsAgent(BaseAgent):
             metrics_type: Type of metrics.
             
         Returns:
-            Generated response.
+            Tuple of (generated response, tokens used or None).
         """
         # Format metrics for display
         formatted_metrics = []
@@ -270,13 +272,18 @@ class MetricsAgent(BaseAgent):
         ]
         
         response = await self.llm_provider.generate(messages, max_tokens=1000)
-        return response.content
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        return response.content, tokens_used
     
     async def _generate_no_data_response(
         self,
         message: str,
         metrics_type: str,
-    ) -> str:
+    ) -> tuple[str, None]:
         """Generate response when no data available.
         
         Args:
@@ -284,7 +291,7 @@ class MetricsAgent(BaseAgent):
             metrics_type: Type of metrics.
             
         Returns:
-            Generated response.
+            Tuple of (generated response, None for tokens).
         """
         return f"""Не удалось получить данные о метриках типа "{metrics_type}".
 
@@ -292,7 +299,7 @@ class MetricsAgent(BaseAgent):
 1. Настроить подключение к системе мониторинга (Grafana, Datadog, Prometheus)
 2. Указать конкретные метрики для отслеживания
 
-Проверьте конфигурацию подключений к источникам данных."""
+Проверьте конфигурацию подключений к источникам данных.""", None
     
     def add_metrics_connector(self, name: str, connector: Any) -> None:
         """Add a metrics source connector.

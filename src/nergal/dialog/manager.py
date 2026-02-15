@@ -22,6 +22,8 @@ from nergal.dialog.default_agent import DefaultAgent
 from nergal.dialog.dispatcher_agent import DispatcherAgent
 from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage
+from nergal.memory.service import MemoryService
+from nergal.memory.extraction import MemoryExtractionService
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +67,7 @@ class DialogManager:
         max_contexts: int = 1000,
         style_type: StyleType = StyleType.DEFAULT,
         use_dispatcher: bool = True,
+        memory_service: MemoryService | None = None,
     ) -> None:
         """Initialize the dialog manager.
 
@@ -74,12 +77,17 @@ class DialogManager:
             max_contexts: Maximum number of user contexts to maintain.
             style_type: Response style to use for agents.
             use_dispatcher: Whether to use dispatcher for agent routing.
+            memory_service: Optional memory service for persistent storage.
         """
         self.llm_provider = llm_provider
         self.agent_registry = AgentRegistry()
         self.context_manager = ContextManager(max_contexts=max_contexts)
         self._style_type = style_type
         self._use_dispatcher = use_dispatcher
+
+        # Memory services
+        self._memory_service = memory_service
+        self._extraction_service: MemoryExtractionService | None = None
 
         # Initialize dispatcher agent (will be configured with registry after agents are registered)
         self._dispatcher: DispatcherAgent | None = None
@@ -95,8 +103,30 @@ class DialogManager:
 
         logger.info(
             f"DialogManager initialized with provider: {llm_provider.provider_name}, "
-            f"style: {style_type.value}, dispatcher: {use_dispatcher}"
+            f"style: {style_type.value}, dispatcher: {use_dispatcher}, "
+            f"memory_enabled: {memory_service is not None}"
         )
+
+    def set_memory_service(self, memory_service: MemoryService) -> None:
+        """Set the memory service for persistent storage.
+
+        Args:
+            memory_service: MemoryService instance.
+        """
+        self._memory_service = memory_service
+        self._extraction_service = MemoryExtractionService(
+            llm_provider=self.llm_provider,
+        )
+        logger.info("Memory service configured for DialogManager")
+
+    async def initialize_memory(self) -> None:
+        """Initialize memory services and database connection."""
+        if self._memory_service is None:
+            self._memory_service = MemoryService()
+            self._extraction_service = MemoryExtractionService(
+                llm_provider=self.llm_provider,
+            )
+            logger.info("Memory service initialized")
 
     def _register_default_agents(self) -> None:
         """Register the default set of agents."""
@@ -155,6 +185,7 @@ class DialogManager:
         3. Executes the plan step by step
         4. Updates the context
         5. Logs the interaction
+        6. Stores messages in memory (if enabled)
 
         Args:
             user_id: Telegram user ID.
@@ -184,8 +215,50 @@ class DialogManager:
         )
 
         try:
+            # Initialize memory context
+            memory_context = {}
+            
+            # Store user and get memory context if memory service is available
+            if self._memory_service:
+                try:
+                    # Ensure user exists in database
+                    await self._memory_service.get_or_create_user(
+                        user_id=user_id,
+                        telegram_username=info.get("username"),
+                        first_name=info.get("first_name"),
+                        last_name=info.get("last_name"),
+                        language_code=info.get("language_code"),
+                    )
+                    
+                    # Get or create session
+                    session = await self._memory_service.get_or_create_session(
+                        user_id=user_id,
+                        session_id=context.session_id,
+                    )
+                    
+                    # Get memory context for agents
+                    memory_context = await self._memory_service.get_context_for_agent(user_id)
+                    
+                    # Store user message
+                    await self._memory_service.add_message(
+                        user_id=user_id,
+                        session_id=context.session_id,
+                        role="user",
+                        content=message,
+                    )
+                    
+                    logger.debug(f"Loaded memory context for user {user_id}")
+                except Exception as mem_error:
+                    logger.warning(f"Memory service error (non-critical): {mem_error}")
+
             # Get context data for agent selection
             agent_context = context.get_context_for_agent()
+            
+            # Enrich agent context with memory data
+            if memory_context:
+                agent_context["memory"] = memory_context
+                agent_context["user_profile"] = memory_context.get("profile")
+                agent_context["profile_summary"] = memory_context.get("profile_summary", "")
 
             # Add user message to history
             context.add_user_message(message)
@@ -194,12 +267,16 @@ class DialogManager:
             history = context.get_history_for_llm()
 
             # Execute with plan or fallback to single agent
+            total_tokens_used = 0
             if self._dispatcher:
                 plan = await self._dispatcher.create_plan(message, agent_context)
                 plan_result = await self._execute_plan(plan, message, agent_context, history)
                 final_response = plan_result.final_response
                 final_agent_type = AgentType.DISPATCHER
                 confidence = 1.0
+                # Sum tokens from all executed steps
+                for step in plan_result.executed_steps:
+                    total_tokens_used += step.get("tokens_used", 0) or 0
 
                 # Log missing agents warning
                 if plan_result.missing_agents:
@@ -218,9 +295,41 @@ class DialogManager:
                 final_response = result.response
                 final_agent_type = result.agent_type
                 confidence = result.confidence
+                total_tokens_used = result.tokens_used or 0
 
             # Add assistant response to history
             context.add_assistant_message(final_response)
+
+            # Store assistant message in memory and extract facts
+            if self._memory_service:
+                try:
+                    # Store assistant message
+                    await self._memory_service.add_message(
+                        user_id=user_id,
+                        session_id=context.session_id,
+                        role="assistant",
+                        content=final_response,
+                        agent_type=final_agent_type.value if hasattr(final_agent_type, 'value') else str(final_agent_type),
+                        tokens_used=total_tokens_used if total_tokens_used > 0 else None,
+                        processing_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000),
+                    )
+                    
+                    # Extract facts from user message (async, non-blocking)
+                    if self._extraction_service:
+                        # Get recent messages for context
+                        recent_messages = await self._memory_service.get_recent_messages(user_id, limit=10)
+                        extraction_result = await self._extraction_service.extract_and_store(
+                            user_id=user_id,
+                            user_message=message,
+                            conversation_history=recent_messages,
+                        )
+                        if extraction_result.get("extracted"):
+                            logger.debug(
+                                f"Extracted {extraction_result.get('facts_count', 0)} facts "
+                                f"for user {user_id}"
+                            )
+                except Exception as mem_error:
+                    logger.warning(f"Memory storage error (non-critical): {mem_error}")
 
             # Calculate processing time
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
@@ -237,7 +346,10 @@ class DialogManager:
                 confidence=confidence,
                 session_id=context.session_id,
                 processing_time_ms=processing_time,
-                metadata={"plan_used": self._use_dispatcher},
+                metadata={
+                    "plan_used": self._use_dispatcher,
+                    "memory_enabled": self._memory_service is not None,
+                },
             )
 
         except Exception as e:
@@ -337,6 +449,7 @@ class DialogManager:
                     "status": "success",
                     "confidence": step_result.confidence,
                     "response_preview": step_result.response[:200] if step_result.response else "",
+                    "tokens_used": step_result.tokens_used,
                 })
 
                 # Update context with step result for next agent

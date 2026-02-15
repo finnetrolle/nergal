@@ -224,9 +224,29 @@ class DispatcherAgent(BaseAgent):
         Returns:
             ExecutionPlan with steps to execute.
         """
+        # Build context message with memory information
+        context_parts = [f"Составь план для сообщения: {message}"]
+        
+        # Add memory context if available
+        if "memory" in context:
+            memory = context["memory"]
+            profile_summary = memory.get("profile_summary", "")
+            if profile_summary and profile_summary != "Информация о пользователе отсутствует.":
+                context_parts.append(f"\nКонтекст о пользователе:\n{profile_summary}")
+            
+            recent_messages = memory.get("recent_messages", [])
+            if recent_messages:
+                context_parts.append("\nПоследние сообщения:")
+                for msg in recent_messages[-3:]:  # Last 3 messages
+                    role = "Пользователь" if msg.get("role") == "user" else "Ассистент"
+                    content = msg.get("content", "")[:100]
+                    context_parts.append(f"  {role}: {content}...")
+        
+        user_message = "\n".join(context_parts)
+        
         messages = [
             LLMMessage(role=MessageRole.SYSTEM, content=self.system_prompt),
-            LLMMessage(role=MessageRole.USER, content=f"Составь план для сообщения: {message}"),
+            LLMMessage(role=MessageRole.USER, content=user_message),
         ]
 
         try:

@@ -149,14 +149,22 @@ class BaseSpecializedAgent(BaseAgent):
         # Generate response
         response = await self.llm_provider.generate(messages)
         
+        # Calculate total tokens from usage
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        
         return AgentResult(
             response=response.content,
             agent_type=self.agent_type,
             confidence=1.0,
             metadata={
-                "tokens_used": response.tokens_used,
+                "usage": response.usage,
                 "model": response.model,
             },
+            tokens_used=tokens_used,
         )
 
     async def _build_messages_with_context(

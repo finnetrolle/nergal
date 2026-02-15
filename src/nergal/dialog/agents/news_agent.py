@@ -217,7 +217,7 @@ class NewsAgent(BaseSpecializedAgent):
             await self._analyze_cluster(cluster)
         
         # Generate aggregated response
-        response = await self._generate_aggregated_response(
+        response, tokens_used = await self._generate_aggregated_response(
             message, clusters, sources
         )
         
@@ -231,7 +231,8 @@ class NewsAgent(BaseSpecializedAgent):
                 "source_urls": [s.url for s in sources],
                 "consensus_points": sum(len(c.consensus) for c in clusters),
                 "discrepancies_found": sum(len(c.discrepancies) for c in clusters),
-            }
+            },
+            tokens_used=tokens_used,
         )
     
     def _extract_sources_from_context(
@@ -544,7 +545,7 @@ class NewsAgent(BaseSpecializedAgent):
         message: str,
         clusters: list[NewsCluster],
         sources: list[NewsSource],
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate the final aggregated response.
         
         Args:
@@ -553,10 +554,10 @@ class NewsAgent(BaseSpecializedAgent):
             sources: All news sources.
             
         Returns:
-            Aggregated response string.
+            Tuple of (aggregated response string, tokens used or None).
         """
         if not clusters:
-            return "Не удалось найти источники новостей для анализа."
+            return "Не удалось найти источники новостей для анализа.", None
         
         # Build context for LLM
         context_parts = []
@@ -617,7 +618,12 @@ class NewsAgent(BaseSpecializedAgent):
         ]
         
         response = await self.llm_provider.generate(messages, max_tokens=1500)
-        return response.content
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        return response.content, tokens_used
     
     async def compare_sources(
         self,

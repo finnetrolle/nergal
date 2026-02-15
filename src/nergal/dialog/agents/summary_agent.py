@@ -111,10 +111,11 @@ class SummaryAgent(ContextAwareAgent):
                 agent_type=self.agent_type,
                 confidence=0.3,
                 metadata={"error": "no_content"},
+                tokens_used=None,
             )
         
         # Generate summary
-        summary = await self._generate_summary(message, content_to_summarize)
+        summary, tokens_used = await self._generate_summary(message, content_to_summarize)
         
         return AgentResult(
             response=summary,
@@ -124,6 +125,7 @@ class SummaryAgent(ContextAwareAgent):
                 "content_length": len(content_to_summarize),
                 "max_points": self._default_max_points,
             },
+            tokens_used=tokens_used,
         )
     
     def _get_content_to_summarize(self, context: dict[str, Any]) -> str:
@@ -155,7 +157,7 @@ class SummaryAgent(ContextAwareAgent):
         self,
         message: str,
         content: str,
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate summary of content.
         
         Args:
@@ -163,7 +165,7 @@ class SummaryAgent(ContextAwareAgent):
             content: Content to summarize.
             
         Returns:
-            Summary text.
+            Tuple of (summary text, tokens used or None).
         """
         # Truncate very long content
         max_content_length = 4000
@@ -185,7 +187,12 @@ class SummaryAgent(ContextAwareAgent):
         ]
         
         response = await self.llm_provider.generate(messages, max_tokens=800)
-        return response.content
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        return response.content, tokens_used
     
     async def extract_key_points(
         self,

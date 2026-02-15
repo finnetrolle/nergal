@@ -150,7 +150,7 @@ class ComparisonAgent(BaseSpecializedAgent):
         item_info = self._gather_item_info(items, context)
         
         # Generate comparison
-        comparison = await self._generate_comparison(
+        comparison, tokens_used = await self._generate_comparison(
             message, items, criteria, item_info
         )
         
@@ -162,7 +162,8 @@ class ComparisonAgent(BaseSpecializedAgent):
                 "items": items,
                 "criteria": criteria,
                 "comparison_type": self._determine_comparison_type(items),
-            }
+            },
+            tokens_used=tokens_used,
         )
     
     def _extract_items(self, message: str) -> list[str]:
@@ -263,7 +264,7 @@ class ComparisonAgent(BaseSpecializedAgent):
         items: list[str],
         criteria: list[str],
         item_info: dict[str, str],
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate structured comparison.
         
         Args:
@@ -273,11 +274,11 @@ class ComparisonAgent(BaseSpecializedAgent):
             item_info: Information about each item.
             
         Returns:
-            Comparison text.
+            Tuple of (comparison text, tokens used or None).
         """
         if not items:
             # No items detected, ask for clarification
-            return "Пожалуйста, укажите, что вы хотите сравнить. Например: 'Сравни React и Vue'"
+            return "Пожалуйста, укажите, что вы хотите сравнить. Например: 'Сравни React и Vue'", None
         
         items_text = " и ".join(items)
         criteria_text = ", ".join(criteria)
@@ -304,7 +305,12 @@ class ComparisonAgent(BaseSpecializedAgent):
         ]
         
         response = await self.llm_provider.generate(messages, max_tokens=1500)
-        return response.content
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        return response.content, tokens_used
     
     def _determine_comparison_type(self, items: list[str]) -> str:
         """Determine the type of comparison.

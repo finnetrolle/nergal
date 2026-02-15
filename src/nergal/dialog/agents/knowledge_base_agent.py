@@ -129,7 +129,8 @@ class KnowledgeBaseAgent(BaseAgent):
                 response="В корпоративной базе знаний не найдено релевантной информации по вашему запросу.",
                 agent_type=self.agent_type,
                 confidence=0.3,
-                metadata={"found": False, "sources": []}
+                metadata={"found": False, "sources": []},
+                tokens_used=None,
             )
         
         # Format context for LLM
@@ -146,6 +147,13 @@ class KnowledgeBaseAgent(BaseAgent):
         
         response = await self.generate_response(enhanced_message, history)
         
+        # Calculate tokens from response
+        tokens_used = None
+        if response.usage:
+            tokens_used = response.usage.get("total_tokens") or (
+                response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
+            )
+        
         return AgentResult(
             response=response.content,
             agent_type=self.agent_type,
@@ -154,7 +162,8 @@ class KnowledgeBaseAgent(BaseAgent):
                 "found": True,
                 "sources": [r.get("source", "unknown") for r in search_results],
                 "result_count": len(search_results),
-            }
+            },
+            tokens_used=tokens_used,
         )
     
     async def _search_knowledge_base(
