@@ -377,7 +377,16 @@ class DialogManager:
         context: dict[str, Any],
         history: list[LLMMessage],
     ) -> PlanExecutionResult:
-        """Execute an execution plan step by step.
+        """Execute an execution plan with parallel execution support.
+
+        This method supports two execution modes:
+        1. Sequential: Steps are executed one after another (default)
+        2. Parallel: Independent steps (depends_on=None) are executed concurrently
+
+        The execution strategy:
+        - Group steps by dependency level
+        - Execute independent steps in parallel using asyncio.gather
+        - Aggregate results before executing dependent steps
 
         Args:
             plan: The execution plan to execute.
@@ -388,6 +397,8 @@ class DialogManager:
         Returns:
             PlanExecutionResult with the final response and execution details.
         """
+        import asyncio
+
         result = PlanExecutionResult(
             success=False,
             final_response="",
@@ -395,106 +406,245 @@ class DialogManager:
             missing_agents_reason=plan.missing_agents_reason,
         )
 
-        current_input = original_message
         accumulated_context = dict(context)
+        step_results: dict[int, AgentResult] = {}  # step_index -> result
 
-        for step in plan.steps:
-            agent = self.agent_registry.get(step.agent_type)
+        # Identify execution groups (steps that can run in parallel)
+        execution_groups = self._group_steps_by_dependency(plan.steps)
 
-            if agent is None:
-                # Agent not available
-                step_info = {
-                    "agent": step.agent_type.value,
-                    "description": step.description,
-                    "status": "skipped",
-                    "reason": "agent_not_available",
-                }
-
-                if step.is_optional:
-                    result.skipped_steps.append(step_info)
-                    logger.debug(f"Skipped optional step: {step.agent_type.value}")
-                    continue
-                else:
-                    # Try to use default agent as fallback
-                    default_agent = self.agent_registry.get(AgentType.DEFAULT)
-                    if default_agent:
-                        logger.warning(
-                            f"Required agent {step.agent_type.value} not available, "
-                            f"using default agent as fallback"
-                        )
-                        agent = default_agent
-                        step_info["fallback"] = True
-                    else:
-                        result.skipped_steps.append(step_info)
-                        result.error = f"Required agent {step.agent_type.value} not available"
-                        return result
-
-            try:
-                # Prepare input for this step
-                if step.input_transform == "previous" and result.executed_steps:
-                    # Use output from previous step
-                    prev_output = result.executed_steps[-1].get("response", current_input)
-                    step_input = prev_output
-                else:
-                    step_input = current_input
-
-                # Execute the step
-                logger.debug(f"Executing step: {step.agent_type.value} - {step.description}")
-                step_result = await agent.process(step_input, accumulated_context, history)
-
-                # Record the step execution
-                result.executed_steps.append({
-                    "agent": step.agent_type.value,
-                    "description": step.description,
-                    "status": "success",
-                    "confidence": step_result.confidence,
-                    "response_preview": step_result.response[:200] if step_result.response else "",
-                    "tokens_used": step_result.tokens_used,
-                })
-
-                # Update context with step result for next agent
-                accumulated_context["previous_step_output"] = step_result.response
-                accumulated_context["previous_agent"] = step.agent_type.value
-
-                # Pass metadata from this step to subsequent agents
-                if step_result.metadata:
-                    # Store search results specifically for easy access
-                    if "search_results" in step_result.metadata:
-                        accumulated_context["search_results"] = step_result.metadata["search_results"]
-                        accumulated_context["search_queries"] = step_result.metadata.get("search_queries", [])
-                        accumulated_context["sources"] = step_result.metadata.get("sources", [])
-                        logger.info(
-                            f"Stored search results for next agent: "
-                            f"{len(step_result.metadata['search_results'])} chars, "
-                            f"queries: {step_result.metadata.get('search_queries', [])}"
-                        )
-                    # Also store full metadata for any other data
-                    accumulated_context["previous_step_metadata"] = step_result.metadata
-
-                # For the final response, use the last agent's output
-                result.final_response = step_result.response
-                result.success = True
-
-            except Exception as e:
-                logger.error(f"Error executing step {step.agent_type.value}: {e}")
-                result.executed_steps.append({
-                    "agent": step.agent_type.value,
-                    "description": step.description,
-                    "status": "error",
-                    "error": str(e),
-                })
-
-                if not step.is_optional:
-                    result.error = f"Step {step.agent_type.value} failed: {e}"
-                    # Provide a user-friendly error message instead of empty response
-                    result.final_response = (
-                        "Извините, произошла ошибка при обработке вашего запроса. "
-                        "Попробуйте позже или переформулируйте вопрос."
+        for group in execution_groups:
+            if len(group) == 1:
+                # Single step - execute normally
+                step_idx = group[0]
+                step = plan.steps[step_idx]
+                step_result = await self._execute_single_step(
+                    step=step,
+                    step_index=step_idx,
+                    original_message=original_message,
+                    accumulated_context=accumulated_context,
+                    step_results=step_results,
+                    history=history,
+                    result=result,
+                )
+                if step_result:
+                    step_results[step_idx] = step_result
+                    self._update_context_from_result(accumulated_context, step, step_result)
+                    
+            else:
+                # Multiple independent steps - execute in parallel
+                logger.debug(f"Executing {len(group)} steps in parallel: {group}")
+                
+                tasks = [
+                    self._execute_single_step(
+                        step=plan.steps[idx],
+                        step_index=idx,
+                        original_message=original_message,
+                        accumulated_context=accumulated_context,
+                        step_results=step_results,
+                        history=history,
+                        result=result,
                     )
-                    result.success = False
-                    return result
+                    for idx in group
+                ]
+                
+                # Execute all tasks concurrently
+                parallel_results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                for idx, step_result in zip(group, parallel_results):
+                    if isinstance(step_result, Exception):
+                        logger.error(f"Parallel step {idx} failed: {step_result}")
+                        # Error already logged in _execute_single_step
+                    elif step_result:
+                        step_results[idx] = step_result
+                        self._update_context_from_result(
+                            accumulated_context, plan.steps[idx], step_result
+                        )
+
+        # Determine final response from the last executed step
+        if step_results:
+            last_idx = max(step_results.keys())
+            result.final_response = step_results[last_idx].response
+            result.success = True
 
         return result
+
+    def _group_steps_by_dependency(self, steps: list[PlanStep]) -> list[list[int]]:
+        """Group steps by their dependency level for parallel execution.
+
+        Steps with no dependencies (depends_on=None) can run in parallel.
+        Steps with dependencies run after their dependencies complete.
+
+        Args:
+            steps: List of PlanStep objects.
+
+        Returns:
+            List of groups, where each group contains step indices that can run in parallel.
+        """
+        groups: list[list[int]] = []
+        assigned: set[int] = set()
+
+        # First group: steps with no dependencies
+        independent = [i for i, step in enumerate(steps) if step.depends_on is None]
+        if independent:
+            groups.append(independent)
+            assigned.update(independent)
+
+        # Subsequent groups: steps whose dependencies are in previous groups
+        while len(assigned) < len(steps):
+            next_group = []
+            for i, step in enumerate(steps):
+                if i in assigned:
+                    continue
+                # Check if all dependencies are satisfied
+                if step.depends_on is not None and step.depends_on in assigned:
+                    next_group.append(i)
+                    assigned.add(i)
+            
+            if not next_group:
+                # No progress - remaining steps have unsatisfied dependencies
+                # Add remaining steps to be executed sequentially
+                remaining = [i for i in range(len(steps)) if i not in assigned]
+                for i in remaining:
+                    groups.append([i])
+                    assigned.add(i)
+                break
+            
+            groups.append(next_group)
+
+        return groups
+
+    async def _execute_single_step(
+        self,
+        step: PlanStep,
+        step_index: int,
+        original_message: str,
+        accumulated_context: dict[str, Any],
+        step_results: dict[int, AgentResult],
+        history: list[LLMMessage],
+        result: PlanExecutionResult,
+    ) -> AgentResult | None:
+        """Execute a single plan step.
+
+        Args:
+            step: The PlanStep to execute.
+            step_index: Index of this step in the plan.
+            original_message: The original user message.
+            accumulated_context: Context accumulated from previous steps.
+            step_results: Results from previously executed steps.
+            history: Message history for LLM.
+            result: PlanExecutionResult to update with execution info.
+
+        Returns:
+            AgentResult if successful, None otherwise.
+        """
+        agent = self.agent_registry.get(step.agent_type)
+
+        if agent is None:
+            # Agent not available
+            step_info = {
+                "agent": step.agent_type.value,
+                "description": step.description,
+                "status": "skipped",
+                "reason": "agent_not_available",
+            }
+
+            if step.is_optional:
+                result.skipped_steps.append(step_info)
+                logger.debug(f"Skipped optional step: {step.agent_type.value}")
+                return None
+            else:
+                # Try to use default agent as fallback
+                default_agent = self.agent_registry.get(AgentType.DEFAULT)
+                if default_agent:
+                    logger.warning(
+                        f"Required agent {step.agent_type.value} not available, "
+                        f"using default agent as fallback"
+                    )
+                    agent = default_agent
+                    step_info["fallback"] = True
+                else:
+                    result.skipped_steps.append(step_info)
+                    result.error = f"Required agent {step.agent_type.value} not available"
+                    return None
+
+        try:
+            # Prepare input for this step
+            if step.input_transform == "previous" and step_results:
+                # Use output from previous step
+                prev_idx = max(step_results.keys())
+                step_input = step_results[prev_idx].response
+            elif step.depends_on is not None and step.depends_on in step_results:
+                # Use output from the step this depends on
+                step_input = step_results[step.depends_on].response
+            else:
+                step_input = original_message
+
+            # Execute the step
+            logger.debug(f"Executing step: {step.agent_type.value} - {step.description}")
+            step_result = await agent.process(step_input, accumulated_context, history)
+
+            # Record the step execution
+            result.executed_steps.append({
+                "agent": step.agent_type.value,
+                "description": step.description,
+                "status": "success",
+                "confidence": step_result.confidence,
+                "response_preview": step_result.response[:200] if step_result.response else "",
+                "tokens_used": step_result.tokens_used,
+            })
+
+            return step_result
+
+        except Exception as e:
+            logger.error(f"Error executing step {step.agent_type.value}: {e}")
+            result.executed_steps.append({
+                "agent": step.agent_type.value,
+                "description": step.description,
+                "status": "error",
+                "error": str(e),
+            })
+
+            if not step.is_optional:
+                result.error = f"Step {step.agent_type.value} failed: {e}"
+                result.final_response = (
+                    "Извините, произошла ошибка при обработке вашего запроса. "
+                    "Попробуйте позже или переформулируйте вопрос."
+                )
+                result.success = False
+
+            return None
+
+    def _update_context_from_result(
+        self,
+        accumulated_context: dict[str, Any],
+        step: PlanStep,
+        step_result: AgentResult,
+    ) -> None:
+        """Update accumulated context from a step result.
+
+        Args:
+            accumulated_context: Context to update.
+            step: The step that was executed.
+            step_result: Result from the step execution.
+        """
+        # Update context with step result for next agent
+        accumulated_context["previous_step_output"] = step_result.response
+        accumulated_context["previous_agent"] = step.agent_type.value
+
+        # Pass metadata from this step to subsequent agents
+        if step_result.metadata:
+            # Store search results specifically for easy access
+            if "search_results" in step_result.metadata:
+                accumulated_context["search_results"] = step_result.metadata["search_results"]
+                accumulated_context["search_queries"] = step_result.metadata.get("search_queries", [])
+                accumulated_context["sources"] = step_result.metadata.get("sources", [])
+                logger.info(
+                    f"Stored search results for next agent: "
+                    f"{len(step_result.metadata['search_results'])} chars, "
+                    f"queries: {step_result.metadata.get('search_queries', [])}"
+                )
+            # Also store full metadata for any other data
+            accumulated_context["previous_step_metadata"] = step_result.metadata
 
     async def process_with_context(
         self,

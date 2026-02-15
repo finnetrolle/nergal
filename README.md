@@ -1,13 +1,16 @@
 # Nergal - Telegram AI Bot
 
-Telegram бот с интеграцией LLM и веб-поиска для круглосуточной работы на VPS.
+Telegram бот с интеграцией LLM, системой агентов, веб-поиском и памятью пользователей для круглосуточной работы на VPS.
 
 ## Возможности
 
 - 🤖 **AI-диалоги** - интеграция с различными LLM провайдерами (Zai, OpenAI, Anthropic, MiniMax)
+- 🎯 **Система агентов** - 14 специализированных агентов для разных типов задач
 - 🔍 **Веб-поиск** - поиск информации в интернете с использованием MCP (Model Context Protocol)
+- 🧠 **Система памяти** - краткосрочная и долгосрочная память пользователей
 - 🎭 **Стили ответов** - настраиваемые стили ответов (default, silvio_dante)
 - 🐳 **Docker** - готовая контейнеризация для простого деплоя
+- 📊 **Мониторинг** - Prometheus, Grafana, Loki для наблюдаемости
 - ⚡ **uv** - быстрый менеджер зависимостей
 
 ## Технологии
@@ -16,7 +19,38 @@ Telegram бот с интеграцией LLM и веб-поиска для кр
 - **python-telegram-bot** - библиотека для работы с Telegram API
 - **pydantic-settings** - управление конфигурацией через переменные окружения
 - **httpx** - асинхронный HTTP клиент
+- **PostgreSQL** - хранение данных памяти пользователей
 - **MCP** - Model Context Protocol для веб-поиска
+- **Prometheus** - сбор метрик
+- **Grafana** - визуализация и дашборды
+
+## Система агентов
+
+Бот использует систему специализированных агентов:
+
+### Основные агенты
+- `default` - общение и финальное формирование ответа
+- `dispatcher` - анализ запроса и составление плана выполнения
+
+### Агенты сбора информации
+- `web_search` - поиск в интернете
+- `knowledge_base` - поиск по корпоративной базе знаний
+- `tech_docs` - техническая документация
+- `code_analysis` - анализ кода
+- `metrics` - получение метрик и статистики
+- `news` - агрегация новостей
+
+### Агенты обработки
+- `analysis` - анализ данных
+- `fact_check` - проверка фактов
+- `comparison` - сравнение альтернатив
+- `summary` - резюмирование
+- `clarification` - уточнение запросов
+
+### Специализированные
+- `expertise` - экспертные знания в доменах
+
+Подробнее в [docs/AGENT_ARCHITECTURE.md](docs/AGENT_ARCHITECTURE.md) и [docs/AGENT_RECOMMENDATIONS.md](docs/AGENT_RECOMMENDATIONS.md).
 
 ## Локальная разработка
 
@@ -24,12 +58,13 @@ Telegram бот с интеграцией LLM и веб-поиска для кр
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) - современный менеджер пакетов
+- PostgreSQL (опционально, для системы памяти)
 
 ### Установка
 
 1. Клонируйте репозиторий:
 ```bash
-git clone https://github.com/yourusername/nergal.git
+git clone https://github.com/finnetrolle/nergal.git
 cd nergal
 ```
 
@@ -44,7 +79,7 @@ cp .env.example .env
 ```
 
 4. Отредактируйте `.env` и добавьте необходимые ключи:
-```
+```env
 TELEGRAM_BOT_TOKEN=your_token_from_botfather
 LLM_API_KEY=your_llm_api_key
 ```
@@ -82,7 +117,17 @@ uv run bot
 | `LLM_BASE_URL` | Кастомный URL API (опционально) | - |
 | `LLM_TEMPERATURE` | Температура генерации | `0.7` |
 | `LLM_MAX_TOKENS` | Максимум токенов (опционально) | - |
-| `LLM_TIMEOUT` | Таймаут запроса в секундах | `60.0` |
+| `LLM_TIMEOUT` | Таймаут запроса в секундах | `120.0` |
+
+### База данных
+
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `DB_HOST` | Хост базы данных | `localhost` |
+| `DB_PORT` | Порт базы данных | `5432` |
+| `DB_USER` | Пользователь БД | `nergal` |
+| `DB_PASSWORD` | Пароль БД | `nergal_secret` |
+| `DB_NAME` | Имя базы данных | `nergal` |
 
 ### Веб-поиск
 
@@ -93,6 +138,34 @@ uv run bot
 | `WEB_SEARCH_MCP_URL` | URL MCP endpoint для поиска | `https://api.z.ai/api/mcp/web_search_prime/mcp` |
 | `WEB_SEARCH_MAX_RESULTS` | Максимальное количество результатов | `5` |
 | `WEB_SEARCH_TIMEOUT` | Таймаут запроса в секундах | `30.0` |
+
+### Система памяти
+
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `MEMORY_SHORT_TERM_MAX_MESSAGES` | Максимум сообщений в истории | `50` |
+| `MEMORY_LONG_TERM_ENABLED` | Включить долгосрочную память | `true` |
+| `MEMORY_LONG_TERM_EXTRACTION_ENABLED` | Включить извлечение фактов | `true` |
+| `MEMORY_CLEANUP_DAYS` | Дней хранения старых сообщений | `30` |
+
+### Speech-to-Text
+
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `STT_ENABLED` | Включить обработку голосовых | `true` |
+| `STT_PROVIDER` | Провайдер STT (`local`, `openai`) | `local` |
+| `STT_MODEL` | Модель Whisper | `base` |
+| `STT_LANGUAGE` | Код языка | `ru` |
+| `STT_MAX_DURATION_SECONDS` | Макс. длительность аудио | `60` |
+
+### Мониторинг
+
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `MONITORING_ENABLED` | Включить мониторинг | `true` |
+| `MONITORING_METRICS_PORT` | Порт для метрик Prometheus | `8000` |
+| `MONITORING_JSON_LOGS` | JSON формат логов | `true` |
+| `MONITORING_LOG_LEVEL` | Уровень логирования | `INFO` |
 
 Подробнее о настройке LLM провайдеров см. в [docs/LLM_PROVIDERS.md](docs/LLM_PROVIDERS.md).
 
@@ -122,6 +195,17 @@ docker compose up -d
 docker compose logs -f
 ```
 
+### С мониторингом
+
+```bash
+docker compose --profile monitoring up -d
+```
+
+Доступы:
+- Grafana: http://localhost:3000
+- Prometheus: http://localhost:9090
+- Метрики: http://localhost:8000/metrics
+
 ### Управление ботом
 
 ```bash
@@ -133,43 +217,100 @@ docker compose restart
 
 # Обновить после изменений в коде
 docker compose up -d --build
+
+# Бэкап базы данных
+docker compose exec postgres pg_dump -U nergal nergal > backup.sql
 ```
+
+Подробнее в [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Структура проекта
 
 ```
 nergal/
 ├── src/nergal/
-│   ├── __init__.py           # Пакет
-│   ├── config.py             # Конфигурация (pydantic-settings)
-│   ├── main.py               # Точка входа, логика бота
-│   ├── dialog/               # Управление диалогами
-│   │   ├── agents.py         # Базовые агенты
-│   │   ├── context.py        # Контекст диалога
-│   │   ├── manager.py        # Менеджер диалогов
-│   │   ├── styles.py         # Стили ответов
-│   │   └── web_search_agent.py  # Агент веб-поиска
-│   ├── llm/                  # LLM провайдеры
-│   │   ├── base.py           # Базовый класс
-│   │   ├── factory.py        # Фабрика провайдеров
-│   │   └── providers/        # Реализации провайдеров
-│   └── web_search/           # Веб-поиск
-│       ├── base.py           # Базовый класс
-│       └── zai_mcp_http.py   # MCP HTTP провайдер
+│   ├── __init__.py              # Пакет
+│   ├── config.py                # Конфигурация (pydantic-settings)
+│   ├── main.py                  # Точка входа, логика бота
+│   ├── protocols.py             # Протоколы и интерфейсы
+│   ├── exceptions.py            # Исключения
+│   ├── database/                # Работа с БД
+│   │   ├── connection.py        # Подключение
+│   │   ├── models.py            # SQLAlchemy модели
+│   │   └── repositories.py      # Репозитории
+│   ├── dialog/                  # Управление диалогами
+│   │   ├── base.py              # Базовые классы агентов
+│   │   ├── constants.py         # Константы и промпты
+│   │   ├── context.py           # Контекст диалога
+│   │   ├── default_agent.py     # DefaultAgent
+│   │   ├── dispatcher_agent.py  # DispatcherAgent
+│   │   ├── manager.py           # DialogManager
+│   │   ├── styles.py            # Стили ответов
+│   │   └── agents/              # Специализированные агенты
+│   │       ├── web_search_agent.py
+│   │       ├── knowledge_base_agent.py
+│   │       ├── tech_docs_agent.py
+│   │       ├── code_analysis_agent.py
+│   │       ├── metrics_agent.py
+│   │       ├── news_agent.py
+│   │       ├── analysis_agent.py
+│   │       ├── fact_check_agent.py
+│   │       ├── comparison_agent.py
+│   │       ├── summary_agent.py
+│   │       ├── clarification_agent.py
+│   │       └── expertise_agent.py
+│   ├── llm/                     # LLM провайдеры
+│   │   ├── base.py              # Базовый класс
+│   │   ├── factory.py           # Фабрика провайдеров
+│   │   └── providers/           # Реализации провайдеров
+│   │       └── zai.py           # Z.ai реализация
+│   ├── memory/                  # Система памяти
+│   │   ├── service.py           # MemoryService
+│   │   └── extraction.py        # Извлечение фактов
+│   ├── monitoring/              # Мониторинг
+│   │   ├── health.py            # Health checks
+│   │   ├── logging_config.py    # Конфигурация логирования
+│   │   └── metrics.py           # Prometheus метрики
+│   ├── stt/                     # Speech-to-Text
+│   │   ├── base.py
+│   │   ├── factory.py
+│   │   └── providers/
+│   │       └── local_whisper.py
+│   ├── utils/
+│   │   └── markdown_to_telegram.py
+│   └── web_search/              # Веб-поиск
+│       ├── base.py
+│       └── zai_mcp_http.py      # MCP HTTP провайдер
+├── database/
+│   └── init.sql                 # Инициализация БД
 ├── docs/
-│   └── LLM_PROVIDERS.md      # Документация по LLM провайдерам
-├── Dockerfile                # Docker-образ
-├── docker-compose.yml        # Docker Compose конфигурация
-├── pyproject.toml            # Зависимости и настройки проекта
-├── .python-version           # Версия Python
-├── .env.example              # Пример конфигурации
-└── README.md                 # Документация
+│   ├── AGENT_ARCHITECTURE.md    # Архитектура агентов
+│   ├── AGENT_RECOMMENDATIONS.md # Рекомендации по агентам
+│   ├── DEPLOYMENT.md            # Гайд по деплою
+│   ├── LLM_PROVIDERS.md         # LLM провайдеры
+│   └── MONITORING.md            # Мониторинг
+├── monitoring/
+│   ├── alerts.yml               # Правила алертов
+│   ├── alertmanager.yml         # Конфигурация Alertmanager
+│   ├── prometheus.yml           # Конфигурация Prometheus
+│   ├── loki-config.yml          # Конфигурация Loki
+│   ├── promtail-config.yml      # Конфигурация Promtail
+│   └── grafana/                 # Grafana дашборды
+├── tests/                       # Тесты
+├── Dockerfile                   # Docker-образ
+├── docker-compose.yml           # Docker Compose конфигурация
+├── pyproject.toml               # Зависимости и настройки проекта
+├── .python-version              # Версия Python
+├── .env.example                 # Пример конфигурации
+└── README.md                    # Документация
 ```
 
 ## Команды бота
 
 - `/start` - начать работу с ботом
 - `/help` - получить справку
+- `/status` - проверить статус системы
+- `/clear` - очистить историю диалога
 
 ## Разработка
 
@@ -184,6 +325,31 @@ uv run ruff check .
 # Форматирование
 uv run ruff format .
 ```
+
+### Тесты
+
+```bash
+# Запуск тестов
+uv run pytest
+
+# С покрытием
+uv run pytest --cov=nergal
+```
+
+### Типизация
+
+```bash
+# Проверка типов
+uv run mypy src/
+```
+
+## Документация
+
+- [AGENT_ARCHITECTURE.md](docs/AGENT_ARCHITECTURE.md) - Архитектура системы агентов
+- [AGENT_RECOMMENDATIONS.md](docs/AGENT_RECOMMENDATIONS.md) - Рекомендации по использованию агентов
+- [DEPLOYMENT.md](docs/DEPLOYMENT.md) - Подробный гайд по деплою
+- [LLM_PROVIDERS.md](docs/LLM_PROVIDERS.md) - Настройка LLM провайдеров
+- [MONITORING.md](docs/MONITORING.md) - Настройка мониторинга
 
 ## Лицензия
 

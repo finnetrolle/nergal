@@ -4,17 +4,27 @@ This agent cross-references information from multiple sources
 to verify claims and assess reliability.
 """
 
+import json
 import logging
 from typing import Any
 
-from nergal.dialog.base import AgentResult, AgentType, BaseAgent
+from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
+from nergal.dialog.base import AgentResult, AgentType
 from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage, MessageRole
 
 logger = logging.getLogger(__name__)
 
+# Centralized keywords for fact-checking
+FACT_CHECK_KEYWORDS = [
+    "правда", "верно", "точно", "действительно", "проверь",
+    "подтверди", "так ли", "правильно ли", "актуально",
+    "достоверно", "официально", "источник",
+    "true", "false", "verify", "fact", "check",
+]
 
-class FactCheckAgent(BaseAgent):
+
+class FactCheckAgent(BaseSpecializedAgent):
     """Agent for verifying facts and claims.
     
     This agent cross-references information from multiple sources,
@@ -25,13 +35,29 @@ class FactCheckAgent(BaseAgent):
     - Check accuracy of statements
     - Assess source reliability
     - Identify outdated or incorrect information
+    
+    Architecture Note:
+        This agent uses the hook-based can_handle() pattern from BaseSpecializedAgent.
+        - _keywords: Fact-checking keywords from FACT_CHECK_KEYWORDS
+        - _patterns: Regex patterns for verification questions
+        - _calculate_custom_confidence(): Hook for context-based confidence
     """
     
-    # Keywords indicating need for fact-checking
-    FACT_CHECK_KEYWORDS = [
-        "правда", "верно", "точно", "действительно", "проверь",
-        "подтверди", "так ли", "правильно ли", "актуально",
-        "достоверно", "официально", "источник",
+    # Configure base class behavior
+    _keywords = FACT_CHECK_KEYWORDS
+    _context_keys = ["search_results", "agent_results"]
+    _base_confidence = 0.2
+    _keyword_boost = 0.15
+    _context_boost = 0.3
+    
+    # Fact-check specific patterns
+    _patterns = [
+        r"так ли\s",
+        r"правильно ли\s",
+        r"верно ли\s",
+        r"действительно ли\s",
+        r"is it true",
+        r"is this (correct|accurate|right)",
     ]
     
     # Reliability scores for different source types
@@ -94,37 +120,34 @@ class FactCheckAgent(BaseAgent):
 ## Вывод
 [Итоговое заключение о достоверности]"""
 
-    async def can_handle(self, message: str, context: dict[str, Any]) -> float:
-        """Determine if this agent can handle the message.
+    async def _calculate_custom_confidence(
+        self, message: str, context: dict[str, Any]
+    ) -> float:
+        """Hook for fact-check-specific confidence calculation.
         
-        Higher confidence for messages about verification or
-        when there's information to verify from other agents.
+        Adds extra confidence when:
+        - There's web search results to verify
+        - Message contains verification questions ("ли" + "?")
         
         Args:
-            message: User message to analyze.
+            message: Original user message.
             context: Current dialog context.
             
         Returns:
-            Confidence score (0.0 to 1.0).
+            Additional confidence boost.
         """
-        message_lower = message.lower()
-        
-        # Check for fact-check keywords
-        for keyword in self.FACT_CHECK_KEYWORDS:
-            if keyword in message_lower:
-                return 0.85
-        
         # Check if there's web search results to verify
         agent_results = context.get("agent_results", {})
         if "web_search" in agent_results:
-            return 0.7
+            return 0.35  # Good boost - we have something to verify
         
-        # Questions about accuracy or truth
+        # Questions about accuracy or truth (Russian "ли" particle)
+        message_lower = message.lower()
         if "?" in message and any(kw in message_lower for kw in ["ли", "правда", "так"]):
-            return 0.65
+            return 0.25
         
-        return 0.2
-    
+        return 0.0
+
     async def process(
         self,
         message: str,
@@ -157,7 +180,7 @@ class FactCheckAgent(BaseAgent):
         verification_result = await self._verify_information(info_to_verify, context)
         
         # Generate response
-        response_text = await self._generate_verification_response(
+        response_text, tokens_used = await self._generate_verification_response(
             info_to_verify, verification_result
         )
         
@@ -171,7 +194,7 @@ class FactCheckAgent(BaseAgent):
                 "sources_checked": verification_result.get("sources_checked", 0),
                 "reliability_score": verification_result.get("reliability_score"),
             },
-            tokens_used=None,  # No LLM call in this agent's response generation
+            tokens_used=tokens_used,
         )
     
     def _extract_info_to_verify(
@@ -315,7 +338,6 @@ class FactCheckAgent(BaseAgent):
         try:
             response = await self.llm_provider.generate(messages, max_tokens=500)
             # Parse JSON from response
-            import json
             start = response.content.find("{")
             end = response.content.rfind("}") + 1
             if start != -1 and end > start:
@@ -329,7 +351,7 @@ class FactCheckAgent(BaseAgent):
         self,
         info: dict[str, Any],
         verification: dict[str, Any],
-    ) -> str:
+    ) -> tuple[str, int | None]:
         """Generate human-readable verification response.
         
         Args:
@@ -337,7 +359,7 @@ class FactCheckAgent(BaseAgent):
             verification: Verification results.
             
         Returns:
-            Formatted response text.
+            Tuple of (formatted response text, tokens used or None).
         """
         result = verification.get("result", "insufficient")
         confidence = verification.get("confidence", 0.5)
@@ -361,7 +383,7 @@ class FactCheckAgent(BaseAgent):
 
 Проверено источников: {verification.get("sources_checked", 0)}"""
         
-        return response
+        return response, None
     
     async def check_claim(self, claim: str, sources: list[dict[str, Any]]) -> dict[str, Any]:
         """Check a specific claim against provided sources.

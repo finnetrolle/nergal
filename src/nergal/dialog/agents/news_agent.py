@@ -72,6 +72,12 @@ class NewsAgent(BaseSpecializedAgent):
     - Cross-source verification
     - Media bias analysis
     - Event timeline construction
+    
+    Architecture Note:
+        This agent uses the hook-based can_handle() pattern from BaseSpecializedAgent.
+        - _keywords: News-related keywords from NEWS_KEYWORDS constant
+        - _patterns: Regex patterns for news-specific phrases
+        - _calculate_custom_confidence(): Hook for context-based confidence
     """
     
     # Configure base class behavior - use centralized constants
@@ -80,6 +86,20 @@ class NewsAgent(BaseSpecializedAgent):
     _base_confidence = 0.25
     _keyword_boost = 0.2
     _context_boost = 0.35
+    
+    # News-specific patterns for pattern matching
+    _patterns = [
+        r"что пишут",
+        r"что говорят",
+        r"в новостях",
+        r"what'?s the news",
+        r"in the news",
+        r"coverage",
+        r"сколько источников",
+        r"different sources",
+        r"сравни источники",
+        r"compare sources",
+    ]
     
     def __init__(
         self,
@@ -108,7 +128,7 @@ class NewsAgent(BaseSpecializedAgent):
     @property
     def system_prompt(self) -> str:
         """Return the system prompt for this agent."""
-        return """Ты — агент агрегации и обработки новостей. Твоя задача — 
+        return """Ты — агент агрегации и обработки новостей. Твоя задача —
 анализировать информацию из нескольких источников, сравнивать их и выявлять:
 1. Точки согласия (консенсус)
 2. Противоречия и расхождения
@@ -144,37 +164,30 @@ class NewsAgent(BaseSpecializedAgent):
 ### 💡 Выводы
 [Итоговый анализ ситуации]"""
 
-    async def can_handle(self, message: str, context: dict[str, Any]) -> float:
-        """Determine if this agent can handle the message.
+    async def _calculate_custom_confidence(
+        self, message: str, context: dict[str, Any]
+    ) -> float:
+        """Hook for news-specific confidence calculation.
         
-        Higher confidence for news-related requests.
+        Adds extra confidence when:
+        - Multiple keywords match (2+ keywords = high confidence)
+        - Context contains web search results with multiple sources
         
         Args:
-            message: User message to analyze.
+            message: Original user message.
             context: Current dialog context.
             
         Returns:
-            Confidence score (0.0 to 1.0).
+            Additional confidence boost.
         """
         message_lower = message.lower()
         
-        # Check for news keywords
-        keyword_count = sum(1 for kw in self.NEWS_KEYWORDS if kw in message_lower)
+        # High confidence for multiple keyword matches
+        keyword_count = sum(1 for kw in self._keywords if kw in message_lower)
         if keyword_count >= 2:
-            return 0.95
+            return 0.4  # Strong boost for multiple news keywords
         elif keyword_count == 1:
-            return 0.8
-        
-        # Check for news patterns
-        news_patterns = [
-            "что пишут", "что говорят", "в новостях",
-            "what's the news", "in the news", "coverage",
-            "сколько источников", "different sources",
-            "сравни источники", "compare sources",
-        ]
-        for pattern in news_patterns:
-            if pattern in message_lower:
-                return 0.9
+            return 0.15  # Moderate boost for single keyword
         
         # Check context for web search results with multiple sources
         if "web_search" in context.get("agent_results", {}):
@@ -182,9 +195,9 @@ class NewsAgent(BaseSpecializedAgent):
             if hasattr(search_result, "metadata"):
                 sources = getattr(search_result.metadata, "sources", [])
                 if len(sources) >= 2:
-                    return 0.85
+                    return 0.3  # Good boost when we have multiple sources
         
-        return 0.2
+        return 0.0
     
     async def process(
         self,

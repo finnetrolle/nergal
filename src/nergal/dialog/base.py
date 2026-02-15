@@ -91,12 +91,14 @@ class PlanStep:
         description: Human-readable description of what this step does.
         input_transform: Optional transformation to apply to input (e.g., use previous output).
         is_optional: Whether this step can be skipped if agent is unavailable.
+        depends_on: Index of step this step depends on (None = no dependency, can run in parallel).
     """
 
     agent_type: AgentType
     description: str
     input_transform: str | None = None  # "original", "previous", or custom instruction
     is_optional: bool = False
+    depends_on: int | None = None  # Index of step this depends on, None = independent
 
 
 @dataclass

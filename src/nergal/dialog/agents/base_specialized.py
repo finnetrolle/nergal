@@ -2,9 +2,14 @@
 
 This module provides a base class for specialized agents that includes
 common patterns like keyword-based message handling and context analysis.
+
+The architecture uses the Template Method pattern with hook methods that
+subclasses can override for custom behavior without duplicating logic.
 """
 
+import re
 from abc import abstractmethod
+from functools import lru_cache
 from typing import Any
 
 from nergal.dialog.base import AgentResult, AgentType, BaseAgent
@@ -13,24 +18,37 @@ from nergal.llm import BaseLLMProvider, LLMMessage
 
 
 class BaseSpecializedAgent(BaseAgent):
-    """Base class for specialized agents with keyword-based can_handle.
+    """Base class for specialized agents with hook-based can_handle.
     
-    This class provides a standardized way for agents to determine if they
-    can handle a message based on keywords and context. Subclasses can
-    customize the behavior by setting class attributes or overriding methods.
+    This class uses the Template Method pattern to provide a standardized
+    way for agents to determine confidence. Subclasses can customize behavior
+    by:
+    
+    1. Setting class attributes (_keywords, _context_keys, etc.)
+    2. Overriding hook methods (_calculate_custom_confidence, etc.)
+    3. Completely overriding can_handle() only when necessary
+    
+    Architecture Pattern:
+        can_handle() is the template method that calls:
+        - _calculate_keyword_boost()      # Override for custom keyword logic
+        - _calculate_context_boost()      # Override for custom context logic
+        - _calculate_custom_confidence()  # Hook for agent-specific logic
     
     Attributes:
         _keywords: List of keywords that indicate this agent should handle the message.
+        _patterns: List of regex patterns for more complex matching.
         _context_keys: Context keys that boost confidence when present.
         _base_confidence: Starting confidence value.
         _keyword_boost: Confidence increase per matched keyword.
         _context_boost: Confidence increase when context keys are present.
         _max_keyword_boost: Maximum confidence boost from keywords.
+        _pattern_boost: Confidence boost when a pattern matches.
     
     Example:
         class NewsAgent(BaseSpecializedAgent):
             _keywords = ["новости", "news", "пресса"]
             _context_keys = ["search_results"]
+            _patterns = [r"что пишут", r"what.*write"]
             
             @property
             def agent_type(self) -> AgentType:
@@ -39,10 +57,19 @@ class BaseSpecializedAgent(BaseAgent):
             @property
             def system_prompt(self) -> str:
                 return "Ты — агент для агрегации новостей..."
+            
+            async def _calculate_custom_confidence(
+                self, message: str, context: dict[str, Any]
+            ) -> float:
+                # Hook: Extra confidence for multiple sources
+                if context.get("sources_count", 0) >= 3:
+                    return 0.2
+                return 0.0
     """
 
     # Subclasses should override these
     _keywords: list[str] = []
+    _patterns: list[str] = []  # Regex patterns for complex matching
     _context_keys: list[str] = []
     
     # Confidence parameters (can be overridden)
@@ -50,6 +77,7 @@ class BaseSpecializedAgent(BaseAgent):
     _keyword_boost: float = 0.15
     _context_boost: float = 0.25
     _max_keyword_boost: float = 0.5
+    _pattern_boost: float = 0.3
 
     def __init__(
         self,
@@ -63,12 +91,16 @@ class BaseSpecializedAgent(BaseAgent):
             style_type: Response style to use.
         """
         super().__init__(llm_provider, style_type)
+        # Compile patterns for efficiency
+        self._compiled_patterns = [
+            re.compile(p, re.IGNORECASE) for p in self._patterns
+        ]
 
     async def can_handle(self, message: str, context: dict[str, Any]) -> float:
-        """Determine confidence based on keywords and context.
+        """Determine confidence using Template Method pattern.
         
-        Uses configurable keyword matching and context analysis.
-        Subclasses can override for custom logic.
+        This is the template method that orchestrates confidence calculation.
+        Subclasses should prefer overriding hook methods over this method.
         
         Args:
             message: User message to analyze.
@@ -80,22 +112,97 @@ class BaseSpecializedAgent(BaseAgent):
         confidence = self._base_confidence
         message_lower = message.lower()
         
-        # Keyword matching with boost
-        matched_keywords = sum(1 for kw in self._keywords if kw in message_lower)
-        keyword_boost = min(matched_keywords * self._keyword_boost, self._max_keyword_boost)
-        confidence += keyword_boost
+        # 1. Keyword-based boost
+        confidence += await self._calculate_keyword_boost(message_lower)
         
-        # Context-based boost
+        # 2. Pattern-based boost (for complex matching)
+        confidence += await self._calculate_pattern_boost(message)
+        
+        # 3. Context-based boost
+        confidence += await self._calculate_context_boost(context)
+        
+        # 4. Hook for agent-specific logic
+        confidence += await self._calculate_custom_confidence(message, context)
+        
+        return min(max(confidence, 0.0), 1.0)
+
+    async def _calculate_keyword_boost(self, message_lower: str) -> float:
+        """Calculate confidence boost from keyword matches.
+        
+        Subclasses can override for custom keyword matching logic
+        (e.g., weighted keywords, phrase matching).
+        
+        Args:
+            message_lower: Lowercase message for matching.
+            
+        Returns:
+            Confidence boost (0.0 to _max_keyword_boost).
+        """
+        matched_keywords = sum(1 for kw in self._keywords if kw in message_lower)
+        return min(matched_keywords * self._keyword_boost, self._max_keyword_boost)
+
+    async def _calculate_pattern_boost(self, message: str) -> float:
+        """Calculate confidence boost from regex pattern matches.
+        
+        Subclasses can override for custom pattern matching logic.
+        
+        Args:
+            message: Original message for pattern matching.
+            
+        Returns:
+            Confidence boost (0.0 or _pattern_boost).
+        """
+        for pattern in self._compiled_patterns:
+            if pattern.search(message):
+                return self._pattern_boost
+        return 0.0
+
+    async def _calculate_context_boost(self, context: dict[str, Any]) -> float:
+        """Calculate confidence boost from context presence.
+        
+        Subclasses can override for custom context analysis.
+        
+        Args:
+            context: Current dialog context.
+            
+        Returns:
+            Confidence boost.
+        """
+        boost = 0.0
+        
+        # Check configured context keys
         for key in self._context_keys:
             if key in context:
-                confidence += self._context_boost
+                boost += self._context_boost
                 break
         
         # Check for accumulated context from previous agents
         if self._has_relevant_context(context):
-            confidence += self._context_boost
+            boost += self._context_boost
         
-        return min(confidence, 1.0)
+        return boost
+
+    async def _calculate_custom_confidence(
+        self, message: str, context: dict[str, Any]
+    ) -> float:
+        """Hook method for agent-specific confidence calculation.
+        
+        Override this method to add custom logic without duplicating
+        the base keyword/context matching.
+        
+        Common use cases:
+        - Check for specific context values (e.g., sources_count >= 3)
+        - Apply domain-specific heuristics
+        - Combine multiple signals
+        
+        Args:
+            message: Original user message.
+            context: Current dialog context.
+            
+        Returns:
+            Additional confidence (can be negative to reduce confidence).
+        """
+        return 0.0
 
     def _has_relevant_context(self, context: dict[str, Any]) -> bool:
         """Check if context contains relevant data for this agent.

@@ -28,6 +28,12 @@ class ComparisonAgent(BaseSpecializedAgent):
     - Evaluate different approaches
     - Create decision matrices
     - Weighted scoring of alternatives
+    
+    Architecture Note:
+        Uses hook-based can_handle() pattern with:
+        - _keywords: Comparison-related keywords from COMPARISON_KEYWORDS
+        - _patterns: Regex patterns for "vs", "или" constructs
+        - _calculate_custom_confidence(): Hook for choice pattern detection
     """
     
     # Configure base class behavior
@@ -36,6 +42,13 @@ class ComparisonAgent(BaseSpecializedAgent):
     _base_confidence = 0.3
     _keyword_boost = 0.2
     _context_boost = 0.2
+    
+    # Comparison-specific patterns
+    _patterns = [
+        r"\s+vs\.?\s+",  # "X vs Y" or "X vs. Y"
+        r"\s+или\s+.*\?",  # "X или Y?" pattern
+        r"против\s+",  # "X против Y"
+    ]
     
     def __init__(
         self,
@@ -97,32 +110,37 @@ class ComparisonAgent(BaseSpecializedAgent):
 ### Рекомендация
 [Итоговый вывод с учётом контекста]"""
 
-    async def can_handle(self, message: str, context: dict[str, Any]) -> float:
-        """Determine if this agent can handle the message.
+    async def _calculate_custom_confidence(
+        self, message: str, context: dict[str, Any]
+    ) -> float:
+        """Hook for comparison-specific confidence calculation.
         
-        Extends base class logic with additional pattern matching.
+        Adds extra confidence when:
+        - Message contains "или" with "?" (choice question)
+        - Message contains "vs" pattern
         
         Args:
-            message: User message to analyze.
+            message: Original user message.
             context: Current dialog context.
             
         Returns:
-            Confidence score (0.0 to 1.0).
+            Additional confidence boost.
         """
-        # Use base class keyword matching
-        confidence = await super().can_handle(message, context)
-        
         message_lower = message.lower()
         
-        # Check for "or" patterns indicating choice
-        if " или " in message_lower and "?" in message:
-            confidence = max(confidence, 0.8)
-        
-        # Check for vs pattern
+        # High confidence for "vs" pattern
         if " vs " in message_lower or " vs. " in message_lower:
-            confidence = max(confidence, 0.9)
+            return 0.5  # Strong boost - this is definitely a comparison
         
-        return confidence
+        # Good confidence for "или" with question mark
+        if " или " in message_lower and "?" in message:
+            return 0.4  # Good boost - likely a choice question
+        
+        # Moderate confidence for "против" pattern
+        if " против " in message_lower:
+            return 0.3
+        
+        return 0.0
     
     async def process(
         self,

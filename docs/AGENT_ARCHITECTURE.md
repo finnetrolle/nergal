@@ -2,7 +2,7 @@
 
 ## Ключевой механизм: динамический список доступных агентов
 
-> **Важно:** DispatcherAgent при каждом вызове LLM динамически формирует system prompt со списком **только доступных** агентов из [`AgentRegistry`](src/nergal/dialog/base.py:248). Это позволяет модели составлять планы только из тех агентов, которые реально зарегистрированы в системе.
+> **Важно:** DispatcherAgent при каждом вызове LLM динамически формирует system prompt со списком **только доступных** агентов из [`AgentRegistry`](src/nergal/dialog/base.py:252). Это позволяет модели составлять планы только из тех агентов, которые реально зарегистрированы в системе.
 
 ```mermaid
 flowchart TD
@@ -31,7 +31,7 @@ flowchart TD
 ### Код формирования списка агентов
 
 ```python
-# dispatcher_agent.py:119-168
+# dispatcher_agent.py:120-191
 def _build_system_prompt(self) -> str:
     # Получаем список доступных агентов из реестра
     available_agents = self._get_available_agents()
@@ -128,6 +128,12 @@ graph TB
         Default[💬 DefaultAgent<br/>Общение и финальный ответ]
     end
 
+    subgraph "Система памяти"
+        MemoryService[🧠 MemoryService<br/>Управление памятью]
+        ExtractionService[📝 MemoryExtractionService<br/>Извлечение фактов]
+        Database[(🗄️ PostgreSQL<br/>Хранилище)]
+    end
+
     subgraph "LLM Provider"
         LLM[🤖 LLM Provider<br/>ZAI/OpenAI/и т.д.]
     end
@@ -141,6 +147,11 @@ graph TB
     DialogManager -->|get_or_create_context| ContextManager
     DialogManager -->|get/register agents| AgentRegistry
     DialogManager -->|create_plan| Dispatcher
+    DialogManager -->|memory_context| MemoryService
+    
+    %% Memory Service связи
+    MemoryService -->|persist| Database
+    MemoryService -->|extract_facts| ExtractionService
     
     %% Dispatcher связи
     Dispatcher -->|get_available_agents| AgentRegistry
@@ -186,6 +197,8 @@ graph TB
     style Dispatcher fill:#e74c3c,color:#fff
     style Default fill:#2ecc71,color:#fff
     style LLM fill:#9b59b6,color:#fff
+    style MemoryService fill:#f39c12,color:#fff
+    style Database fill:#34495e,color:#fff
 ```
 
 ## Поток обработки сообщения
@@ -197,6 +210,7 @@ sequenceDiagram
     participant M as 🚀 Main
     participant DM as 📋 DialogManager
     participant CM as 🗃️ ContextManager
+    participant MS as 🧠 MemoryService
     participant D as 🎯 Dispatcher
     participant AR as 📚 AgentRegistry
     participant A1 as 🔍 Agent 1
@@ -211,10 +225,14 @@ sequenceDiagram
     DM->>CM: get_or_create_context(user_id)
     CM-->>DM: DialogContext
     
-    Note over DM: 2. Добавление сообщения в историю
-    DM->>CM: add_user_message(message)
+    Note over DM: 2. Получение контекста памяти
+    DM->>MS: get_context_for_agent(user_id)
+    MS-->>DM: memory_context (profile, facts, history)
     
-    Note over DM: 3. Создание плана выполнения
+    Note over DM: 3. Добавление сообщения в историю
+    DM->>MS: add_message(user_id, message)
+    
+    Note over DM: 4. Создание плана выполнения
     DM->>D: create_plan(message, context)
     D->>AR: get_all()
     AR-->>D: [available agents]
@@ -222,7 +240,7 @@ sequenceDiagram
     LLM-->>D: JSON план
     D-->>DM: ExecutionPlan
     
-    Note over DM: 4. Выполнение плана пошагово
+    Note over DM: 5. Выполнение плана пошагово
     
     loop Для каждого шага плана
         DM->>AR: get(agent_type)
@@ -234,14 +252,17 @@ sequenceDiagram
         Note over DM: Сохранение результата в accumulated_context
     end
     
-    Note over DM: 5. Финальный агент формирует ответ
+    Note over DM: 6. Финальный агент формирует ответ
     DM->>A2: process(accumulated_context)
     A2->>LLM: generate(messages)
     LLM-->>A2: LLMResponse
     A2-->>DM: AgentResult
     
-    Note over DM: 6. Сохранение ответа в истории
-    DM->>CM: add_assistant_message(response)
+    Note over DM: 7. Сохранение ответа в истории
+    DM->>MS: add_message(user_id, response)
+    
+    Note over DM: 8. Извлечение фактов из диалога
+    DM->>MS: extract_and_store_facts(messages)
     
     DM-->>M: ProcessResult
     M->>T: send_message(response)
@@ -266,6 +287,7 @@ classDiagram
         +str description
         +str input_transform
         +bool is_optional
+        +int depends_on
     }
     
     class AgentResult {
@@ -275,6 +297,7 @@ classDiagram
         +Dict metadata
         +bool should_handoff
         +AgentType handoff_agent
+        +int tokens_used
     }
     
     class ProcessResult {
@@ -404,6 +427,68 @@ graph TB
     D --> RESP[Обзор: большинство источников сообщают...]
 ```
 
+## Система памяти
+
+### Архитектура памяти
+
+```mermaid
+flowchart TB
+    subgraph "Short-term Memory"
+        STM[Conversation History]
+        STM -->|last N messages| Context[Dialog Context]
+    end
+    
+    subgraph "Long-term Memory"
+        UP[User Profile]
+        PF[Profile Facts]
+        UP -->|personalization| Context
+        PF -->|extracted facts| Context
+    end
+    
+    subgraph "Storage"
+        DB[(PostgreSQL)]
+        STM -->|persist| DB
+        UP -->|persist| DB
+        PF -->|persist| DB
+    end
+    
+    subgraph "Processing"
+        MES[MemoryExtractionService]
+        Dialog -->|analyze| MES
+        MES -->|extract facts| PF
+    end
+```
+
+### Компоненты системы памяти
+
+| Компонент | Файл | Описание |
+|-----------|------|----------|
+| [`MemoryService`](src/nergal/memory/service.py:30) | memory/service.py | Главная точка координации памяти |
+| [`MemoryExtractionService`](src/nergal/memory/extraction.py) | memory/extraction.py | Извлечение фактов из диалогов |
+| [`UserRepository`](src/nergal/database/repositories.py) | database/repositories.py | Репозиторий пользователей |
+| [`ProfileRepository`](src/nergal/database/repositories.py) | database/repositories.py | Репозиторий профилей |
+| [`ConversationRepository`](src/nergal/database/repositories.py) | database/repositories.py | Репозиторий диалогов |
+
+### Контекст памяти для агентов
+
+```python
+# Пример контекста, передаваемого агентам
+memory_context = {
+    "user_id": 123456789,
+    "user_name": "Иван Петров",
+    "user_display_name": "Иван",
+    "profile_summary": "Пользователь интересуется Python и ML",
+    "conversation_summary": "Последние 5 сообщений о разработке",
+    "profile": {...},  # Полный профиль
+    "facts": [...],    # Извлеченные факты
+    "recent_messages": [
+        {"role": "user", "content": "..."},
+        {"role": "assistant", "content": "..."}
+    ],
+    "session_id": "abc123"
+}
+```
+
 ## Жизненный цикл контекста
 
 ```mermaid
@@ -412,7 +497,8 @@ stateDiagram-v2
     NewUser --> ActiveContext: Создан контекст
     ActiveContext --> ActiveContext: Новые сообщения
     ActiveContext --> HistoryUpdated: add_user_message
-    HistoryUpdated --> ActiveContext: add_assistant_message
+    HistoryUpdated --> MemoryUpdated: extract_facts
+    MemoryUpdated --> ActiveContext: add_assistant_message
     ActiveContext --> Cleared: /clear команда
     ActiveContext --> Expired: Таймаут
     Cleared --> [*]
@@ -426,6 +512,7 @@ stateDiagram-v2
         - current_agent
         - created_at
         - updated_at
+        - memory_context
     end note
 ```
 
@@ -463,30 +550,122 @@ flowchart TD
 
 | Класс | Файл | Ответственность |
 |-------|------|-----------------|
-| [`DialogManager`](src/nergal/dialog/manager.py:54) | manager.py | Главная точка координации, управление контекстом, выполнение планов |
-| [`DispatcherAgent`](src/nergal/dialog/dispatcher_agent.py:86) | dispatcher_agent.py | Анализ сообщений, создание планов выполнения |
-| [`AgentRegistry`](src/nergal/dialog/base.py:248) | base.py | Хранение и поиск агентов |
+| [`DialogManager`](src/nergal/dialog/manager.py:56) | manager.py | Главная точка координации, управление контекстом, выполнение планов |
+| [`DispatcherAgent`](src/nergal/dialog/dispatcher_agent.py:87) | dispatcher_agent.py | Анализ сообщений, создание планов выполнения |
+| [`AgentRegistry`](src/nergal/dialog/base.py:252) | base.py | Хранение и поиск агентов |
 | [`ContextManager`](src/nergal/dialog/context.py) | context.py | Управление контекстами пользователей |
-| [`BaseAgent`](src/nergal/dialog/base.py:141) | base.py | Абстрактный базовый класс для всех агентов |
-| [`ExecutionPlan`](src/nergal/dialog/base.py:101) | base.py | Структура плана выполнения |
-| [`PlanStep`](src/nergal/dialog/base.py:84) | base.py | Отдельный шаг в плане |
+| [`BaseAgent`](src/nergal/dialog/base.py:145) | base.py | Абстрактный базовый класс для всех агентов |
+| [`ExecutionPlan`](src/nergal/dialog/base.py:104) | base.py | Структура плана выполнения |
+| [`PlanStep`](src/nergal/dialog/base.py:85) | base.py | Отдельный шаг в плане |
+| [`MemoryService`](src/nergal/memory/service.py:30) | memory/service.py | Управление памятью пользователей |
+| [`MemoryExtractionService`](src/nergal/memory/extraction.py) | memory/extraction.py | Извлечение фактов из диалогов |
 
 ## Конфигурация системы
 
 ```python
 # Пример инициализации
-llm_provider = LLMFactory.create_provider(config)
+from nergal.config import get_settings
+from nergal.llm import create_llm_provider
+from nergal.dialog.manager import DialogManager
+from nergal.memory.service import MemoryService
+from nergal.database.connection import get_database
+
+settings = get_settings()
+
+# Инициализация компонентов
+llm_provider = create_llm_provider(
+    provider_type=settings.llm.provider,
+    api_key=settings.llm.api_key,
+    model=settings.llm.model,
+)
+
+memory_service = MemoryService(db=get_database())
+
 dialog_manager = DialogManager(
     llm_provider=llm_provider,
     max_history=20,
     max_contexts=1000,
-    style_type=StyleType.DEFAULT,
-    use_dispatcher=True,  # Включить планировщик
+    style_type=settings.style,
+    use_dispatcher=True,
+    memory_service=memory_service,
 )
 
 # Регистрация дополнительных агентов
-dialog_manager.register_agent(WebSearchAgent(llm_provider, style_type))
-dialog_manager.register_agent(KnowledgeBaseAgent(llm_provider, style_type))
-dialog_manager.register_agent(TechDocsAgent(llm_provider, style_type))
+from nergal.dialog.agents import (
+    WebSearchAgent,
+    KnowledgeBaseAgent,
+    TechDocsAgent,
+    NewsAgent,
+)
+
+dialog_manager.register_agent(WebSearchAgent(llm_provider, settings.style))
+dialog_manager.register_agent(KnowledgeBaseAgent(llm_provider, settings.style))
+dialog_manager.register_agent(TechDocsAgent(llm_provider, settings.style))
+dialog_manager.register_agent(NewsAgent(llm_provider, settings.style))
 # ... и т.д.
+```
+
+## Структура проекта
+
+```
+src/nergal/
+├── config.py                    # Конфигурация (pydantic-settings)
+├── main.py                      # Точка входа, логика бота
+├── protocols.py                 # Протоколы и интерфейсы
+├── exceptions.py                # Исключения
+├── database/
+│   ├── connection.py            # Подключение к БД
+│   ├── models.py                # SQLAlchemy модели
+│   └── repositories.py          # Репозитории для работы с БД
+├── dialog/
+│   ├── __init__.py              # Публичный API модуля
+│   ├── base.py                  # Базовые классы агентов
+│   ├── constants.py             # Константы и промпты
+│   ├── context.py               # Контекст диалога
+│   ├── default_agent.py         # DefaultAgent
+│   ├── dispatcher_agent.py      # DispatcherAgent
+│   ├── manager.py               # DialogManager
+│   ├── styles.py                # Стили ответов
+│   └── agents/                  # Специализированные агенты
+│       ├── __init__.py
+│       ├── base_specialized.py  # Базовый класс для спец. агентов
+│       ├── web_search_agent.py  # Веб-поиск
+│       ├── knowledge_base_agent.py
+│       ├── tech_docs_agent.py
+│       ├── code_analysis_agent.py
+│       ├── metrics_agent.py
+│       ├── news_agent.py
+│       ├── analysis_agent.py
+│       ├── fact_check_agent.py
+│       ├── comparison_agent.py
+│       ├── summary_agent.py
+│       ├── clarification_agent.py
+│       └── expertise_agent.py
+├── llm/                         # LLM провайдеры
+│   ├── __init__.py
+│   ├── base.py                  # Базовый класс
+│   ├── factory.py               # Фабрика провайдеров
+│   └── providers/
+│       └── zai.py               # Z.ai реализация
+├── memory/                      # Система памяти
+│   ├── __init__.py
+│   ├── service.py               # MemoryService
+│   └── extraction.py            # Извлечение фактов
+├── monitoring/                  # Мониторинг
+│   ├── __init__.py
+│   ├── health.py                # Health checks
+│   ├── logging_config.py        # Конфигурация логирования
+│   └── metrics.py               # Prometheus метрики
+├── stt/                         # Speech-to-Text
+│   ├── __init__.py
+│   ├── base.py
+│   ├── factory.py
+│   └── providers/
+│       └── local_whisper.py
+├── utils/
+│   └── markdown_to_telegram.py
+└── web_search/                  # Веб-поиск
+    ├── __init__.py
+    ├── base.py
+    └── zai_mcp_http.py          # MCP HTTP провайдер
 ```
