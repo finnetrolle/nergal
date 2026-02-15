@@ -67,6 +67,22 @@ class WebSearchSettings(BaseSettings):
     timeout: float = Field(default=30.0, description="Request timeout in seconds")
 
 
+class MonitoringSettings(BaseSettings):
+    """Monitoring and observability settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="MONITORING_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    enabled: bool = Field(default=True, description="Enable monitoring and metrics collection")
+    metrics_port: int = Field(default=8000, description="Port for Prometheus metrics endpoint")
+    json_logs: bool = Field(default=True, description="Use JSON format for logs (recommended for production)")
+    log_level: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -93,6 +109,9 @@ class Settings(BaseSettings):
 
     # STT settings (nested)
     stt: STTSettings = Field(default_factory=STTSettings)
+
+    # Monitoring settings (nested)
+    monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
 
 
 @lru_cache

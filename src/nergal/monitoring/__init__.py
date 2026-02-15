@@ -1,0 +1,86 @@
+"""Monitoring module for metrics, logging, and alerting."""
+
+from nergal.monitoring.health import (
+    HealthChecker,
+    HealthStatus,
+    ComponentHealth,
+    get_health_checker,
+    run_health_checks,
+)
+from nergal.monitoring.logging_config import (
+    configure_logging as configure_structlog,
+    get_logger,
+    LogContext,
+    bind_context,
+    unbind_context,
+)
+from nergal.monitoring.metrics import (
+    bot_messages_total,
+    bot_message_duration_seconds,
+    bot_errors_total,
+    bot_active_users,
+    bot_llm_requests_total,
+    bot_llm_request_duration_seconds,
+    bot_llm_tokens_total,
+    bot_web_search_requests_total,
+    bot_web_search_duration_seconds,
+    bot_stt_requests_total,
+    bot_stt_duration_seconds,
+    bot_stt_audio_duration_seconds,
+    system_cpu_percent,
+    system_memory_percent,
+    system_disk_percent,
+    MetricsServer,
+    track_message,
+    track_llm_request,
+    track_web_search,
+    track_stt_request,
+    track_error,
+    track_tokens,
+    track_user_activity,
+    update_system_metrics,
+)
+
+__all__ = [
+    # Counters
+    "bot_messages_total",
+    "bot_errors_total",
+    "bot_active_users",
+    "bot_llm_requests_total",
+    "bot_llm_tokens_total",
+    "bot_web_search_requests_total",
+    "bot_stt_requests_total",
+    # Histograms
+    "bot_message_duration_seconds",
+    "bot_llm_request_duration_seconds",
+    "bot_web_search_duration_seconds",
+    "bot_stt_duration_seconds",
+    "bot_stt_audio_duration_seconds",
+    # Gauges
+    "system_cpu_percent",
+    "system_memory_percent",
+    "system_disk_percent",
+    # Classes
+    "MetricsServer",
+    "HealthChecker",
+    "HealthStatus",
+    "ComponentHealth",
+    "LogContext",
+    # Decorators and helpers
+    "track_message",
+    "track_llm_request",
+    "track_web_search",
+    "track_stt_request",
+    "track_error",
+    "track_tokens",
+    "track_user_activity",
+    "update_system_metrics",
+    # Health check functions
+    "get_health_checker",
+    "run_health_checks",
+    # Logging functions
+    "configure_structlog",
+    "get_logger",
+    "bind_context",
+    "unbind_context",
+]

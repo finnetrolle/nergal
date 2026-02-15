@@ -16,6 +16,7 @@ from nergal.llm.base import (
     LLMRateLimitError,
     LLMResponse,
 )
+from nergal.monitoring import track_llm_request, track_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -155,39 +156,46 @@ class ZaiProvider(BaseLLMProvider):
             LLMModelNotFoundError: If model is not found.
             LLMError: For other API errors.
         """
-        client = self._get_client()
-        url = f"{self.base_url}/chat/completions"
-        body = self._build_request_body(
-            messages, temperature, max_tokens, stream=False, **kwargs
-        )
-
-        logger.debug(f"Sending request to Z.ai: {url}")
-
-        response = await client.post(url, json=body)
-
-        if response.status_code != 200:
-            self._handle_error_response(response)
-
-        data = response.json()
-
-        try:
-            choice = data["choices"][0]
-            content = choice["message"]["content"]
-            finish_reason = choice.get("finish_reason")
-            usage = data.get("usage")
-            model = data.get("model", self.model)
-
-            return LLMResponse(
-                content=content,
-                model=model,
-                usage=usage,
-                finish_reason=finish_reason,
-                raw_response=data,
+        async with track_llm_request(self.provider_name, self.model):
+            client = self._get_client()
+            url = f"{self.base_url}/chat/completions"
+            body = self._build_request_body(
+                messages, temperature, max_tokens, stream=False, **kwargs
             )
-        except (KeyError, IndexError) as e:
-            raise LLMError(
-                f"Invalid response format: {e}", provider=self.provider_name
-            ) from e
+
+            logger.debug(f"Sending request to Z.ai: {url}")
+
+            response = await client.post(url, json=body)
+
+            if response.status_code != 200:
+                self._handle_error_response(response)
+
+            data = response.json()
+
+            try:
+                choice = data["choices"][0]
+                content = choice["message"]["content"]
+                finish_reason = choice.get("finish_reason")
+                usage = data.get("usage")
+                model = data.get("model", self.model)
+
+                # Track token usage if available
+                if usage:
+                    prompt_tokens = usage.get("prompt_tokens", 0)
+                    completion_tokens = usage.get("completion_tokens", 0)
+                    track_tokens(self.provider_name, model, prompt_tokens, completion_tokens)
+
+                return LLMResponse(
+                    content=content,
+                    model=model,
+                    usage=usage,
+                    finish_reason=finish_reason,
+                    raw_response=data,
+                )
+            except (KeyError, IndexError) as e:
+                raise LLMError(
+                    f"Invalid response format: {e}", provider=self.provider_name
+                ) from e
 
     async def generate_stream(
         self,

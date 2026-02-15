@@ -2,6 +2,7 @@
 
 import logging
 import re
+import time
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
@@ -10,8 +11,22 @@ from nergal.config import get_settings
 from nergal.dialog import DialogManager
 from nergal.dialog.agents.web_search_agent import WebSearchAgent
 from nergal.llm import create_llm_provider
+from nergal.monitoring import (
+    MetricsServer,
+    configure_structlog,
+    get_health_checker,
+    get_logger,
+    run_health_checks,
+    track_error,
+    track_user_activity,
+)
+from nergal.monitoring.metrics import (
+    bot_message_duration_seconds,
+    bot_messages_total,
+)
 from nergal.stt import AudioTooLongError, convert_ogg_to_wav, create_stt_provider
 from nergal.stt.base import BaseSTTProvider
+from nergal.utils import markdown_to_telegram_html, split_message_for_telegram
 from nergal.web_search.zai_mcp_http import ZaiMcpHttpSearchProvider
 
 
@@ -56,7 +71,9 @@ class BotApplication:
         self._web_search_provider: ZaiMcpHttpSearchProvider | None = None
         self._stt_provider: BaseSTTProvider | None = None
         self._settings = get_settings()
-        self._logger = logging.getLogger(__name__)
+        self._logger = get_logger(__name__)
+        self._metrics_server: MetricsServer | None = None
+        self._startup_time: float | None = None
 
     @classmethod
     def get_instance(cls) -> "BotApplication":
@@ -96,8 +113,9 @@ class BotApplication:
             api_key=self._settings.stt.api_key or None,
         )
         self._logger.info(
-            f"Initialized STT provider: {provider.provider_name}, "
-            f"model: {self._settings.stt.model}"
+            "Initialized STT provider",
+            provider=provider.provider_name,
+            model=self._settings.stt.model,
         )
         return provider
 
@@ -110,7 +128,8 @@ class BotApplication:
             timeout=self._settings.web_search.timeout,
         )
         self._logger.info(
-            f"Initialized ZaiMcpHttpSearchProvider with MCP URL: {self._settings.web_search.mcp_url}"
+            "Initialized web search provider",
+            mcp_url=self._settings.web_search.mcp_url,
         )
         return provider
 
@@ -130,8 +149,9 @@ class BotApplication:
             style_type=self._settings.style,
         )
         self._logger.info(
-            f"Initialized DialogManager with LLM provider: {llm_provider.provider_name}, "
-            f"style: {self._settings.style.value}"
+            "Initialized DialogManager",
+            llm_provider=llm_provider.provider_name,
+            style=self._settings.style.value,
         )
 
         search_provider = self.web_search_provider
@@ -147,18 +167,30 @@ class BotApplication:
 
         return manager
 
+    def start_metrics_server(self) -> None:
+        """Start the Prometheus metrics server."""
+        if self._settings.monitoring.enabled:
+            self._metrics_server = MetricsServer(port=self._settings.monitoring.metrics_port)
+            self._metrics_server.start()
+            self._logger.info(
+                "Metrics server started",
+                port=self._settings.monitoring.metrics_port,
+            )
 
-def configure_logging(log_level: str) -> None:
+    def set_startup_time(self) -> None:
+        """Record the application startup time."""
+        self._startup_time = time.time()
+        get_health_checker().set_startup_time(self._startup_time)
+
+
+def configure_logging(log_level: str, json_output: bool = True) -> None:
     """Configure logging for the application.
 
     Args:
         log_level: The logging level to use.
+        json_output: Whether to use JSON format for logs.
     """
-    logging.basicConfig(
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        level=logging.INFO,
-    )
-    logging.getLogger().setLevel(getattr(logging, log_level.upper()))
+    configure_structlog(log_level=log_level, json_output=json_output)
 
     # Suppress verbose HTTP logs from httpx
     httpx_logger = logging.getLogger("httpx")
@@ -179,8 +211,46 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Просто напиши мне сообщение, и я отвечу с помощью AI!")
 
 
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /status command to show bot health."""
+    if not update.message:
+        return
+
+    app = BotApplication.get_instance()
+    checker = get_health_checker()
+
+    # Run health checks
+    await run_health_checks(
+        llm_provider=app.dialog_manager._llm_provider if app._dialog_manager else None,
+        bot_application=app,
+        web_search_provider=app.web_search_provider,
+        stt_provider=app.stt_provider,
+    )
+
+    health = checker.to_dict()
+    status_emoji = {"healthy": "✅", "degraded": "⚠️", "unhealthy": "❌"}
+
+    status_text = f"{status_emoji.get(health['status'], '❓')} Статус: {health['status']}\n\n"
+
+    for name, component in health.get("components", {}).items():
+        emoji = status_emoji.get(component["status"], "❓")
+        status_text += f"{emoji} {name}: {component.get('message', component['status'])}\n"
+
+    if "uptime_seconds" in health:
+        uptime = int(health["uptime_seconds"])
+        days, remainder = divmod(uptime, 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes, _ = divmod(remainder, 60)
+        uptime_str = f"{days}д {hours}ч {minutes}м" if days else f"{hours}ч {minutes}м"
+        status_text += f"\n⏱ Uptime: {uptime_str}"
+
+    await update.message.reply_text(status_text)
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle all incoming text messages using the dialog manager."""
+    logger = get_logger(__name__)
+
     if not (update.message and update.message.text):
         return
 
@@ -193,19 +263,66 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     }
     user_id = update.effective_user.id if update.effective_user else 0
 
-    app = BotApplication.get_instance()
-    result = await app.dialog_manager.process_message(
+    # Track user activity for metrics
+    track_user_activity(user_id)
+
+    # Log incoming message
+    logger.debug(
+        "Processing message",
         user_id=user_id,
-        message=user_text,
-        user_info=user_info,
+        message_length=len(user_text),
     )
 
-    await update.message.reply_text(result.response)
+    app = BotApplication.get_instance()
+
+    start_time = time.time()
+    status = "success"
+    agent_type = "default"
+    try:
+        result = await app.dialog_manager.process_message(
+            user_id=user_id,
+            message=user_text,
+            user_info=user_info,
+        )
+        agent_type = result.agent_type.value
+
+        # Convert Markdown to Telegram HTML format
+        html_response = markdown_to_telegram_html(result.response)
+
+        # Send with HTML parsing enabled
+        await update.message.reply_text(html_response, parse_mode="HTML")
+
+        # Log successful processing
+        duration = time.time() - start_time
+        logger.info(
+            "Message processed successfully",
+            user_id=user_id,
+            duration_seconds=round(duration, 3),
+            agent_used=result.agent_type.value,
+        )
+
+    except Exception as e:
+        status = "error"
+        track_error(type(e).__name__, "message_handler")
+        logger.error(
+            "Error processing message",
+            user_id=user_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        await update.message.reply_text(
+            "Произошла ошибка при обработке сообщения. Пожалуйста, попробуйте позже."
+        )
+    finally:
+        # Track message metrics
+        duration = time.time() - start_time
+        bot_messages_total.labels(status=status, agent_type=agent_type).inc()
+        bot_message_duration_seconds.labels(agent_type=agent_type).observe(duration)
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming voice messages using STT and dialog manager."""
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
 
     if not (update.message and update.message.voice):
         return
@@ -227,6 +344,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
+    user_id = update.effective_user.id if update.effective_user else 0
+    track_user_activity(user_id)
+
     # Send typing action to show the bot is processing
     if update.effective_chat:
         await context.bot.send_chat_action(
@@ -246,7 +366,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 bytes(audio_bytes),
                 max_duration_seconds=settings.stt.max_duration_seconds,
             )
-            logger.info(f"Converted voice message: {duration:.1f}s")
+            logger.info("Converted voice message", duration_seconds=round(duration, 1))
         except AudioTooLongError as e:
             await update.message.reply_text(
                 f"Голосовое сообщение слишком длинное ({e.duration_seconds:.0f}с). "
@@ -266,7 +386,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
             return
 
-        logger.info(f"Transcription: {transcription[:100]}...")
+        logger.info("Transcription completed", text_preview=transcription[:100])
 
         # Process the transcribed text through dialog manager
         user_info = {
@@ -275,18 +395,45 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             "username": update.effective_user.username if update.effective_user else None,
             "language_code": update.effective_user.language_code if update.effective_user else None,
         }
-        user_id = update.effective_user.id if update.effective_user else 0
 
-        result = await app.dialog_manager.process_message(
-            user_id=user_id,
-            message=transcription,
-            user_info=user_info,
-        )
+        start_time = time.time()
+        try:
+            result = await app.dialog_manager.process_message(
+                user_id=user_id,
+                message=transcription,
+                user_info=user_info,
+            )
 
-        await update.message.reply_text(result.response)
+            # Convert Markdown to Telegram HTML format
+            html_response = markdown_to_telegram_html(result.response)
+            await update.message.reply_text(html_response, parse_mode="HTML")
+
+            duration = time.time() - start_time
+            logger.info(
+                "Voice message processed successfully",
+                user_id=user_id,
+                duration_seconds=round(duration, 3),
+                audio_duration_seconds=round(duration, 1),
+            )
+
+        except Exception as e:
+            track_error(type(e).__name__, "voice_handler")
+            logger.error(
+                "Error processing voice transcription",
+                user_id=user_id,
+                error=str(e),
+            )
+            await update.message.reply_text(
+                "Произошла ошибка при обработке сообщения. Пожалуйста, попробуйте позже."
+            )
 
     except Exception as e:
-        logger.error(f"Error processing voice message: {e}", exc_info=True)
+        track_error(type(e).__name__, "voice_processing")
+        logger.error(
+            "Error processing voice message",
+            error=str(e),
+            error_type=type(e).__name__,
+        )
         await update.message.reply_text(
             "Произошла ошибка при обработке голосового сообщения. "
             "Пожалуйста, попробуйте ещё раз или напишите текстом."
@@ -296,25 +443,51 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 def main() -> None:
     """Start the bot."""
     settings = get_settings()
-    configure_logging(settings.log_level)
+
+    # Configure logging with monitoring settings
+    configure_logging(
+        log_level=settings.monitoring.log_level or settings.log_level,
+        json_output=settings.monitoring.json_logs,
+    )
+
+    logger = get_logger(__name__)
 
     if not settings.llm.api_key:
-        logging.getLogger(__name__).warning(
-            "LLM_API_KEY is not set. Bot will not be able to generate AI responses."
-        )
+        logger.warning("LLM_API_KEY is not set. Bot will not be able to generate AI responses.")
+
+    # Initialize bot application
+    app = BotApplication.get_instance()
+    app.set_startup_time()
+
+    # Start metrics server if monitoring is enabled
+    if settings.monitoring.enabled:
+        app.start_metrics_server()
+
+    # Pre-initialize components for health checks
+    _ = app.dialog_manager  # Initialize dialog manager
+
+    # Mark components as healthy
+    from nergal.monitoring import HealthStatus, get_health_checker
+    checker = get_health_checker()
+    checker.mark_healthy("bot", "Bot application initialized")
 
     application = Application.builder().token(settings.telegram_bot_token).build()
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("status", status_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Add voice message handler if STT is enabled
     if settings.stt.enabled:
         application.add_handler(MessageHandler(filters.VOICE, handle_voice))
-        logging.getLogger(__name__).info("Voice message handler registered")
+        logger.info("Voice message handler registered")
 
-    logging.getLogger(__name__).info("Starting bot...")
+    logger.info(
+        "Starting bot",
+        monitoring_enabled=settings.monitoring.enabled,
+        metrics_port=settings.monitoring.metrics_port,
+    )
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

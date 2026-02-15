@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from nergal.monitoring import track_web_search
 from nergal.web_search.base import (
     BaseSearchProvider,
     SearchError,
@@ -312,57 +313,58 @@ class ZaiMcpHttpSearchProvider(BaseSearchProvider):
         """
         logger.info(f"Searching for: {request.query}")
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                await self._initialize_session(client)
+        async with track_web_search():
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    await self._initialize_session(client)
 
-                tools = await self._list_tools(client)
-                tool_names = [t.get("name") for t in tools if t.get("name")]
-                logger.debug(f"Available tools: {tool_names}")
+                    tools = await self._list_tools(client)
+                    tool_names = [t.get("name") for t in tools if t.get("name")]
+                    logger.debug(f"Available tools: {tool_names}")
 
-                tool_name = self._find_search_tool(tool_names)
-                if not tool_name:
-                    raise SearchError(
-                        "No tools available on MCP server",
-                        provider=self.provider_name,
+                    tool_name = self._find_search_tool(tool_names)
+                    if not tool_name:
+                        raise SearchError(
+                            "No tools available on MCP server",
+                            provider=self.provider_name,
+                        )
+
+                    result = await self._call_tool(
+                        client,
+                        tool_name,
+                        {"search_query": request.query, "count": request.count},
                     )
 
-                result = await self._call_tool(
-                    client,
-                    tool_name,
-                    {"search_query": request.query, "count": request.count},
-                )
+                    if "error" in result:
+                        raise SearchProviderError(
+                            str(result["error"]),
+                            provider=self.provider_name,
+                        )
 
-                if "error" in result:
-                    raise SearchProviderError(
-                        str(result["error"]),
-                        provider=self.provider_name,
+                    results: list[SearchResult] = []
+                    if "result" in result:
+                        content = result["result"].get("content", [])
+                        results = self._parse_content_response(content)
+
+                    logger.info(f"Search completed: {len(results)} results for '{request.query}'")
+
+                    return SearchResults(
+                        results=results,
+                        query=request.query,
+                        total=len(results),
                     )
 
-                results: list[SearchResult] = []
-                if "result" in result:
-                    content = result["result"].get("content", [])
-                    results = self._parse_content_response(content)
-
-                logger.info(f"Search completed: {len(results)} results for '{request.query}'")
-
-                return SearchResults(
-                    results=results,
-                    query=request.query,
-                    total=len(results),
-                )
-
-        except httpx.TimeoutException:
-            logger.error(f"Timeout for query '{request.query}'")
-            raise SearchError("Request timeout", provider=self.provider_name)
-        except httpx.RequestError as e:
-            logger.error(f"Request error: {e}")
-            raise SearchError(f"Request failed: {e}", provider=self.provider_name)
-        except (SearchRateLimitError, SearchProviderError):
-            raise
-        except Exception as e:
-            logger.error(f"Search failed: {type(e).__name__}: {e}", exc_info=True)
-            raise SearchError(f"Search failed: {e}", provider=self.provider_name) from e
+            except httpx.TimeoutException:
+                logger.error(f"Timeout for query '{request.query}'")
+                raise SearchError("Request timeout", provider=self.provider_name)
+            except httpx.RequestError as e:
+                logger.error(f"Request error: {e}")
+                raise SearchError(f"Request failed: {e}", provider=self.provider_name)
+            except (SearchRateLimitError, SearchProviderError):
+                raise
+            except Exception as e:
+                logger.error(f"Search failed: {type(e).__name__}: {e}", exc_info=True)
+                raise SearchError(f"Search failed: {e}", provider=self.provider_name) from e
 
     def _parse_result_item(self, item: dict[str, Any]) -> SearchResult:
         """Parse a single search result item.

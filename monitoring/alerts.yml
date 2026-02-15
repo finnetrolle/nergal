@@ -1,0 +1,220 @@
+# Alert rules for Nergal Bot monitoring
+
+groups:
+  - name: nergal_bot_alerts
+    interval: 30s
+    rules:
+      # ===========================================================================
+      # Bot Availability Alerts
+      # ===========================================================================
+
+      - alert: BotDown
+        expr: up{job="nergal-bot"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nergal bot is down"
+          description: "The nergal-bot instance is not responding to health checks for more than 1 minute."
+
+      - alert: BotMetricsUnavailable
+        expr: absent(up{job="nergal-bot"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Bot metrics unavailable"
+          description: "No metrics are being received from the nergal-bot for more than 2 minutes."
+
+      # ===========================================================================
+      # Error Rate Alerts
+      # ===========================================================================
+
+      - alert: HighErrorRate
+        expr: rate(bot_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Bot is experiencing {{ $value | humanize }} errors per second over the last 5 minutes."
+
+      - alert: CriticalErrorRate
+        expr: rate(bot_errors_total[5m]) > 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate"
+          description: "Bot is experiencing critical error rate of {{ $value | humanize }} errors per second."
+
+      - alert: MessageProcessingErrors
+        expr: rate(bot_messages_total{status="error"}[5m]) / rate(bot_messages_total[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High message processing error rate"
+          description: "{{ $value | humanizePercentage }} of messages are failing to process."
+
+      # ===========================================================================
+      # LLM Provider Alerts
+      # ===========================================================================
+
+      - alert: LLMRequestLatencyHigh
+        expr: histogram_quantile(0.95, rate(bot_llm_request_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM request latency is high"
+          description: "95th percentile LLM request latency is {{ $value | humanizeDuration }}."
+
+      - alert: LLMRequestErrors
+        expr: rate(bot_llm_requests_total{status="error"}[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM request errors"
+          description: "LLM provider {{ $labels.provider }} is experiencing {{ $value | humanize }} errors per second."
+
+      - alert: LLMProviderDown
+        expr: rate(bot_llm_requests_total{status="error"}[5m]) / rate(bot_llm_requests_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM provider appears to be down"
+          description: "More than 50% of LLM requests are failing for provider {{ $labels.provider }}."
+
+      # ===========================================================================
+      # Performance Alerts
+      # ===========================================================================
+
+      - alert: SlowMessageProcessing
+        expr: histogram_quantile(0.95, rate(bot_message_duration_seconds_bucket[5m])) > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow message processing"
+          description: "95th percentile message processing time is {{ $value | humanizeDuration }}."
+
+      - alert: VerySlowMessageProcessing
+        expr: histogram_quantile(0.95, rate(bot_message_duration_seconds_bucket[5m])) > 120
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Very slow message processing"
+          description: "95th percentile message processing time is {{ $value | humanizeDuration }}. Users are experiencing significant delays."
+
+      # ===========================================================================
+      # Web Search Alerts
+      # ===========================================================================
+
+      - alert: WebSearchErrors
+        expr: rate(bot_web_search_requests_total{status="error"}[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Web search errors"
+          description: "Web search is experiencing {{ $value | humanize }} errors per second."
+
+      - alert: WebSearchLatencyHigh
+        expr: histogram_quantile(0.95, rate(bot_web_search_duration_seconds_bucket[5m])) > 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Web search latency is high"
+          description: "95th percentile web search latency is {{ $value | humanizeDuration }}."
+
+      # ===========================================================================
+      # STT Alerts
+      # ===========================================================================
+
+      - alert: STTErrors
+        expr: rate(bot_stt_requests_total{status="error"}[5m]) > 0.02
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Speech-to-text errors"
+          description: "STT provider {{ $labels.provider }} is experiencing {{ $value | humanize }} errors per second."
+
+      - alert: STTLatencyHigh
+        expr: histogram_quantile(0.95, rate(bot_stt_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "STT latency is high"
+          description: "95th percentile STT processing time is {{ $value | humanizeDuration }}."
+
+      # ===========================================================================
+      # System Resource Alerts
+      # ===========================================================================
+
+      - alert: HighCPUUsage
+        expr: system_cpu_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is at {{ $value }}%."
+
+      - alert: HighMemoryUsage
+        expr: system_memory_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is at {{ $value }}%."
+
+      - alert: CriticalMemoryUsage
+        expr: system_memory_percent > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is at {{ $value }}%. The bot may become unstable."
+
+      - alert: HighDiskUsage
+        expr: system_disk_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage on {{ $labels.path }} is at {{ $value }}%."
+
+  # ===========================================================================
+  # Node/System Alerts (from node-exporter)
+  # ===========================================================================
+
+  - name: system_alerts
+    interval: 30s
+    rules:
+      - alert: InstanceDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instance {{ $labels.instance }} down"
+          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 1 minute."
+
+      - alert: DiskWillFillIn4Hours
+        expr: predict_linear(node_filesystem_avail_bytes[1h], 4*3600) < 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk will fill in 4 hours"
+          description: "Disk {{ $labels.mountpoint }} is predicted to fill within 4 hours based on current growth rate."
