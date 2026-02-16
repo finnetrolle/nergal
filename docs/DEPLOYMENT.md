@@ -366,6 +366,25 @@ MONITORING_JSON_LOGS=true
 | `AUTH_ADMIN_PORT` | Admin panel port | `8001` |
 | `AUTH_ADMIN_ENABLED` | Enable admin panel | `true` |
 
+#### Group Chat Configuration
+
+The bot can work in group chats and respond only when mentioned or replied to.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GROUP_CHAT_ENABLED` | Enable group chat functionality | `true` |
+| `GROUP_CHAT_BOT_NAME` | Bot name for mention detection | `Sil` |
+| `GROUP_CHAT_BOT_USERNAME` | Bot Telegram username (without @) | auto-detected |
+| `GROUP_CHAT_RESPOND_TO_REPLIES` | Respond to replies to bot's messages | `true` |
+| `GROUP_CHAT_RESPOND_TO_MENTIONS` | Respond when bot name/username is mentioned | `true` |
+
+**Behavior in group chats:**
+- In private chats, the bot responds to all messages
+- In group chats, the bot responds only when:
+  - Someone mentions the bot's name (e.g., "Sil, hello!")
+  - Someone mentions @bot_username
+  - Someone replies to a bot's message
+
 #### Agent Configuration
 
 Each agent can be enabled/disabled individually:

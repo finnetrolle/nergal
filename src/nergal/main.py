@@ -370,6 +370,94 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(status_text)
 
 
+def should_respond_in_group(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Check if the bot should respond to a message in a group chat.
+
+    Args:
+        update: Telegram update object.
+        context: Callback context.
+
+    Returns:
+        True if the bot should respond, False otherwise.
+    """
+    app = BotApplication.get_instance()
+    settings = app._settings.group_chat
+
+    # If group chats are disabled, don't respond
+    if not settings.enabled:
+        return False
+
+    message = update.message
+    if not message:
+        return False
+
+    # Check if this is a private chat - always respond
+    chat_type = message.chat.type
+    if chat_type == "private":
+        return True
+
+    # For group/supergroup chats, check conditions
+    if chat_type in ("group", "supergroup"):
+        # Check if message is a reply to bot's message
+        if settings.respond_to_replies and message.reply_to_message:
+            replied_message = message.reply_to_message
+            # Check if the replied message is from the bot
+            if replied_message.from_user and context.bot.username:
+                if replied_message.from_user.username == context.bot.username:
+                    return True
+
+        # Check for bot mention in message text
+        if settings.respond_to_mentions and message.text:
+            text = message.text
+            bot_name = settings.bot_name.lower()
+            bot_username = settings.bot_username.lower() if settings.bot_username else ""
+
+            # Check for name mention (case-insensitive)
+            if bot_name and bot_name in text.lower():
+                return True
+
+            # Check for @username mention
+            if bot_username and f"@{bot_username}" in text.lower():
+                return True
+
+            # Also check for @bot_username from Telegram's entity parsing
+            if message.entities:
+                for entity in message.entities:
+                    if entity.type == "mention":
+                        mention_text = text[entity.offset:entity.offset + entity.length]
+                        if bot_username and mention_text.lower() == f"@{bot_username}":
+                            return True
+                    elif entity.type == "text_mention" and entity.user:
+                        # Text mention without username (user ID mention)
+                        if context.bot.username and entity.user.username == context.bot.username:
+                            return True
+
+        # Don't respond in group chat if no conditions met
+        return False
+
+    # Default: respond (for channel or unknown types, we allow)
+    return True
+
+
+def clean_message_text(text: str, bot_username: str) -> str:
+    """Remove bot username mention from message text.
+
+    Args:
+        text: Original message text.
+        bot_username: Bot's username to remove.
+
+    Returns:
+        Cleaned message text.
+    """
+    if not bot_username or not text:
+        return text
+
+    import re
+    # Remove @username mention (case-insensitive)
+    pattern = re.compile(rf'@{re.escape(bot_username)}\b', re.IGNORECASE)
+    return pattern.sub('', text).strip()
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle all incoming text messages using the dialog manager."""
     logger = get_logger(__name__)
@@ -377,7 +465,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not (update.message and update.message.text):
         return
 
-    user_text = update.message.text
+    # Check if bot should respond in this context (group chat filtering)
+    if not should_respond_in_group(update, context):
+        logger.debug(
+            "Skipping message in group chat - no mention or reply",
+            chat_id=update.message.chat.id,
+            chat_type=update.message.chat.type,
+        )
+        return
+
+    # Get bot username for mention cleaning
+    bot_username = context.bot.username if context.bot else ""
+    app = BotApplication.get_instance()
+
+    # Clean message text (remove bot username mention)
+    user_text = clean_message_text(update.message.text, bot_username) if bot_username else update.message.text
     user_info = {
         "first_name": update.effective_user.first_name if update.effective_user else None,
         "last_name": update.effective_user.last_name if update.effective_user else None,
@@ -387,7 +489,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = update.effective_user.id if update.effective_user else 0
 
     # Check user authorization
-    app = BotApplication.get_instance()
     if app._settings.auth.enabled:
         try:
             is_authorized = await check_user_authorized(user_id)
@@ -472,6 +573,15 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     logger = get_logger(__name__)
 
     if not (update.message and update.message.voice):
+        return
+
+    # Check if bot should respond in this context (group chat filtering)
+    if not should_respond_in_group(update, context):
+        logger.debug(
+            "Skipping voice message in group chat - no mention or reply",
+            chat_id=update.message.chat.id,
+            chat_type=update.message.chat.type,
+        )
         return
 
     app = BotApplication.get_instance()

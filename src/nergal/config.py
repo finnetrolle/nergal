@@ -173,6 +173,33 @@ class AuthSettings(BaseSettings):
     )
 
 
+class GroupChatSettings(BaseSettings):
+    """Group chat settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="GROUP_CHAT_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=True, description="Enable bot to work in group chats"
+    )
+    bot_name: str = Field(
+        default="Sil", description="Bot name to detect mentions in messages"
+    )
+    bot_username: str = Field(
+        default="", description="Bot Telegram username (without @) for mention detection"
+    )
+    respond_to_replies: bool = Field(
+        default=True, description="Respond when someone replies to bot's message"
+    )
+    respond_to_mentions: bool = Field(
+        default=True, description="Respond when bot name or username is mentioned in message"
+    )
+
+
 class AgentSettings(BaseSettings):
     """Agent registration settings."""
 
@@ -263,6 +290,9 @@ class Settings(BaseSettings):
 
     # Authorization settings (nested)
     auth: AuthSettings = Field(default_factory=AuthSettings)
+
+    # Group chat settings (nested)
+    group_chat: GroupChatSettings = Field(default_factory=GroupChatSettings)
 
 
 @lru_cache
