@@ -64,12 +64,20 @@ class DefaultAgent(BaseAgent):
         Returns:
             AgentResult containing the response and metadata.
         """
+        # Debug: log all context keys
+        logger.info(f"DefaultAgent context keys: {list(context.keys())}")
+        
         # Check if we have search results from a previous agent
         search_results = context.get("search_results")
         original_message = context.get("previous_step_metadata", {}).get("original_message", message)
+        
+        # Also try to get original message from context directly (fallback)
+        if not original_message or original_message == message:
+            original_message = context.get("original_message", message)
 
         if search_results:
             logger.info(f"DefaultAgent received search results ({len(search_results)} chars), using them for response")
+            logger.info(f"Original message: {original_message[:100]}..." if len(original_message) > 100 else f"Original message: {original_message}")
             # Use search results to generate a better response
             response = await self._generate_response_with_search_results(
                 original_message=original_message,
@@ -79,7 +87,7 @@ class DefaultAgent(BaseAgent):
                 context=context,
             )
         else:
-            logger.debug("DefaultAgent: no search results in context, using standard response")
+            logger.warning(f"DefaultAgent: NO search results found in context. Available keys: {list(context.keys())}")
             response = await self._generate_response_with_memory(message, history, context)
 
         # Calculate total tokens from usage

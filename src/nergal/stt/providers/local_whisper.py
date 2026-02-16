@@ -44,6 +44,23 @@ class LocalWhisperProvider(BaseSTTProvider):
         """Return the provider name."""
         return "local_whisper"
 
+    def preload_model(self) -> None:
+        """Pre-load the Whisper model to avoid timeout on first transcription.
+
+        This method should be called at startup to ensure the model is loaded
+        before any transcription requests come in.
+        """
+        self._logger.info(
+            f"Pre-loading Whisper model: {self._model_name}, "
+            f"device: {self._device}, compute_type: {self._compute_type}"
+        )
+        self._model = WhisperModel(
+            self._model_name,
+            device=self._device,
+            compute_type=self._compute_type,
+        )
+        self._logger.info(f"Whisper model {self._model_name} pre-loaded successfully")
+
     def _get_model(self) -> WhisperModel:
         """Lazy load the Whisper model to save memory.
 

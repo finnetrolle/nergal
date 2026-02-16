@@ -2,9 +2,11 @@
 FROM python:3.12-slim
 
 # Set environment variables
+# PYTHONWARNINGS=ignore::SyntaxWarning suppresses pydub invalid escape sequence warnings
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONWARNINGS=ignore::SyntaxWarning
 
 # Install system dependencies:
 # - ffmpeg: Required for pydub audio conversion (OGG to WAV)

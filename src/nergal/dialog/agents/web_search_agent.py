@@ -288,6 +288,11 @@ class WebSearchAgent(BaseAgent):
         Returns:
             AgentResult containing the response.
         """
+        # Initialize variables for error handling
+        search_queries = []
+        formatted_results = None
+        all_sources = []
+        
         try:
             # Step 1: Generate search queries using LLM
             search_queries = await self._generate_search_queries(message)
@@ -312,20 +317,21 @@ class WebSearchAgent(BaseAgent):
                     tokens_used=tokens_used,
                 )
 
-            # Step 3: Generate response with combined results
+            # Format results for passing to next agent
             formatted_results = self._format_multiple_results(all_results)
-            response, tokens_used = await self._generate_response_with_results(
-                message, search_queries, formatted_results, history
-            )
-
+            
             # Collect all unique sources
-            all_sources = []
             seen_links = set()
             for query, results in all_results:
                 for r in results.results[:3]:
                     if r.link not in seen_links:
                         all_sources.append(r.link)
                         seen_links.add(r.link)
+
+            # Step 3: Generate response with combined results
+            response, tokens_used = await self._generate_response_with_results(
+                message, search_queries, formatted_results, history
+            )
 
             return AgentResult(
                 response=response,
@@ -357,7 +363,14 @@ class WebSearchAgent(BaseAgent):
                 response=f"{response.content}\n\n_(Примечание: Не удалось выполнить поиск в сети)_",
                 agent_type=self.agent_type,
                 confidence=0.3,
-                metadata={"error": str(e), "error_type": type(e).__name__},
+                metadata={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    # Still pass any search results we might have
+                    "search_queries": search_queries,
+                    "search_results": formatted_results,
+                    "original_message": message,
+                },
                 tokens_used=tokens_used,
             )
         except Exception as e:
@@ -368,19 +381,32 @@ class WebSearchAgent(BaseAgent):
             )
             # Check if it's a timeout error
             error_name = type(e).__name__
+            
+            # Build metadata with search results if available
+            error_metadata = {
+                "error": str(e),
+                "error_type": error_name,
+                "search_queries": search_queries,
+                "original_message": message,
+            }
+            if formatted_results:
+                error_metadata["search_results"] = formatted_results
+                error_metadata["sources"] = all_sources[:5]
+                logger.info(f"Passing search results to next agent despite error: {len(formatted_results)} chars")
+            
             if "Timeout" in error_name or "timeout" in str(e).lower():
                 return AgentResult(
                     response="Превышено время ожидания ответа. Попробуйте упростить запрос или повторить позже.",
                     agent_type=self.agent_type,
                     confidence=0.1,
-                    metadata={"error": str(e), "error_type": error_name},
+                    metadata=error_metadata,
                     tokens_used=None,
                 )
             return AgentResult(
                 response="Произошла ошибка при обработке вашего запроса. Попробуйте позже или переформулируйте вопрос.",
                 agent_type=self.agent_type,
                 confidence=0.1,
-                metadata={"error": str(e), "error_type": error_name},
+                metadata=error_metadata,
                 tokens_used=None,
             )
 

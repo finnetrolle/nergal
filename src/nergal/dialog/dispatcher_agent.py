@@ -253,6 +253,18 @@ class DispatcherAgent(BaseAgent):
             response = await self.llm_provider.generate(messages, max_tokens=500)
             plan = self._parse_plan_response(response.content)
 
+            # Filter out missing agents that are actually available
+            available_agents = set(self._get_available_agents())
+            plan.missing_agents = [
+                agent for agent in plan.missing_agents
+                if agent not in available_agents
+            ]
+            # Also filter the reasons
+            plan.missing_agents_reason = {
+                agent: reason for agent, reason in plan.missing_agents_reason.items()
+                if self._map_agent_type(agent.lower()) not in available_agents
+            }
+
             # Get first 10 words of message for logging
             words = message.split()[:10]
             message_preview = " ".join(words)
@@ -263,7 +275,7 @@ class DispatcherAgent(BaseAgent):
                 f"я отправлю сообщение [{message_preview}] по плану: {steps_desc} потому что {plan.reasoning}"
             )
 
-            # Log missing agents if any
+            # Log missing agents if any (only truly missing ones)
             if plan.has_missing_agents():
                 logger.warning(
                     f"Для полноценного выполнения плана не хватает агентов: "

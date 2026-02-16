@@ -1,5 +1,10 @@
 """Main entry point for the Telegram bot."""
 
+# Suppress pydub SyntaxWarning for invalid escape sequences (third-party library issue)
+# Must be done before any imports that trigger pydub loading
+import warnings
+warnings.filterwarnings("ignore", message=".*invalid escape sequence.*", category=SyntaxWarning, module="pydub")
+
 import asyncio
 import logging
 import re
@@ -503,7 +508,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 def main() -> None:
     """Start the bot."""
     import asyncio
-    
+
     settings = get_settings()
 
     # Configure logging with monitoring settings
@@ -527,6 +532,14 @@ def main() -> None:
 
     # Pre-initialize components for health checks
     _ = app.dialog_manager  # Initialize dialog manager
+
+    # Pre-load Whisper model if STT is enabled to avoid timeout on first transcription
+    if settings.stt.enabled:
+        stt_provider = app.stt_provider
+        if stt_provider is not None:
+            logger.info("Pre-loading Whisper model...")
+            stt_provider.preload_model()
+            logger.info("Whisper model pre-loaded successfully")
 
     # Initialize memory service (async, in event loop)
     async def post_init(application: Application) -> None:

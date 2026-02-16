@@ -17,6 +17,14 @@ class BaseSTTProvider(ABC):
         """
         pass
 
+    def preload_model(self) -> None:
+        """Pre-load the model to avoid timeout on first transcription.
+
+        This method should be called at startup to ensure the model is loaded
+        before any transcription requests come in. Default implementation does nothing.
+        """
+        pass
+
     @abstractmethod
     async def transcribe(
         self,

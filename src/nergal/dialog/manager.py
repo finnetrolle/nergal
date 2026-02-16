@@ -411,6 +411,10 @@ class DialogManager:
 
         # Identify execution groups (steps that can run in parallel)
         execution_groups = self._group_steps_by_dependency(plan.steps)
+        
+        logger.debug(f"Execution plan has {len(plan.steps)} steps in {len(execution_groups)} groups")
+        for i, step in enumerate(plan.steps):
+            logger.debug(f"  Step {i}: {step.agent_type.value} - {step.description}")
 
         for group in execution_groups:
             if len(group) == 1:
@@ -465,14 +469,21 @@ class DialogManager:
             last_idx = max(step_results.keys())
             result.final_response = step_results[last_idx].response
             result.success = True
+            logger.info(f"Plan execution complete: {len(step_results)} steps executed, final step: {last_idx}")
+        else:
+            logger.warning("Plan execution complete but no steps were executed!")
 
         return result
 
     def _group_steps_by_dependency(self, steps: list[PlanStep]) -> list[list[int]]:
         """Group steps by their dependency level for parallel execution.
 
-        Steps with no dependencies (depends_on=None) can run in parallel.
-        Steps with dependencies run after their dependencies complete.
+        By default, steps are executed SEQUENTIALLY (one at a time).
+        Parallel execution only happens when steps explicitly have depends_on set
+        to indicate they can run independently.
+
+        This ensures proper context passing between agents (e.g., web_search results
+        are available to default agent).
 
         Args:
             steps: List of PlanStep objects.
@@ -483,20 +494,31 @@ class DialogManager:
         groups: list[list[int]] = []
         assigned: set[int] = set()
 
-        # First group: steps with no dependencies
-        independent = [i for i, step in enumerate(steps) if step.depends_on is None]
-        if independent:
-            groups.append(independent)
-            assigned.update(independent)
+        # First group: only the first step (or steps that explicitly depend on nothing)
+        # We start with step 0 to ensure sequential execution by default
+        if steps:
+            groups.append([0])
+            assigned.add(0)
 
-        # Subsequent groups: steps whose dependencies are in previous groups
+        # Subsequent groups: steps whose dependencies are satisfied
         while len(assigned) < len(steps):
             next_group = []
             for i, step in enumerate(steps):
                 if i in assigned:
                     continue
-                # Check if all dependencies are satisfied
+                # A step can run if:
+                # 1. It has explicit depends_on and that dependency is satisfied
+                # 2. It has no explicit depends_on AND the previous step (i-1) is done
+                #    This ensures sequential execution by default
+                can_run = False
                 if step.depends_on is not None and step.depends_on in assigned:
+                    # Explicit dependency is satisfied
+                    can_run = True
+                elif step.depends_on is None and (i - 1) in assigned:
+                    # No explicit dependency, but previous step is done (sequential)
+                    can_run = True
+                
+                if can_run:
                     next_group.append(i)
                     assigned.add(i)
             
@@ -580,7 +602,9 @@ class DialogManager:
                 step_input = original_message
 
             # Execute the step
-            logger.debug(f"Executing step: {step.agent_type.value} - {step.description}")
+            logger.info(f"Executing step: {step.agent_type.value} - {step.description}")
+            logger.debug(f"Step input: {step_input[:100]}..." if len(step_input) > 100 else f"Step input: {step_input}")
+            logger.debug(f"Context has search_results: {'search_results' in accumulated_context}")
             step_result = await agent.process(step_input, accumulated_context, history)
 
             # Record the step execution
