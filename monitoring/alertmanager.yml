@@ -62,14 +62,14 @@ route:
 
 # Receivers
 receivers:
+  # Default receiver - logs alerts to stdout (null receiver pattern)
   - name: 'default-receiver'
-    # Default receiver - configure your preferred notification method
-    webhook_configs:
-      - url: 'http://localhost:5001/webhook'
-        send_resolved: true
+    # No configs = alerts are logged but not sent anywhere
+    # This is useful for development/testing
+    # To enable real notifications, add your preferred config below
 
   - name: 'critical-alerts'
-    # Critical alerts - use multiple channels
+    # Critical alerts - configure your notification channel
     # Email (configure SMTP above)
     # email_configs:
     #   - to: 'admin@example.com'
@@ -83,19 +83,21 @@ receivers:
     #     text: '{{ .CommonAnnotations.description }}'
     
     # Telegram bot for alerts (recommended)
-    # Create a separate bot for alerts and use its token
-    webhook_configs:
-      - url: 'http://localhost:5001/webhook/critical'
-        send_resolved: true
+    # Use webhook to your nergal-bot or a separate alerts bot:
+    # webhook_configs:
+    #   - url: 'http://nergal-bot:8000/admin/alerts/webhook'
+    #     send_resolved: true
 
   - name: 'warning-alerts'
-    # Warning alerts
-    webhook_configs:
-      - url: 'http://localhost:5001/webhook/warning'
-        send_resolved: true
+    # Warning alerts - logged only, no external notifications
+    # Configure when ready:
+    # webhook_configs:
+    #   - url: 'http://nergal-bot:8000/admin/alerts/webhook'
+    #     send_resolved: true
 
   - name: 'llm-alerts'
-    # LLM-specific alerts
-    webhook_configs:
-      - url: 'http://localhost:5001/webhook/llm'
-        send_resolved: true
+    # LLM-specific alerts - logged only
+    # Configure when ready:
+    # webhook_configs:
+    #   - url: 'http://nergal-bot:8000/admin/alerts/webhook'
+    #     send_resolved: true

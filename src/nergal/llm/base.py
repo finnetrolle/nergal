@@ -5,6 +5,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from nergal.exceptions import (
+    LLMConnectionError,
+    LLMError,
+    LLMResponseError,
+    LLMTimeoutError,
+)
+
 
 class MessageRole(str, Enum):
     """Role of a message in a conversation."""
@@ -134,14 +141,7 @@ class BaseLLMProvider(ABC):
             raise ValueError(f"{self.provider_name}: Model name is required")
 
 
-class LLMError(Exception):
-    """Base exception for LLM-related errors."""
-
-    def __init__(self, message: str, provider: str | None = None) -> None:
-        self.provider = provider
-        super().__init__(f"[{provider}] {message}" if provider else message)
-
-
+# Additional exception classes for compatibility
 class LLMRateLimitError(LLMError):
     """Raised when rate limit is exceeded."""
 

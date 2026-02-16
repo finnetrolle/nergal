@@ -5,16 +5,7 @@ from io import BytesIO
 
 from pydub import AudioSegment
 
-
-class AudioTooLongError(Exception):
-    """Raised when audio duration exceeds the maximum allowed."""
-
-    def __init__(self, duration_seconds: float, max_seconds: int):
-        self.duration_seconds = duration_seconds
-        self.max_seconds = max_seconds
-        super().__init__(
-            f"Audio duration {duration_seconds:.1f}s exceeds maximum allowed {max_seconds}s"
-        )
+from nergal.exceptions import AudioTooLongError
 
 
 def convert_ogg_to_wav(

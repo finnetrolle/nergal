@@ -172,7 +172,7 @@ class UserRepository:
             Created or updated User instance.
         """
         # For new users, use provided is_allowed or default to False
-        # For existing users, only update is_allowed if explicitly provided
+        # For existing users, only update is_allowed if explicitly provided (not None)
         query = """
             INSERT INTO users (id, telegram_username, first_name, last_name, language_code, is_allowed)
             VALUES ($1, $2, $3, $4, $5, COALESCE($6, FALSE))
@@ -181,7 +181,7 @@ class UserRepository:
                 first_name = EXCLUDED.first_name,
                 last_name = EXCLUDED.last_name,
                 language_code = EXCLUDED.language_code,
-                is_allowed = COALESCE(EXCLUDED.is_allowed, users.is_allowed),
+                is_allowed = CASE WHEN $6 IS NOT NULL THEN $6 ELSE users.is_allowed END,
                 updated_at = NOW()
             RETURNING id, telegram_username, first_name, last_name, language_code,
                       is_allowed, created_at, updated_at
@@ -428,6 +428,8 @@ class ProfileRepository:
         Returns:
             Created or updated ProfileFact instance.
         """
+        # Ensure fact_value is a string (LLM may return bool or other types)
+        fact_value_str = str(fact_value) if not isinstance(fact_value, str) else fact_value
         query = """
             INSERT INTO profile_facts (user_id, fact_type, fact_key, fact_value, confidence, source, expires_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -441,7 +443,7 @@ class ProfileRepository:
                       source, created_at, updated_at, expires_at
         """
         record = await self._db.fetchrow(
-            query, user_id, fact_type, fact_key, fact_value, confidence, source, expires_at
+            query, user_id, fact_type, fact_key, fact_value_str, confidence, source, expires_at
         )
         return record_to_profile_fact(record)
 

@@ -19,7 +19,7 @@ def mock_llm_response() -> LLMResponse:
     return LLMResponse(
         content="This is a test response.",
         model="test-model",
-        tokens_used=100,
+        usage={"prompt_tokens": 50, "completion_tokens": 50, "total_tokens": 100},
         finish_reason="stop",
     )
 
@@ -40,7 +40,7 @@ def mock_llm_provider_with_response() -> callable:
         response = LLMResponse(
             content=response_content,
             model="test-model",
-            tokens_used=100,
+            usage={"prompt_tokens": 50, "completion_tokens": 50, "total_tokens": 100},
             finish_reason="stop",
         )
         provider = MagicMock(spec=BaseLLMProvider)

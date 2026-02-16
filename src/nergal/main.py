@@ -16,7 +16,6 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from nergal.auth import check_user_authorized
 from nergal.config import get_settings
 from nergal.dialog import DialogManager
-from nergal.dialog.agents.web_search_agent import WebSearchAgent
 from nergal.llm import create_llm_provider
 from nergal.monitoring import (
     MetricsServer,
@@ -145,6 +144,8 @@ class BotApplication:
 
     def _create_dialog_manager(self) -> DialogManager:
         """Create a new dialog manager instance."""
+        from nergal.dialog.agent_loader import register_configured_agents
+        
         llm_provider = create_llm_provider(
             provider_type=self._settings.llm.provider,
             api_key=self._settings.llm.api_key,
@@ -164,16 +165,16 @@ class BotApplication:
             style=self._settings.style.value,
         )
 
+        # Register agents based on configuration
         search_provider = self.web_search_provider
-        if search_provider:
-            web_search_agent = WebSearchAgent(
-                llm_provider=llm_provider,
-                search_provider=search_provider,
-                style_type=self._settings.style,
-                max_search_results=self._settings.web_search.max_results,
-            )
-            manager.register_agent(web_search_agent)
-            self._logger.info("Web search agent registered and enabled")
+        registered = register_configured_agents(
+            registry=manager.agent_registry,
+            settings=self._settings,
+            llm_provider=llm_provider,
+            search_provider=search_provider,
+        )
+        if registered:
+            self._logger.info("Registered agents", agents=registered)
 
         return manager
 
@@ -547,10 +548,12 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         # Transcribe the audio with timeout handling
         try:
-            transcription = await stt.transcribe(
-                wav_audio,
-                language=settings.stt.language,
-            )
+            from nergal.monitoring import track_stt_request
+            async with track_stt_request(provider="local_whisper", audio_duration=duration):
+                transcription = await stt.transcribe(
+                    wav_audio,
+                    language=settings.stt.language,
+                )
         except asyncio.TimeoutError:
             logger.error(
                 "Voice transcription timed out",

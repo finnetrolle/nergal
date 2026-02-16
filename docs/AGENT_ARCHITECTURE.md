@@ -611,8 +611,8 @@ dialog_manager.register_agent(NewsAgent(llm_provider, settings.style))
 src/nergal/
 ├── config.py                    # Конфигурация (pydantic-settings)
 ├── main.py                      # Точка входа, логика бота
-├── protocols.py                 # Протоколы и интерфейсы
 ├── exceptions.py                # Исключения
+├── auth.py                      # Авторизация пользователей
 ├── database/
 │   ├── connection.py            # Подключение к БД
 │   ├── models.py                # SQLAlchemy модели
@@ -626,6 +626,7 @@ src/nergal/
 │   ├── dispatcher_agent.py      # DispatcherAgent
 │   ├── manager.py               # DialogManager
 │   ├── styles.py                # Стили ответов
+│   ├── agent_loader.py          # Загрузка агентов по конфигурации
 │   └── agents/                  # Специализированные агенты
 │       ├── __init__.py
 │       ├── base_specialized.py  # Базовый класс для спец. агентов
@@ -656,10 +657,14 @@ src/nergal/
 │   ├── health.py                # Health checks
 │   ├── logging_config.py        # Конфигурация логирования
 │   └── metrics.py               # Prometheus метрики
+├── admin/                       # Admin веб-панель
+│   ├── __init__.py
+│   └── server.py                # Flask сервер управления пользователями
 ├── stt/                         # Speech-to-Text
 │   ├── __init__.py
 │   ├── base.py
 │   ├── factory.py
+│   ├── audio_utils.py           # Конвертация аудио
 │   └── providers/
 │       └── local_whisper.py
 ├── utils/

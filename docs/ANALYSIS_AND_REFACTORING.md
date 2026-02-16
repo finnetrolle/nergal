@@ -14,40 +14,66 @@
 
 ---
 
+## ✅ Выполненные изменения (Sprint 1 & 2)
+
+### Sprint 1: Очистка мёртвого код ✅
+
+1. **Удалён `src/nergal/protocols.py`** (220 строк)
+   - Файл не использовался нигде в проекте
+
+2. **Интегрирован `src/nergal/exceptions.py`** в кодовую базу
+   - Добавлены импорты в LLM, WebSearch, STT модули
+   - Добавлен недостающий класс `SearchRateLimitError`
+
+3. **Добавлены тесты**:
+   - `tests/test_database/test_repositories.py` — 28 тестов для репозиториев
+   - `tests/test_memory/test_service.py` — 20 тестов для MemoryService
+
+### Sprint 2: Конфигурируемая регистрация агентов ✅
+
+1. **Добавлен `AgentSettings`** в [`src/nergal/config.py`](src/nergal/config.py)
+   - Каждый агент можно включить/выключить через переменные окружения
+   - Пример: `AGENTS_NEWS_ENABLED=true`, `AGENTS_FACT_CHECK_ENABLED=true`
+
+2. **Создан [`src/nergal/dialog/agent_loader.py`](src/nergal/dialog/agent_loader.py)**
+   - Функция `register_configured_agents()` для регистрации агентов по конфигурации
+   - Фабричные функции для создания каждого агента
+
+3. **Обновлён [`src/nergal/main.py`](src/nergal/main.py)**
+   - Использует `register_configured_agents()` вместо хардкода
+   - Удалён неиспользуемый импорт `WebSearchAgent`
+
+---
+
 ## 1. Неиспользуемые файлы и мёртвый код
 
-### Критические находки
+### Статус после рефакторинга
 
-#### 1.1 Полностью неиспользуемые файлы
+#### 1.1 ~~Полностью неиспользуемые файлы~~ ✅ ИСПРАВЛЕНО
 
-| Файл | Строк | Проблема |
-|------|-------|----------|
-| [`src/nergal/protocols.py`](src/nergal/protocols.py) | 220 | Не импортируется нигде в проекте |
-| [`src/nergal/exceptions.py`](src/nergal/exceptions.py) | 384 | Не импортируется нигде в проекте |
+| Файл | Строк | Статус |
+|------|-------|--------|
+| ~~`src/nergal/protocols.py`~~ | ~~220~~ | ✅ Удалён |
+| `src/nergal/exceptions.py` | 384 | ✅ Интегрирован в кодовую базу |
 
-**Рекомендация**: Удалить или интегрировать в кодовую базу.
+#### 1.2 Специализированные агенты — теперь конфигурируемые ✅
 
-#### 1.2 Специализированные агенты без регистрации
+Все агенты теперь можно включить через переменные окружения:
 
-Следующие агенты определены, но **НЕ регистрируются** в [`DialogManager`](src/nergal/dialog/manager.py):
-
-| Агент | Файл | Строк | Статус |
-|-------|------|-------|--------|
-| `KnowledgeBaseAgent` | [`knowledge_base_agent.py`](src/nergal/dialog/agents/knowledge_base_agent.py) | 224 | Не используется |
-| `TechDocsAgent` | [`tech_docs_agent.py`](src/nergal/dialog/agents/tech_docs_agent.py) | 359 | Не используется |
-| `CodeAnalysisAgent` | [`code_analysis_agent.py`](src/nergal/dialog/agents/code_analysis_agent.py) | 402 | Не используется |
-| `MetricsAgent` | [`metrics_agent.py`](src/nergal/dialog/agents/metrics_agent.py) | 395 | Не используется |
-| `ExpertiseAgent` | [`expertise_agent.py`](src/nergal/dialog/agents/expertise_agent.py) | 407 | Не используется |
-| `AnalysisAgent` | [`analysis_agent.py`](src/nergal/dialog/agents/analysis_agent.py) | 87 | Не используется |
-| `ClarificationAgent` | [`clarification_agent.py`](src/nergal/dialog/agents/clarification_agent.py) | 222 | Не используется |
-| `SummaryAgent` | [`summary_agent.py`](src/nergal/dialog/agents/summary_agent.py) | 223 | Не используется |
-| `ComparisonAgent` | [`comparison_agent.py`](src/nergal/dialog/agents/comparison_agent.py) | 434 | Не используется |
-| `FactCheckAgent` | [`fact_check_agent.py`](src/nergal/dialog/agents/fact_check_agent.py) | 402 | Не используется |
-| `NewsAgent` | [`news_agent.py`](src/nergal/dialog/agents/news_agent.py) | 722 | Не используется |
-
-**Единственный регистрируемый агент**: `WebSearchAgent` (регистрируется в [`main.py:175`](src/nergal/main.py:175))
-
-**Причина**: Агенты не имеют внешних подключений (база знаний, API метрик, etc.) и не регистрируются по умолчанию.
+| Агент | Переменная окружения | По умолчанию |
+|-------|---------------------|--------------|
+| `WebSearchAgent` | `AGENTS_WEB_SEARCH_ENABLED` | `true` |
+| `NewsAgent` | `AGENTS_NEWS_ENABLED` | `false` |
+| `AnalysisAgent` | `AGENTS_ANALYSIS_ENABLED` | `false` |
+| `FactCheckAgent` | `AGENTS_FACT_CHECK_ENABLED` | `false` |
+| `ComparisonAgent` | `AGENTS_COMPARISON_ENABLED` | `false` |
+| `SummaryAgent` | `AGENTS_SUMMARY_ENABLED` | `false` |
+| `CodeAnalysisAgent` | `AGENTS_CODE_ANALYSIS_ENABLED` | `false` |
+| `MetricsAgent` | `AGENTS_METRICS_ENABLED` | `false` |
+| `ExpertiseAgent` | `AGENTS_EXPERTISE_ENABLED` | `false` |
+| `ClarificationAgent` | `AGENTS_CLARIFICATION_ENABLED` | `false` |
+| `KnowledgeBaseAgent` | `AGENTS_KNOWLEDGE_BASE_ENABLED` | `false` |
+| `TechDocsAgent` | `AGENTS_TECH_DOCS_ENABLED` | `false` |
 
 #### 1.3 Дублирование констант
 
@@ -301,14 +327,14 @@ def process(self, context: AgentContext) -> AgentResult:
 
 ## 6. Приоритизированный список задач
 
-### Sprint 1 (Неделя 1-2)
-- [ ] Удалить `protocols.py`
-- [ ] Решить судьбу `exceptions.py` (интегрировать или удалить)
-- [ ] Добавить тесты для `database/repositories.py`
-- [ ] Добавить тесты для `memory/service.py`
+### Sprint 1 (Неделя 1-2) ✅ ЗАВЕРШЁН
+- [x] Удалить `protocols.py`
+- [x] Решить судьбу `exceptions.py` (интегрировать или удалить) — интегрирован
+- [x] Добавить тесты для `database/repositories.py`
+- [x] Добавить тесты для `memory/service.py`
 
-### Sprint 2 (Неделя 3-4)
-- [ ] Создать механизм регистрации агентов
+### Sprint 2 (Неделя 3-4) ✅ ЗАВЕРШЁН
+- [x] Создать механизм регистрации агентов — создан `agent_loader.py`
 - [ ] Рефакторинг `main.py` — вынести BotApplication
 - [ ] Добавить тесты для `web_search/`
 

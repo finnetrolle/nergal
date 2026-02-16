@@ -1739,7 +1739,7 @@
         "justifyMode": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["sum"],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -2472,7 +2472,7 @@
         "justifyMode": "auto",
         "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["sum"],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },

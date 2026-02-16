@@ -29,7 +29,7 @@ def mock_llm_provider() -> BaseLLMProvider:
     provider.generate = AsyncMock(return_value=LLMResponse(
         content="Test response",
         model="test-model",
-        tokens_used=100,
+        usage={"total_tokens": 100},
         finish_reason="stop",
     ))
     return provider

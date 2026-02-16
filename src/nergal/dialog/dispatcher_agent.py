@@ -251,6 +251,7 @@ class DispatcherAgent(BaseAgent):
 
         try:
             response = await self.llm_provider.generate(messages, max_tokens=500)
+            logger.info(f"Dispatcher LLM response: {response.content[:1000]}")
             plan = self._parse_plan_response(response.content)
 
             # Filter out missing agents that are actually available
@@ -308,11 +309,23 @@ class DispatcherAgent(BaseAgent):
             ExecutionPlan with steps.
         """
         try:
+            # Strip markdown code blocks if present
+            json_str = response.strip()
+            if json_str.startswith("```"):
+                # Remove opening ```json or ```
+                first_newline = json_str.find("\n")
+                if first_newline != -1:
+                    json_str = json_str[first_newline + 1:]
+                # Remove closing ```
+                if json_str.endswith("```"):
+                    json_str = json_str[:-3]
+                json_str = json_str.strip()
+            
             # Find JSON in response
-            start_idx = response.find("{")
-            end_idx = response.rfind("}") + 1
+            start_idx = json_str.find("{")
+            end_idx = json_str.rfind("}") + 1
             if start_idx != -1 and end_idx > start_idx:
-                json_str = response[start_idx:end_idx]
+                json_str = json_str[start_idx:end_idx]
                 data = json.loads(json_str)
 
                 # Parse steps
@@ -348,7 +361,13 @@ class DispatcherAgent(BaseAgent):
                 )
 
         except json.JSONDecodeError as e:
-            logger.debug(f"Failed to parse JSON from dispatcher response: {response}, error: {e}")
+            print(f"[DISPATCHER DEBUG] JSON parse error: {e}")
+            print(f"[DISPATCHER DEBUG] Response: {response[:1000]}")
+            logger.warning(f"Failed to parse JSON from dispatcher response: {response[:500]}, error: {e}")
+        except Exception as e:
+            print(f"[DISPATCHER DEBUG] Unexpected error: {e}")
+            print(f"[DISPATCHER DEBUG] Response: {response[:1000]}")
+            logger.warning(f"Unexpected error parsing dispatcher response: {response[:500]}, error: {e}")
 
         # Fallback: simple plan with default agent
         return ExecutionPlan(

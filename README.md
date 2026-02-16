@@ -167,6 +167,34 @@ uv run bot
 | `MONITORING_JSON_LOGS` | JSON формат логов | `true` |
 | `MONITORING_LOG_LEVEL` | Уровень логирования | `INFO` |
 
+### Авторизация
+
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `AUTH_ENABLED` | Включить авторизацию | `true` |
+| `AUTH_ADMIN_USER_IDS` | Список Telegram ID администраторов | `[]` |
+| `AUTH_ADMIN_ENABLED` | Включить админ-панель | `true` |
+| `AUTH_ADMIN_PORT` | Порт админ-панели | `8001` |
+
+### Агенты
+
+Каждый агент можно включить/выключить отдельно:
+
+| Переменная | По умолчанию |
+|------------|--------------|
+| `AGENTS_WEB_SEARCH_ENABLED` | `true` |
+| `AGENTS_NEWS_ENABLED` | `false` |
+| `AGENTS_ANALYSIS_ENABLED` | `false` |
+| `AGENTS_FACT_CHECK_ENABLED` | `false` |
+| `AGENTS_COMPARISON_ENABLED` | `false` |
+| `AGENTS_SUMMARY_ENABLED` | `false` |
+| `AGENTS_CODE_ANALYSIS_ENABLED` | `false` |
+| `AGENTS_METRICS_ENABLED` | `false` |
+| `AGENTS_EXPERTISE_ENABLED` | `false` |
+| `AGENTS_CLARIFICATION_ENABLED` | `false` |
+| `AGENTS_KNOWLEDGE_BASE_ENABLED` | `false` |
+| `AGENTS_TECH_DOCS_ENABLED` | `false` |
+
 Подробнее о настройке LLM провайдеров см. в [docs/LLM_PROVIDERS.md](docs/LLM_PROVIDERS.md).
 
 ## Деплой на VPS
@@ -232,8 +260,8 @@ nergal/
 │   ├── __init__.py              # Пакет
 │   ├── config.py                # Конфигурация (pydantic-settings)
 │   ├── main.py                  # Точка входа, логика бота
-│   ├── protocols.py             # Протоколы и интерфейсы
 │   ├── exceptions.py            # Исключения
+│   ├── auth.py                  # Авторизация пользователей
 │   ├── database/                # Работа с БД
 │   │   ├── connection.py        # Подключение
 │   │   ├── models.py            # SQLAlchemy модели
@@ -246,7 +274,9 @@ nergal/
 │   │   ├── dispatcher_agent.py  # DispatcherAgent
 │   │   ├── manager.py           # DialogManager
 │   │   ├── styles.py            # Стили ответов
+│   │   ├── agent_loader.py      # Загрузка агентов по конфигурации
 │   │   └── agents/              # Специализированные агенты
+│   │       ├── base_specialized.py
 │   │       ├── web_search_agent.py
 │   │       ├── knowledge_base_agent.py
 │   │       ├── tech_docs_agent.py
@@ -271,9 +301,12 @@ nergal/
 │   │   ├── health.py            # Health checks
 │   │   ├── logging_config.py    # Конфигурация логирования
 │   │   └── metrics.py           # Prometheus метрики
+│   ├── admin/                   # Admin веб-панель
+│   │   └── server.py            # Flask сервер управления
 │   ├── stt/                     # Speech-to-Text
 │   │   ├── base.py
 │   │   ├── factory.py
+│   │   ├── audio_utils.py       # Конвертация аудио
 │   │   └── providers/
 │   │       └── local_whisper.py
 │   ├── utils/

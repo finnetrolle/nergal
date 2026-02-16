@@ -173,6 +173,55 @@ class AuthSettings(BaseSettings):
     )
 
 
+class AgentSettings(BaseSettings):
+    """Agent registration settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="AGENTS_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Enable/disable specific agents
+    web_search_enabled: bool = Field(
+        default=True, description="Enable WebSearchAgent"
+    )
+    news_enabled: bool = Field(
+        default=False, description="Enable NewsAgent"
+    )
+    analysis_enabled: bool = Field(
+        default=False, description="Enable AnalysisAgent"
+    )
+    fact_check_enabled: bool = Field(
+        default=False, description="Enable FactCheckAgent"
+    )
+    comparison_enabled: bool = Field(
+        default=False, description="Enable ComparisonAgent"
+    )
+    summary_enabled: bool = Field(
+        default=False, description="Enable SummaryAgent"
+    )
+    code_analysis_enabled: bool = Field(
+        default=False, description="Enable CodeAnalysisAgent"
+    )
+    metrics_enabled: bool = Field(
+        default=False, description="Enable MetricsAgent"
+    )
+    expertise_enabled: bool = Field(
+        default=False, description="Enable ExpertiseAgent"
+    )
+    clarification_enabled: bool = Field(
+        default=False, description="Enable ClarificationAgent"
+    )
+    knowledge_base_enabled: bool = Field(
+        default=False, description="Enable KnowledgeBaseAgent"
+    )
+    tech_docs_enabled: bool = Field(
+        default=False, description="Enable TechDocsAgent"
+    )
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -208,6 +257,9 @@ class Settings(BaseSettings):
 
     # Memory settings (nested)
     memory: MemorySettings = Field(default_factory=MemorySettings)
+
+    # Agent settings (nested)
+    agents: AgentSettings = Field(default_factory=AgentSettings)
 
     # Authorization settings (nested)
     auth: AuthSettings = Field(default_factory=AuthSettings)

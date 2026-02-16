@@ -3,15 +3,15 @@
 This module provides a simple web interface for managing bot users.
 """
 
-import logging
 from typing import Optional
 
 from aiohttp import web
 
 from nergal.auth import AuthorizationService, get_auth_service
 from nergal.database.repositories import ConversationRepository, UserRepository
+from nergal.monitoring.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # HTML Templates
@@ -354,6 +354,8 @@ class AdminServer:
             )
             logger.info("User added via admin panel", user_id=user_id)
             raise web.HTTPFound("/admin/users?message=Пользователь добавлен и авторизован")
+        except web.HTTPFound:
+            raise  # Re-raise HTTP redirects
         except Exception as e:
             logger.error("Error adding user", error=str(e))
             raise web.HTTPFound(f"/admin/users?message=Ошибка: {e}&message_type=error")
@@ -370,6 +372,8 @@ class AdminServer:
                 raise web.HTTPFound("/admin/users?message=Пользователь авторизован")
             else:
                 raise web.HTTPFound("/admin/users?message=Пользователь не найден&message_type=error")
+        except web.HTTPFound:
+            raise  # Re-raise HTTP redirects
         except Exception as e:
             logger.error("Error authorizing user", error=str(e))
             raise web.HTTPFound(f"/admin/users?message=Ошибка: {e}&message_type=error")
@@ -385,6 +389,8 @@ class AdminServer:
                 raise web.HTTPFound("/admin/users?message=Доступ пользователя отозван")
             else:
                 raise web.HTTPFound("/admin/users?message=Пользователь не найден&message_type=error")
+        except web.HTTPFound:
+            raise  # Re-raise HTTP redirects
         except Exception as e:
             logger.error("Error deauthorizing user", error=str(e))
             raise web.HTTPFound(f"/admin/users?message=Ошибка: {e}&message_type=error")
@@ -400,6 +406,8 @@ class AdminServer:
                 raise web.HTTPFound("/admin/users?message=Пользователь удален")
             else:
                 raise web.HTTPFound("/admin/users?message=Пользователь не найден&message_type=error")
+        except web.HTTPFound:
+            raise  # Re-raise HTTP redirects
         except Exception as e:
             logger.error("Error deleting user", error=str(e))
             raise web.HTTPFound(f"/admin/users?message=Ошибка: {e}&message_type=error")

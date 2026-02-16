@@ -42,7 +42,7 @@ def mock_llm_provider() -> BaseLLMProvider:
     provider.generate = AsyncMock(return_value=LLMResponse(
         content=json.dumps(default_plan),
         model="test-model",
-        tokens_used=100,
+        usage={"total_tokens": 100},
         finish_reason="stop",
     ))
     return provider
@@ -154,7 +154,7 @@ class TestPlanCreation:
         mock_llm_provider.generate = AsyncMock(return_value=LLMResponse(
             content=json.dumps(simple_plan),
             model="test-model",
-            tokens_used=50,
+            usage={"total_tokens": 50},
             finish_reason="stop",
         ))
         
@@ -178,7 +178,7 @@ class TestPlanCreation:
         mock_llm_provider.generate = AsyncMock(return_value=LLMResponse(
             content=json.dumps(search_plan),
             model="test-model",
-            tokens_used=100,
+            usage={"total_tokens": 100},
             finish_reason="stop",
         ))
         
@@ -204,7 +204,7 @@ class TestPlanCreation:
         mock_llm_provider.generate = AsyncMock(return_value=LLMResponse(
             content=json.dumps(plan_with_optional),
             model="test-model",
-            tokens_used=100,
+            usage={"total_tokens": 100},
             finish_reason="stop",
         ))
         
@@ -226,7 +226,7 @@ class TestPlanCreation:
         mock_llm_provider.generate = AsyncMock(return_value=LLMResponse(
             content="This is not valid JSON",
             model="test-model",
-            tokens_used=20,
+            usage={"total_tokens": 20},
             finish_reason="stop",
         ))
         
@@ -332,7 +332,7 @@ class TestFallbackBehavior:
         mock_llm_provider.generate = AsyncMock(return_value=LLMResponse(
             content="",
             model="test-model",
-            tokens_used=0,
+            usage={"total_tokens": 0},
             finish_reason="stop",
         ))
         
@@ -364,7 +364,7 @@ class TestPlanValidation:
         mock_llm_provider.generate = AsyncMock(return_value=LLMResponse(
             content=json.dumps(valid_plan),
             model="test-model",
-            tokens_used=50,
+            usage={"total_tokens": 50},
             finish_reason="stop",
         ))
         
@@ -391,7 +391,7 @@ class TestPlanValidation:
         mock_llm_provider.generate = AsyncMock(return_value=LLMResponse(
             content=json.dumps(plan_with_missing),
             model="test-model",
-            tokens_used=50,
+            usage={"total_tokens": 50},
             finish_reason="stop",
         ))
         

@@ -5,6 +5,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from nergal.exceptions import (
+    SearchConnectionError,
+    SearchError,
+    SearchRateLimitError,
+    SearchTimeoutError,
+)
+
 
 class SearchRecency(str, Enum):
     """Time filter for search results."""
@@ -154,20 +161,7 @@ class SearchRequest:
             raise ValueError("Count must be between 1 and 50")
 
 
-class SearchError(Exception):
-    """Base exception for search-related errors."""
-
-    def __init__(self, message: str, provider: str | None = None) -> None:
-        self.provider = provider
-        super().__init__(f"[{provider}] {message}" if provider else message)
-
-
-class SearchRateLimitError(SearchError):
-    """Raised when rate limit is exceeded."""
-
-    pass
-
-
+# Additional exception class for compatibility
 class SearchProviderError(SearchError):
     """Raised when the search provider returns an error."""
 

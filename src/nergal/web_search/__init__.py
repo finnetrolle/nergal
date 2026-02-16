@@ -4,11 +4,15 @@ This module provides web search capabilities using various providers
 like Z.AI's search engine.
 """
 
+from nergal.exceptions import (
+    SearchConnectionError,
+    SearchError,
+    SearchRateLimitError,
+    SearchTimeoutError,
+)
 from nergal.web_search.base import (
     BaseSearchProvider,
-    SearchError,
     SearchProviderError,
-    SearchRateLimitError,
     SearchRecency,
     SearchRequest,
     SearchResult,
@@ -18,6 +22,7 @@ from nergal.web_search.zai_mcp_http import ZaiMcpHttpSearchProvider
 
 __all__ = [
     "BaseSearchProvider",
+    "SearchConnectionError",
     "SearchError",
     "SearchProviderError",
     "SearchRateLimitError",
@@ -25,5 +30,6 @@ __all__ = [
     "SearchRequest",
     "SearchResult",
     "SearchResults",
+    "SearchTimeoutError",
     "ZaiMcpHttpSearchProvider",
 ]

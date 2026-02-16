@@ -357,6 +357,34 @@ MONITORING_JSON_LOGS=true
 | `MONITORING_JSON_LOGS` | Use JSON log format | `true` |
 | `MONITORING_LOG_LEVEL` | Log level | `INFO` |
 
+#### Authorization Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AUTH_ENABLED` | Enable user authorization | `true` |
+| `AUTH_ADMIN_USER_IDS` | Admin Telegram user IDs | `[]` |
+| `AUTH_ADMIN_PORT` | Admin panel port | `8001` |
+| `AUTH_ADMIN_ENABLED` | Enable admin panel | `true` |
+
+#### Agent Configuration
+
+Each agent can be enabled/disabled individually:
+
+| Variable | Default |
+|----------|---------|
+| `AGENTS_WEB_SEARCH_ENABLED` | `true` |
+| `AGENTS_NEWS_ENABLED` | `false` |
+| `AGENTS_ANALYSIS_ENABLED` | `false` |
+| `AGENTS_FACT_CHECK_ENABLED` | `false` |
+| `AGENTS_COMPARISON_ENABLED` | `false` |
+| `AGENTS_SUMMARY_ENABLED` | `false` |
+| `AGENTS_CODE_ANALYSIS_ENABLED` | `false` |
+| `AGENTS_METRICS_ENABLED` | `false` |
+| `AGENTS_EXPERTISE_ENABLED` | `false` |
+| `AGENTS_CLARIFICATION_ENABLED` | `false` |
+| `AGENTS_KNOWLEDGE_BASE_ENABLED` | `false` |
+| `AGENTS_TECH_DOCS_ENABLED` | `false` |
+
 Save with `Ctrl+O`, exit with `Ctrl+X`.
 
 ---
@@ -577,6 +605,7 @@ docker compose --profile monitoring up -d
 - **Prometheus**: http://localhost:9090
 - **Alertmanager**: http://localhost:9093
 - **Bot Metrics**: http://localhost:8000/metrics
+- **Admin Panel**: http://localhost:8001 (user management)
 
 ### 9.3 Configure alerts
 

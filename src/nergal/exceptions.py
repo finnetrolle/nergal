@@ -292,6 +292,14 @@ class SearchTimeoutError(SearchError):
         super().__init__(message, query, cause)
 
 
+class SearchRateLimitError(SearchError):
+    """Error when search rate limit is exceeded.
+    
+    Raised when too many requests are made to the search API.
+    """
+    pass
+
+
 class STTError(NergalError):
     """Base error for Speech-to-Text issues.
     
