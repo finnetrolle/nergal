@@ -149,6 +149,30 @@ class MemorySettings(BaseSettings):
     )
 
 
+class AuthSettings(BaseSettings):
+    """Authorization settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="AUTH_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=True, description="Enable user authorization (only allowed users can use bot)"
+    )
+    admin_user_ids: list[int] = Field(
+        default_factory=list, description="List of admin Telegram user IDs"
+    )
+    admin_port: int = Field(
+        default=8001, description="Port for admin web interface"
+    )
+    admin_enabled: bool = Field(
+        default=True, description="Enable admin web interface"
+    )
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -184,6 +208,9 @@ class Settings(BaseSettings):
 
     # Memory settings (nested)
     memory: MemorySettings = Field(default_factory=MemorySettings)
+
+    # Authorization settings (nested)
+    auth: AuthSettings = Field(default_factory=AuthSettings)
 
 
 @lru_cache

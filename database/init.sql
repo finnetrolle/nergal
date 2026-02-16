@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     first_name VARCHAR(255),                        -- User's first name
     last_name VARCHAR(255),                         -- User's last name
     language_code VARCHAR(10),                      -- User's language code
+    is_allowed BOOLEAN DEFAULT FALSE,               -- Whether user is allowed to use the bot
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
@@ -22,6 +23,20 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Index for faster lookups by username
 CREATE INDEX IF NOT EXISTS idx_users_telegram_username ON users(telegram_username);
+
+-- Index for faster lookups by is_allowed status
+CREATE INDEX IF NOT EXISTS idx_users_is_allowed ON users(is_allowed) WHERE is_allowed = TRUE;
+
+-- =============================================================================
+-- Migration: Add is_allowed column if it doesn't exist (for existing databases)
+-- =============================================================================
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'is_allowed') THEN
+        ALTER TABLE users ADD COLUMN is_allowed BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;
 
 -- =============================================================================
 -- Long-term Memory (User Profile) Table

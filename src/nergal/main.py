@@ -13,6 +13,7 @@ import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
+from nergal.auth import check_user_authorized
 from nergal.config import get_settings
 from nergal.dialog import DialogManager
 from nergal.dialog.agents.web_search_agent import WebSearchAgent
@@ -79,6 +80,8 @@ class BotApplication:
         self._settings = get_settings()
         self._logger = get_logger(__name__)
         self._metrics_server: MetricsServer | None = None
+        self._admin_server = None  # Admin web interface
+        self._admin_runner = None  # aiohttp runner
         self._startup_time: float | None = None
 
     @classmethod
@@ -177,7 +180,7 @@ class BotApplication:
     async def initialize_memory(self) -> None:
         """Initialize the memory service and database connection."""
         try:
-            from nergal.database.connection import create_pool
+            from nergal.database.connection import create_pool, get_database
             from nergal.memory.service import MemoryService
             
             # Create database connection pool
@@ -187,6 +190,9 @@ class BotApplication:
                 host=self._settings.database.host,
                 database=self._settings.database.name,
             )
+            
+            # Run database migrations
+            await self._run_database_migrations()
             
             # Initialize memory service in dialog manager
             memory_service = MemoryService()
@@ -206,6 +212,35 @@ class BotApplication:
             )
             # Continue without memory - it's not critical for bot operation
             self._logger.warning("Bot will continue without persistent memory")
+
+    async def _run_database_migrations(self) -> None:
+        """Run database migrations for schema updates."""
+        try:
+            from nergal.database.connection import get_database
+            
+            db = get_database()
+            
+            # Migration 1: Add is_allowed column to users table if not exists
+            migration_sql = """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'users' AND column_name = 'is_allowed'
+                    ) THEN
+                        ALTER TABLE users ADD COLUMN is_allowed BOOLEAN DEFAULT FALSE;
+                        CREATE INDEX IF NOT EXISTS idx_users_is_allowed ON users(is_allowed) WHERE is_allowed = TRUE;
+                    END IF;
+                END $$;
+            """
+            await db.execute(migration_sql)
+            self._logger.info("Database migrations completed successfully")
+        except Exception as e:
+            self._logger.warning(
+                "Database migration warning",
+                error=str(e),
+                note="This may be expected if migrations were already applied",
+            )
 
     async def shutdown_memory(self) -> None:
         """Shutdown the memory service and close database connections."""
@@ -234,6 +269,40 @@ class BotApplication:
         """Record the application startup time."""
         self._startup_time = time.time()
         get_health_checker().set_startup_time(self._startup_time)
+
+    async def start_admin_server(self) -> None:
+        """Start the admin web interface server."""
+        if not self._settings.auth.admin_enabled:
+            return
+        
+        try:
+            from aiohttp import web
+            from nergal.admin.server import AdminServer
+            
+            self._admin_server = AdminServer(
+                port=self._settings.auth.admin_port,
+            )
+            self._admin_runner = web.AppRunner(self._admin_server.app)
+            await self._admin_runner.setup()
+            site = web.TCPSite(self._admin_runner, "0.0.0.0", self._settings.auth.admin_port)
+            await site.start()
+            
+            self._logger.info(
+                "Admin web interface started",
+                port=self._settings.auth.admin_port,
+                url=f"http://localhost:{self._settings.auth.admin_port}/admin",
+            )
+        except Exception as e:
+            self._logger.error(
+                "Failed to start admin server",
+                error=str(e),
+            )
+
+    async def stop_admin_server(self) -> None:
+        """Stop the admin web interface server."""
+        if self._admin_runner:
+            await self._admin_runner.cleanup()
+            self._logger.info("Admin web interface stopped")
 
 
 def configure_logging(log_level: str, json_output: bool = True) -> None:
@@ -316,6 +385,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     }
     user_id = update.effective_user.id if update.effective_user else 0
 
+    # Check user authorization
+    app = BotApplication.get_instance()
+    if app._settings.auth.enabled:
+        try:
+            is_authorized = await check_user_authorized(user_id)
+            if not is_authorized:
+                logger.warning(
+                    "Unauthorized access attempt",
+                    user_id=user_id,
+                    username=user_info.get("username"),
+                )
+                await update.message.reply_text(
+                    "⛔ У вас нет доступа к этому боту. Обратитесь к администратору для получения доступа."
+                )
+                return
+        except Exception as e:
+            logger.error(
+                "Error checking authorization",
+                user_id=user_id,
+                error=str(e),
+            )
+            await update.message.reply_text(
+                "Ошибка проверки авторизации. Пожалуйста, попробуйте позже."
+            )
+            return
+
     # Track user activity for metrics
     track_user_activity(user_id)
 
@@ -325,8 +420,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         user_id=user_id,
         message_length=len(user_text),
     )
-
-    app = BotApplication.get_instance()
 
     start_time = time.time()
     status = "success"
@@ -383,6 +476,32 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     app = BotApplication.get_instance()
     settings = app._settings
 
+    user_id = update.effective_user.id if update.effective_user else 0
+
+    # Check user authorization
+    if settings.auth.enabled:
+        try:
+            is_authorized = await check_user_authorized(user_id)
+            if not is_authorized:
+                logger.warning(
+                    "Unauthorized voice access attempt",
+                    user_id=user_id,
+                )
+                await update.message.reply_text(
+                    "⛔ У вас нет доступа к этому боту. Обратитесь к администратору для получения доступа."
+                )
+                return
+        except Exception as e:
+            logger.error(
+                "Error checking authorization",
+                user_id=user_id,
+                error=str(e),
+            )
+            await update.message.reply_text(
+                "Ошибка проверки авторизации. Пожалуйста, попробуйте позже."
+            )
+            return
+
     # Check if STT is enabled
     if not settings.stt.enabled:
         await update.message.reply_text(
@@ -397,7 +516,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    user_id = update.effective_user.id if update.effective_user else 0
     track_user_activity(user_id)
 
     # Send typing action to show the bot is processing
@@ -546,6 +664,9 @@ def main() -> None:
         """Initialize async resources after application is ready."""
         await app.initialize_memory()
         
+        # Start admin web interface
+        await app.start_admin_server()
+        
         # Mark components as healthy
         from nergal.monitoring import HealthStatus, get_health_checker
         checker = get_health_checker()
@@ -554,6 +675,7 @@ def main() -> None:
 
     async def post_shutdown(application: Application) -> None:
         """Cleanup async resources on shutdown."""
+        await app.stop_admin_server()
         await app.shutdown_memory()
 
     # Mark components as healthy (initial)

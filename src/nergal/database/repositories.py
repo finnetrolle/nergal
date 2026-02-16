@@ -33,6 +33,7 @@ def record_to_user(record: Record) -> User:
         first_name=record["first_name"],
         last_name=record["last_name"],
         language_code=record["language_code"],
+        is_allowed=record.get("is_allowed", False),
         created_at=record["created_at"],
         updated_at=record["updated_at"],
     )
@@ -123,7 +124,7 @@ class UserRepository:
         """
         query = """
             SELECT id, telegram_username, first_name, last_name, language_code,
-                   created_at, updated_at
+                   is_allowed, created_at, updated_at
             FROM users
             WHERE id = $1
         """
@@ -141,7 +142,7 @@ class UserRepository:
         """
         query = """
             SELECT id, telegram_username, first_name, last_name, language_code,
-                   created_at, updated_at
+                   is_allowed, created_at, updated_at
             FROM users
             WHERE telegram_username = $1
         """
@@ -155,6 +156,7 @@ class UserRepository:
         first_name: str | None = None,
         last_name: str | None = None,
         language_code: str | None = None,
+        is_allowed: bool | None = None,
     ) -> User:
         """Create a new user or update an existing one.
 
@@ -164,26 +166,96 @@ class UserRepository:
             first_name: User's first name.
             last_name: User's last name.
             language_code: User's language code.
+            is_allowed: Whether user is allowed to use the bot.
 
         Returns:
             Created or updated User instance.
         """
+        # For new users, use provided is_allowed or default to False
+        # For existing users, only update is_allowed if explicitly provided
         query = """
-            INSERT INTO users (id, telegram_username, first_name, last_name, language_code)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO users (id, telegram_username, first_name, last_name, language_code, is_allowed)
+            VALUES ($1, $2, $3, $4, $5, COALESCE($6, FALSE))
             ON CONFLICT (id) DO UPDATE SET
                 telegram_username = EXCLUDED.telegram_username,
                 first_name = EXCLUDED.first_name,
                 last_name = EXCLUDED.last_name,
                 language_code = EXCLUDED.language_code,
+                is_allowed = COALESCE(EXCLUDED.is_allowed, users.is_allowed),
                 updated_at = NOW()
             RETURNING id, telegram_username, first_name, last_name, language_code,
-                      created_at, updated_at
+                      is_allowed, created_at, updated_at
         """
         record = await self._db.fetchrow(
-            query, user_id, telegram_username, first_name, last_name, language_code
+            query, user_id, telegram_username, first_name, last_name, language_code, is_allowed
         )
         return record_to_user(record)
+
+    async def set_allowed(self, user_id: int, is_allowed: bool) -> bool:
+        """Set the allowed status for a user.
+
+        Args:
+            user_id: Telegram user ID.
+            is_allowed: Whether user is allowed to use the bot.
+
+        Returns:
+            True if user was updated, False if not found.
+        """
+        query = """
+            UPDATE users SET is_allowed = $2, updated_at = NOW()
+            WHERE id = $1
+        """
+        result = await self._db.execute(query, user_id, is_allowed)
+        return result == "UPDATE 1"
+
+    async def is_user_allowed(self, user_id: int) -> bool:
+        """Check if a user is allowed to use the bot.
+
+        Args:
+            user_id: Telegram user ID.
+
+        Returns:
+            True if user is allowed, False otherwise.
+        """
+        query = "SELECT is_allowed FROM users WHERE id = $1"
+        record = await self._db.fetchrow(query, user_id)
+        return record["is_allowed"] if record else False
+
+    async def get_all_allowed(self) -> list[User]:
+        """Get all users who are allowed to use the bot.
+
+        Returns:
+            List of User instances with is_allowed=True.
+        """
+        query = """
+            SELECT id, telegram_username, first_name, last_name, language_code,
+                   is_allowed, created_at, updated_at
+            FROM users
+            WHERE is_allowed = TRUE
+            ORDER BY created_at DESC
+        """
+        records = await self._db.fetch(query)
+        return [record_to_user(r) for r in records]
+
+    async def get_all(self, limit: int = 100, offset: int = 0) -> list[User]:
+        """Get all users with pagination.
+
+        Args:
+            limit: Maximum number of users to return.
+            offset: Number of users to skip.
+
+        Returns:
+            List of User instances.
+        """
+        query = """
+            SELECT id, telegram_username, first_name, last_name, language_code,
+                   is_allowed, created_at, updated_at
+            FROM users
+            ORDER BY created_at DESC
+            LIMIT $1 OFFSET $2
+        """
+        records = await self._db.fetch(query, limit, offset)
+        return [record_to_user(r) for r in records]
 
     async def delete(self, user_id: int) -> bool:
         """Delete a user by ID.
@@ -630,6 +702,74 @@ class ConversationRepository:
         result = await self._db.execute(query, str(days_to_keep))
         count = int(result.split()[-1]) if result.startswith("DELETE") else 0
         return count
+
+    async def get_user_stats(self, user_id: int) -> dict[str, int]:
+        """Get statistics for a specific user.
+
+        Args:
+            user_id: Telegram user ID.
+
+        Returns:
+            Dictionary with tokens_used, web_searches, and message_count.
+        """
+        # Get total tokens used
+        tokens_query = """
+            SELECT COALESCE(SUM(tokens_used), 0) as total_tokens
+            FROM conversation_messages
+            WHERE user_id = $1 AND tokens_used IS NOT NULL
+        """
+        tokens_record = await self._db.fetchrow(tokens_query, user_id)
+        total_tokens = tokens_record["total_tokens"] if tokens_record else 0
+
+        # Get web search count (messages from web search agents)
+        web_search_query = """
+            SELECT COUNT(*) as web_search_count
+            FROM conversation_messages
+            WHERE user_id = $1 AND agent_type IS NOT NULL AND agent_type LIKE '%web_search%'
+        """
+        web_search_record = await self._db.fetchrow(web_search_query, user_id)
+        web_search_count = web_search_record["web_search_count"] if web_search_record else 0
+
+        # Get total message count (user messages = requests to bot)
+        messages_query = """
+            SELECT COUNT(*) as message_count
+            FROM conversation_messages
+            WHERE user_id = $1 AND role = 'user'
+        """
+        messages_record = await self._db.fetchrow(messages_query, user_id)
+        message_count = messages_record["message_count"] if messages_record else 0
+
+        return {
+            "tokens_used": total_tokens,
+            "web_searches": web_search_count,
+            "requests": message_count,
+        }
+
+    async def get_all_users_stats(self) -> dict[int, dict[str, int]]:
+        """Get statistics for all users.
+
+        Returns:
+            Dictionary mapping user_id to stats dictionary.
+        """
+        query = """
+            SELECT 
+                user_id,
+                COALESCE(SUM(tokens_used), 0) as total_tokens,
+                COUNT(*) FILTER (WHERE agent_type IS NOT NULL AND agent_type LIKE '%web_search%') as web_search_count,
+                COUNT(*) FILTER (WHERE role = 'user') as message_count
+            FROM conversation_messages
+            GROUP BY user_id
+        """
+        records = await self._db.fetch(query)
+
+        return {
+            record["user_id"]: {
+                "tokens_used": record["total_tokens"],
+                "web_searches": record["web_search_count"],
+                "requests": record["message_count"],
+            }
+            for record in records
+        }
 
     async def record_extraction_event(
         self,

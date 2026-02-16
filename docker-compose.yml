@@ -16,9 +16,10 @@ services:
       - "service=nergal-bot"
     networks:
       - monitoring
-    # Expose metrics port for Prometheus
+    # Expose ports: metrics (8000) and admin panel (8001)
     ports:
       - "8000:8000"
+      - "8001:8001"
     depends_on:
       postgres:
         condition: service_healthy

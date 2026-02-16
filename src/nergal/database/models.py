@@ -19,6 +19,7 @@ class User(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     language_code: str | None = None
+    is_allowed: bool = False  # Whether user is allowed to use the bot
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
