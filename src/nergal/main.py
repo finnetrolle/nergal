@@ -380,11 +380,13 @@ def should_respond_in_group(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     Returns:
         True if the bot should respond, False otherwise.
     """
+    logger = get_logger(__name__)
     app = BotApplication.get_instance()
     settings = app._settings.group_chat
 
     # If group chats are disabled, don't respond
     if not settings.enabled:
+        logger.debug("Group chats disabled in config")
         return False
 
     message = update.message
@@ -396,28 +398,51 @@ def should_respond_in_group(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if chat_type == "private":
         return True
 
+    # Get bot username - prefer settings, fallback to context
+    bot_username = settings.bot_username or (context.bot.username if context.bot else "")
+    bot_name = settings.bot_name
+
+    logger.debug(
+        "Checking group chat message",
+        chat_type=chat_type,
+        chat_id=message.chat.id,
+        message_text=message.text[:50] if message.text else None,
+        bot_username=bot_username,
+        bot_name=bot_name,
+        has_reply=message.reply_to_message is not None,
+    )
+
     # For group/supergroup chats, check conditions
     if chat_type in ("group", "supergroup"):
         # Check if message is a reply to bot's message
         if settings.respond_to_replies and message.reply_to_message:
             replied_message = message.reply_to_message
             # Check if the replied message is from the bot
-            if replied_message.from_user and context.bot.username:
-                if replied_message.from_user.username == context.bot.username:
+            if replied_message.from_user:
+                # Check by username
+                if bot_username and replied_message.from_user.username:
+                    if replied_message.from_user.username.lower() == bot_username.lower():
+                        logger.debug("Responding: reply to bot's message (by username)")
+                        return True
+                # Check by is_bot flag
+                if replied_message.from_user.is_bot:
+                    logger.debug("Responding: reply to bot's message (is_bot=True)")
                     return True
 
         # Check for bot mention in message text
         if settings.respond_to_mentions and message.text:
             text = message.text
-            bot_name = settings.bot_name.lower()
-            bot_username = settings.bot_username.lower() if settings.bot_username else ""
+            bot_name_lower = bot_name.lower() if bot_name else ""
+            bot_username_lower = bot_username.lower() if bot_username else ""
 
             # Check for name mention (case-insensitive)
-            if bot_name and bot_name in text.lower():
+            if bot_name_lower and bot_name_lower in text.lower():
+                logger.debug("Responding: bot name mentioned in text")
                 return True
 
             # Check for @username mention
-            if bot_username and f"@{bot_username}" in text.lower():
+            if bot_username_lower and f"@{bot_username_lower}" in text.lower():
+                logger.debug("Responding: @username mentioned in text")
                 return True
 
             # Also check for @bot_username from Telegram's entity parsing
@@ -425,14 +450,17 @@ def should_respond_in_group(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 for entity in message.entities:
                     if entity.type == "mention":
                         mention_text = text[entity.offset:entity.offset + entity.length]
-                        if bot_username and mention_text.lower() == f"@{bot_username}":
+                        if bot_username_lower and mention_text.lower() == f"@{bot_username_lower}":
+                            logger.debug("Responding: @username in entities")
                             return True
                     elif entity.type == "text_mention" and entity.user:
                         # Text mention without username (user ID mention)
-                        if context.bot.username and entity.user.username == context.bot.username:
+                        if entity.user.is_bot:
+                            logger.debug("Responding: text_mention to bot")
                             return True
 
         # Don't respond in group chat if no conditions met
+        logger.debug("Not responding: no mention or reply in group chat")
         return False
 
     # Default: respond (for channel or unknown types, we allow)
@@ -465,6 +493,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not (update.message and update.message.text):
         return
 
+    # Log all incoming messages for debugging
+    logger.info(
+        "Received message",
+        chat_id=update.message.chat.id,
+        chat_type=update.message.chat.type,
+        user_id=update.effective_user.id if update.effective_user else None,
+        message_text=update.message.text[:100] if update.message.text else None,
+        has_reply=update.message.reply_to_message is not None,
+    )
+
     # Check if bot should respond in this context (group chat filtering)
     if not should_respond_in_group(update, context):
         logger.debug(
@@ -474,9 +512,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         return
 
+    logger.info("Processing message from group chat")
+
     # Get bot username for mention cleaning
-    bot_username = context.bot.username if context.bot else ""
     app = BotApplication.get_instance()
+    bot_username = app._settings.group_chat.bot_username or (context.bot.username if context.bot else "")
 
     # Clean message text (remove bot username mention)
     user_text = clean_message_text(update.message.text, bot_username) if bot_username else update.message.text

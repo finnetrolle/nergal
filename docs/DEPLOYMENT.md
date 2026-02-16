@@ -378,6 +378,22 @@ The bot can work in group chats and respond only when mentioned or replied to.
 | `GROUP_CHAT_RESPOND_TO_REPLIES` | Respond to replies to bot's messages | `true` |
 | `GROUP_CHAT_RESPOND_TO_MENTIONS` | Respond when bot name/username is mentioned | `true` |
 
+**Important: Privacy Mode Configuration**
+
+By default, Telegram bots operate in Privacy Mode - the bot only receives:
+- Commands (/start, /help, etc.)
+- Messages where the bot is mentioned (@username)
+- Replies to the bot's messages
+- Messages where the bot is added in CC
+
+For name-based mention detection (e.g., "Sil, hello!") to work, you **must disable Privacy Mode**:
+
+1. Open [@BotFather](https://t.me/BotFather)
+2. Send `/mybots`
+3. Select your bot
+4. Click `Bot Settings` → `Group Privacy`
+5. Select `Disable`
+
 **Behavior in group chats:**
 - In private chats, the bot responds to all messages
 - In group chats, the bot responds only when:
