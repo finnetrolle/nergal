@@ -8,7 +8,11 @@ from typing import Optional
 from aiohttp import web
 
 from nergal.auth import AuthorizationService, get_auth_service
-from nergal.database.repositories import ConversationRepository, UserRepository
+from nergal.database.repositories import (
+    ConversationRepository,
+    UserRepository,
+    WebSearchTelemetryRepository,
+)
 from nergal.monitoring.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -106,11 +110,79 @@ HTML_BASE = """<!DOCTYPE html>
             color: #666;
             font-size: 14px;
         }}
+        .nav {{
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }}
+        .nav a {{
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }}
+        .nav a:hover {{
+            background: #0056b3;
+        }}
+        .nav a.active {{
+            background: #0056b3;
+        }}
+        .badge {{
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }}
+        .badge-success {{ background: #d4edda; color: #155724; }}
+        .badge-error {{ background: #f8d7da; color: #721c24; }}
+        .badge-warning {{ background: #fff3cd; color: #856404; }}
+        .badge-info {{ background: #d1ecf1; color: #0c5460; }}
+        .telemetry-details {{
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }}
+        .error-message {{
+            color: #721c24;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 5px;
+        }}
+        .tabs {{
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }}
+        .tab {{
+            padding: 10px 20px;
+            background: #e9ecef;
+            border-radius: 4px 4px 0 0;
+            text-decoration: none;
+            color: #333;
+        }}
+        .tab:hover {{
+            background: #dee2e6;
+        }}
+        .tab.active {{
+            background: #007bff;
+            color: white;
+        }}
     </style>
 </head>
 <body>
     <div class="header">
         <h1>🤖 Nergal Bot Admin</h1>
+    </div>
+    <div class="nav">
+        <a href="/admin" class="{nav_users}">Пользователи</a>
+        <a href="/admin/telemetry" class="{nav_telemetry}">Web Search Telemetry</a>
     </div>
     {content}
 </body>
@@ -204,6 +276,227 @@ HTML_USER_ROW = """
 </tr>
 """
 
+# Telemetry page templates
+HTML_TELEMETRY_DASHBOARD = """
+<div class="stats">
+    <div class="stat-card">
+        <div class="stat-value">{total_searches}</div>
+        <div class="stat-label">Всего поисков</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{successful_searches}</div>
+        <div class="stat-label">Успешных</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #dc3545;">{failed_searches}</div>
+        <div class="stat-label">Ошибок</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: #ffc107;">{empty_results}</div>
+        <div class="stat-label">Пустых результатов</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{avg_response_time}ms</div>
+        <div class="stat-label">Среднее время ответа</div>
+    </div>
+</div>
+
+<div class="tabs">
+    <a href="/admin/telemetry" class="tab {tab_recent_active}">Последние поиски</a>
+    <a href="/admin/telemetry/failures" class="tab {tab_failures_active}">Ошибки</a>
+    <a href="/admin/telemetry/empty" class="tab {tab_empty_active}">Пустые результаты</a>
+    <a href="/admin/telemetry/stats" class="tab {tab_stats_active}">Статистика</a>
+</div>
+
+{content}
+"""
+
+HTML_TELEMETRY_TABLE = """
+<div class="card">
+    <h2>{title}</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Время</th>
+                <th>Запрос</th>
+                <th>Статус</th>
+                <th>Результатов</th>
+                <th>Время (мс)</th>
+                <th>Ошибка</th>
+                <th class="actions">Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {rows}
+        </tbody>
+    </table>
+</div>
+"""
+
+HTML_TELEMETRY_ROW = """
+<tr>
+    <td>{created_at}</td>
+    <td>{query}</td>
+    <td><span class="badge {badge_class}">{status}</span></td>
+    <td>{results_count}</td>
+    <td>{duration}</td>
+    <td>{error_summary}</td>
+    <td class="actions">
+        <a href="/admin/telemetry/{id}" class="btn-primary" style="text-decoration:none; padding: 5px 10px;">Детали</a>
+    </td>
+</tr>
+"""
+
+HTML_TELEMETRY_DETAIL = """
+<div class="card">
+    <h2>🔍 Детали поиска</h2>
+    <p><a href="/admin/telemetry">← Назад к списку</a></p>
+    
+    <table>
+        <tr><th>Запрос</th><td>{query}</td></tr>
+        <tr><th>Статус</th><td><span class="badge {badge_class}">{status}</span></td></tr>
+        <tr><th>Результатов</th><td>{results_count}</td></tr>
+        <tr><th>Время</th><td>{created_at}</td></tr>
+        <tr><th>User ID</th><td>{user_id}</td></tr>
+        <tr><th>Session ID</th><td>{session_id}</td></tr>
+    </table>
+</div>
+
+{error_section}
+
+<div class="card">
+    <h2>⏱️ Тайминги</h2>
+    <table>
+        <tr><th>Общее время</th><td>{total_duration_ms} ms</td></tr>
+        <tr><th>MCP Init</th><td>{init_duration_ms} ms</td></tr>
+        <tr><th>Tools List</th><td>{tools_list_duration_ms} ms</td></tr>
+        <tr><th>Search Call</th><td>{search_call_duration_ms} ms</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>🔧 Технические детали</h2>
+    <table>
+        <tr><th>Provider</th><td>{provider_name}</td></tr>
+        <tr><th>Tool Used</th><td>{tool_used}</td></tr>
+        <tr><th>HTTP Status</th><td>{http_status_code}</td></tr>
+        <tr><th>API Session ID</th><td>{api_session_id}</td></tr>
+    </table>
+</div>
+
+{results_section}
+
+{raw_response_section}
+"""
+
+HTML_ERROR_SECTION = """
+<div class="card">
+    <h2>❌ Информация об ошибке</h2>
+    <table>
+        <tr><th>Тип ошибки</th><td>{error_type}</td></tr>
+    </table>
+    <div class="error-message">
+        <strong>Сообщение:</strong><br>
+        {error_message}
+    </div>
+    {stack_trace_section}
+</div>
+"""
+
+HTML_STACK_TRACE = """
+<div style="margin-top: 10px;">
+    <strong>Stack Trace:</strong>
+    <div class="telemetry-details">{error_stack_trace}</div>
+</div>
+"""
+
+HTML_RESULTS_SECTION = """
+<div class="card">
+    <h2>📋 Результаты поиска ({count})</h2>
+    {results_list}
+</div>
+"""
+
+HTML_RESULT_ITEM = """
+<div style="padding: 10px; border-bottom: 1px solid #ddd;">
+    <strong>{title}</strong><br>
+    <small style="color: #666;">{link}</small><br>
+    <p style="margin: 5px 0;">{content}</p>
+</div>
+"""
+
+HTML_RAW_RESPONSE = """
+<div class="card">
+    <h2>📄 Raw Response {truncated_badge}</h2>
+    <div class="telemetry-details">{raw_response}</div>
+</div>
+"""
+
+HTML_STATS_SECTION = """
+<div class="card">
+    <h2>📊 Статистика за {days} дней</h2>
+    {content}
+</div>
+"""
+
+HTML_DAILY_STATS_TABLE = """
+<table>
+    <thead>
+        <tr>
+            <th>Дата</th>
+            <th>Всего</th>
+            <th>Успешных</th>
+            <th>Ошибок</th>
+            <th>Пустых</th>
+            <th>Среднее время (мс)</th>
+            <th>Среднее результатов</th>
+        </tr>
+    </thead>
+    <tbody>
+        {rows}
+    </tbody>
+</table>
+"""
+
+HTML_ERROR_TYPES_TABLE = """
+<div class="card">
+    <h2>🐛 Частые ошибки</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Тип ошибки</th>
+                <th>Сообщение</th>
+                <th>Количество</th>
+                <th>Последнее появление</th>
+            </tr>
+        </thead>
+        <tbody>
+            {rows}
+        </tbody>
+    </table>
+</div>
+"""
+
+HTML_POPULAR_QUERIES_TABLE = """
+<div class="card">
+    <h2>🔍 Популярные запросы</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Запрос</th>
+                <th>Поисков</th>
+                <th>Успешных</th>
+                <th>Ошибок</th>
+                <th>Среднее результатов</th>
+            </tr>
+        </thead>
+        <tbody>
+            {rows}
+        </tbody>
+    </table>
+</div>
+"""
+
 
 class AdminServer:
     """Web admin server for user management."""
@@ -234,6 +527,12 @@ class AdminServer:
             web.post("/admin/users/{user_id}/allow", self.handle_user_allow),
             web.post("/admin/users/{user_id}/deny", self.handle_user_deny),
             web.post("/admin/users/{user_id}/delete", self.handle_user_delete),
+            # Telemetry routes
+            web.get("/admin/telemetry", self.handle_telemetry_dashboard),
+            web.get("/admin/telemetry/failures", self.handle_telemetry_failures),
+            web.get("/admin/telemetry/empty", self.handle_telemetry_empty),
+            web.get("/admin/telemetry/stats", self.handle_telemetry_stats),
+            web.get("/admin/telemetry/{telemetry_id}", self.handle_telemetry_detail),
         ])
 
     async def handle_root(self, request: web.Request) -> web.Response:
@@ -327,8 +626,289 @@ class AdminServer:
             users_rows="".join(users_rows) if users_rows else "<tr><td colspan='9'>Нет пользователей</td></tr>",
         )
         
-        html = HTML_BASE.format(content=content)
+        html = HTML_BASE.format(content=content, nav_users="active", nav_telemetry="")
         return web.Response(text=html, content_type="text/html")
+
+    async def handle_telemetry_dashboard(self, request: web.Request) -> web.Response:
+        """Show telemetry dashboard with recent searches."""
+        repo = WebSearchTelemetryRepository()
+        
+        # Get stats and recent searches
+        stats = await repo.get_stats(days=7)
+        recent = await repo.get_recent(limit=50)
+        
+        # Build rows
+        rows = []
+        for t in recent:
+            rows.append(self._format_telemetry_row(t))
+        
+        content = HTML_TELEMETRY_DASHBOARD.format(
+            total_searches=stats["total_searches"],
+            successful_searches=stats["successful_searches"],
+            failed_searches=stats["failed_searches"],
+            empty_results=stats["empty_result_searches"],
+            avg_response_time=int(stats["avg_response_time_ms"] or 0),
+            tab_recent_active="active",
+            tab_failures_active="",
+            tab_empty_active="",
+            tab_stats_active="",
+            content=HTML_TELEMETRY_TABLE.format(
+                title="Последние поиски",
+                rows="".join(rows) if rows else "<tr><td colspan='7'>Нет данных</td></tr>",
+            ),
+        )
+        
+        html = HTML_BASE.format(content=content, nav_users="", nav_telemetry="active")
+        return web.Response(text=html, content_type="text/html")
+
+    async def handle_telemetry_failures(self, request: web.Request) -> web.Response:
+        """Show failed searches."""
+        repo = WebSearchTelemetryRepository()
+        
+        stats = await repo.get_stats(days=7)
+        failures = await repo.get_failures(limit=100)
+        
+        rows = []
+        for t in failures:
+            rows.append(self._format_telemetry_row(t))
+        
+        content = HTML_TELEMETRY_DASHBOARD.format(
+            total_searches=stats["total_searches"],
+            successful_searches=stats["successful_searches"],
+            failed_searches=stats["failed_searches"],
+            empty_results=stats["empty_result_searches"],
+            avg_response_time=int(stats["avg_response_time_ms"] or 0),
+            tab_recent_active="",
+            tab_failures_active="active",
+            tab_empty_active="",
+            tab_stats_active="",
+            content=HTML_TELEMETRY_TABLE.format(
+                title="Ошибки поиска",
+                rows="".join(rows) if rows else "<tr><td colspan='7'>Нет ошибок</td></tr>",
+            ),
+        )
+        
+        html = HTML_BASE.format(content=content, nav_users="", nav_telemetry="active")
+        return web.Response(text=html, content_type="text/html")
+
+    async def handle_telemetry_empty(self, request: web.Request) -> web.Response:
+        """Show searches with empty results."""
+        repo = WebSearchTelemetryRepository()
+        
+        stats = await repo.get_stats(days=7)
+        empty = await repo.get_empty_results(limit=100)
+        
+        rows = []
+        for t in empty:
+            rows.append(self._format_telemetry_row(t))
+        
+        content = HTML_TELEMETRY_DASHBOARD.format(
+            total_searches=stats["total_searches"],
+            successful_searches=stats["successful_searches"],
+            failed_searches=stats["failed_searches"],
+            empty_results=stats["empty_result_searches"],
+            avg_response_time=int(stats["avg_response_time_ms"] or 0),
+            tab_recent_active="",
+            tab_failures_active="",
+            tab_empty_active="active",
+            tab_stats_active="",
+            content=HTML_TELEMETRY_TABLE.format(
+                title="Поиски без результатов",
+                rows="".join(rows) if rows else "<tr><td colspan='7'>Нет пустых результатов</td></tr>",
+            ),
+        )
+        
+        html = HTML_BASE.format(content=content, nav_users="", nav_telemetry="active")
+        return web.Response(text=html, content_type="text/html")
+
+    async def handle_telemetry_stats(self, request: web.Request) -> web.Response:
+        """Show telemetry statistics."""
+        repo = WebSearchTelemetryRepository()
+        
+        days = int(request.query.get("days", 30))
+        stats = await repo.get_stats(days=7)
+        daily_stats = await repo.get_daily_stats(days=days)
+        error_types = await repo.get_error_types(days=days)
+        popular_queries = await repo.get_popular_queries(days=days)
+        
+        # Daily stats rows
+        daily_rows = []
+        for ds in daily_stats:
+            daily_rows.append(f"""
+                <tr>
+                    <td>{ds['date']}</td>
+                    <td>{ds['total_searches']}</td>
+                    <td>{ds['successful_searches']}</td>
+                    <td>{ds['failed_searches']}</td>
+                    <td>{ds['empty_result_searches']}</td>
+                    <td>{int(ds['avg_total_duration_ms'] or 0)}</td>
+                    <td>{ds['avg_results_count'] or 0:.1f}</td>
+                </tr>
+            """)
+        
+        # Error types rows
+        error_rows = []
+        for et in error_types:
+            error_rows.append(f"""
+                <tr>
+                    <td>{et['error_type'] or '-'}</td>
+                    <td>{(et['error_message'] or '-')[:100]}</td>
+                    <td>{et['count']}</td>
+                    <td>{et['last_occurrence'] or '-'}</td>
+                </tr>
+            """)
+        
+        # Popular queries rows
+        query_rows = []
+        for pq in popular_queries:
+            query_rows.append(f"""
+                <tr>
+                    <td>{pq['query'][:50]}{'...' if len(pq['query']) > 50 else ''}</td>
+                    <td>{pq['search_count']}</td>
+                    <td>{pq['success_count']}</td>
+                    <td>{pq['error_count']}</td>
+                    <td>{pq['avg_results'] or 0:.1f}</td>
+                </tr>
+            """)
+        
+        stats_content = HTML_DAILY_STATS_TABLE.format(
+            rows="".join(daily_rows) if daily_rows else "<tr><td colspan='7'>Нет данных</td></tr>",
+        )
+        
+        stats_content += HTML_ERROR_TYPES_TABLE.format(
+            rows="".join(error_rows) if error_rows else "<tr><td colspan='4'>Нет ошибок</td></tr>",
+        )
+        
+        stats_content += HTML_POPULAR_QUERIES_TABLE.format(
+            rows="".join(query_rows) if query_rows else "<tr><td colspan='5'>Нет данных</td></tr>",
+        )
+        
+        content = HTML_TELEMETRY_DASHBOARD.format(
+            total_searches=stats["total_searches"],
+            successful_searches=stats["successful_searches"],
+            failed_searches=stats["failed_searches"],
+            empty_results=stats["empty_result_searches"],
+            avg_response_time=int(stats["avg_response_time_ms"] or 0),
+            tab_recent_active="",
+            tab_failures_active="",
+            tab_empty_active="",
+            tab_stats_active="active",
+            content=HTML_STATS_SECTION.format(days=days, content=stats_content),
+        )
+        
+        html = HTML_BASE.format(content=content, nav_users="", nav_telemetry="active")
+        return web.Response(text=html, content_type="text/html")
+
+    async def handle_telemetry_detail(self, request: web.Request) -> web.Response:
+        """Show detailed telemetry for a single search."""
+        import json
+        from uuid import UUID
+        
+        telemetry_id = UUID(request.match_info["telemetry_id"])
+        repo = WebSearchTelemetryRepository()
+        
+        telemetry = await repo.get_by_id(telemetry_id)
+        if not telemetry:
+            raise web.HTTPFound("/admin/telemetry")
+        
+        # Determine badge class
+        badge_class = {
+            "success": "badge-success",
+            "error": "badge-error",
+            "timeout": "badge-error",
+            "empty": "badge-warning",
+        }.get(telemetry.status, "badge-info")
+        
+        # Build error section if applicable
+        error_section = ""
+        if telemetry.is_error():
+            stack_trace_section = ""
+            if telemetry.error_stack_trace:
+                stack_trace_section = HTML_STACK_TRACE.format(
+                    error_stack_trace=telemetry.error_stack_trace.replace("<", "&lt;").replace(">", "&gt;")
+                )
+            error_section = HTML_ERROR_SECTION.format(
+                error_type=telemetry.error_type or "-",
+                error_message=telemetry.error_message or "-",
+                stack_trace_section=stack_trace_section,
+            )
+        
+        # Build results section
+        results_section = ""
+        if telemetry.results:
+            results_list = []
+            for r in telemetry.results[:10]:
+                results_list.append(HTML_RESULT_ITEM.format(
+                    title=r.get("title", "-"),
+                    link=r.get("link", "-"),
+                    content=(r.get("content", "") or "")[:200],
+                ))
+            results_section = HTML_RESULTS_SECTION.format(
+                count=len(telemetry.results),
+                results_list="".join(results_list),
+            )
+        
+        # Build raw response section
+        raw_response_section = ""
+        if telemetry.raw_response:
+            truncated_badge = ""
+            if telemetry.raw_response_truncated:
+                truncated_badge = '<span class="badge badge-warning">Truncated</span>'
+            
+            raw_response_section = HTML_RAW_RESPONSE.format(
+                truncated_badge=truncated_badge,
+                raw_response=json.dumps(telemetry.raw_response, indent=2, ensure_ascii=False).replace("<", "&lt;").replace(">", "&gt;"),
+            )
+        
+        content = HTML_TELEMETRY_DETAIL.format(
+            query=telemetry.query,
+            status=telemetry.status,
+            badge_class=badge_class,
+            results_count=telemetry.results_count,
+            created_at=telemetry.created_at.strftime("%Y-%m-%d %H:%M:%S") if telemetry.created_at else "-",
+            user_id=telemetry.user_id or "-",
+            session_id=telemetry.session_id or "-",
+            error_section=error_section,
+            total_duration_ms=telemetry.total_duration_ms or "-",
+            init_duration_ms=telemetry.init_duration_ms or "-",
+            tools_list_duration_ms=telemetry.tools_list_duration_ms or "-",
+            search_call_duration_ms=telemetry.search_call_duration_ms or "-",
+            provider_name=telemetry.provider_name or "-",
+            tool_used=telemetry.tool_used or "-",
+            http_status_code=telemetry.http_status_code or "-",
+            api_session_id=telemetry.api_session_id or "-",
+            results_section=results_section,
+            raw_response_section=raw_response_section,
+        )
+        
+        html = HTML_BASE.format(content=content, nav_users="", nav_telemetry="active")
+        return web.Response(text=html, content_type="text/html")
+
+    def _format_telemetry_row(self, telemetry) -> str:
+        """Format a telemetry record as a table row."""
+        badge_class = {
+            "success": "badge-success",
+            "error": "badge-error",
+            "timeout": "badge-error",
+            "empty": "badge-warning",
+        }.get(telemetry.status, "badge-info")
+        
+        error_summary = "-"
+        if telemetry.is_error():
+            error_summary = telemetry.error_type or telemetry.error_message or "Unknown error"
+            if len(error_summary) > 50:
+                error_summary = error_summary[:50] + "..."
+        
+        return HTML_TELEMETRY_ROW.format(
+            id=telemetry.id,
+            created_at=telemetry.created_at.strftime("%Y-%m-%d %H:%M") if telemetry.created_at else "-",
+            query=telemetry.query[:50] + ("..." if len(telemetry.query) > 50 else ""),
+            status=telemetry.status,
+            badge_class=badge_class,
+            results_count=telemetry.results_count,
+            duration=telemetry.total_duration_ms or "-",
+            error_summary=error_summary,
+        )
 
     async def handle_user_add(self, request: web.Request) -> web.Response:
         """Add a new user."""

@@ -254,3 +254,127 @@ FROM conversation_messages cm
 JOIN users u ON cm.user_id = u.id
 ORDER BY cm.created_at DESC
 LIMIT 1000;
+
+-- =============================================================================
+-- Web Search Telemetry Table
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS web_search_telemetry (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    
+    -- Request information
+    query TEXT NOT NULL,                            -- Search query
+    user_id BIGINT,                                 -- User who initiated search (nullable for system searches)
+    session_id VARCHAR(255),                        -- Session identifier
+    
+    -- Request parameters
+    result_count_requested INTEGER DEFAULT 10,      -- Requested number of results
+    recency_filter VARCHAR(50),                     -- Time filter (oneDay, oneWeek, etc.)
+    domain_filter TEXT,                             -- Domain whitelist filter
+    
+    -- Response information
+    status VARCHAR(50) NOT NULL,                    -- success, error, timeout, empty
+    results_count INTEGER DEFAULT 0,                -- Actual number of results returned
+    results JSONB DEFAULT '[]',                     -- Search results (limited data)
+    
+    -- Error information
+    error_type VARCHAR(255),                        -- Exception class name
+    error_message TEXT,                             -- Error message
+    error_stack_trace TEXT,                         -- Full stack trace for debugging
+    
+    -- API response details
+    http_status_code INTEGER,                       -- HTTP status code from API
+    api_response_time_ms INTEGER,                   -- Time taken for API to respond
+    api_session_id VARCHAR(255),                    -- MCP session ID
+    
+    -- Raw response data for debugging
+    raw_response JSONB,                             -- Raw API response (truncated if needed)
+    raw_response_truncated BOOLEAN DEFAULT FALSE,   -- Whether raw response was truncated
+    
+    -- Timing information
+    total_duration_ms INTEGER,                      -- Total time for search operation
+    init_duration_ms INTEGER,                       -- Time for MCP initialization
+    tools_list_duration_ms INTEGER,                 -- Time for tools/list call
+    search_call_duration_ms INTEGER,                -- Time for actual search call
+    
+    -- Provider information
+    provider_name VARCHAR(255),                     -- Search provider name
+    tool_used VARCHAR(255),                         -- MCP tool name used
+    
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for web search telemetry
+CREATE INDEX IF NOT EXISTS idx_web_search_telemetry_user_id ON web_search_telemetry(user_id);
+CREATE INDEX IF NOT EXISTS idx_web_search_telemetry_session ON web_search_telemetry(session_id);
+CREATE INDEX IF NOT EXISTS idx_web_search_telemetry_status ON web_search_telemetry(status);
+CREATE INDEX IF NOT EXISTS idx_web_search_telemetry_created ON web_search_telemetry(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_web_search_telemetry_query ON web_search_telemetry USING gin(to_tsvector('english', query));
+
+-- =============================================================================
+-- Web Search Telemetry Views
+-- =============================================================================
+
+-- View for failed searches with details
+CREATE OR REPLACE VIEW web_search_failures AS
+SELECT 
+    id,
+    query,
+    user_id,
+    session_id,
+    status,
+    error_type,
+    error_message,
+    http_status_code,
+    api_response_time_ms,
+    total_duration_ms,
+    provider_name,
+    created_at
+FROM web_search_telemetry
+WHERE status IN ('error', 'timeout')
+ORDER BY created_at DESC;
+
+-- View for empty searches (successful but no results)
+CREATE OR REPLACE VIEW web_search_empty_results AS
+SELECT 
+    id,
+    query,
+    user_id,
+    session_id,
+    results_count,
+    api_response_time_ms,
+    total_duration_ms,
+    raw_response,
+    created_at
+FROM web_search_telemetry
+WHERE status = 'success' AND results_count = 0
+ORDER BY created_at DESC;
+
+-- View for search statistics
+CREATE OR REPLACE VIEW web_search_stats AS
+SELECT
+    DATE(created_at) as search_date,
+    COUNT(*) as total_searches,
+    COUNT(*) FILTER (WHERE status = 'success') as successful_searches,
+    COUNT(*) FILTER (WHERE status = 'error') as failed_searches,
+    COUNT(*) FILTER (WHERE status = 'timeout') as timed_out_searches,
+    COUNT(*) FILTER (WHERE status = 'success' AND results_count = 0) as empty_result_searches,
+    AVG(api_response_time_ms) FILTER (WHERE status = 'success') as avg_response_time_ms,
+    AVG(total_duration_ms) as avg_total_duration_ms,
+    AVG(results_count) FILTER (WHERE status = 'success') as avg_results_count
+FROM web_search_telemetry
+GROUP BY DATE(created_at)
+ORDER BY search_date DESC;
+
+-- =============================================================================
+-- Cleanup Function for Old Telemetry
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION cleanup_old_telemetry(days_to_keep INTEGER DEFAULT 90)
+RETURNS void AS $$
+BEGIN
+    DELETE FROM web_search_telemetry
+    WHERE created_at < NOW() - (days_to_keep || ' days')::INTERVAL;
+END;
+$$ LANGUAGE plpgsql;

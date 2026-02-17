@@ -20,6 +20,7 @@ from nergal.database.models import (
     ProfileFact,
     User,
     UserProfile,
+    WebSearchTelemetry,
 )
 
 logger = logging.getLogger(__name__)
@@ -818,3 +819,413 @@ class ConversationRepository:
             was_applied=record["was_applied"],
             created_at=record["created_at"],
         )
+
+
+def record_to_web_search_telemetry(record: Record) -> WebSearchTelemetry:
+    """Convert a database record to WebSearchTelemetry model."""
+    return WebSearchTelemetry(
+        id=record["id"],
+        query=record["query"],
+        user_id=record["user_id"],
+        session_id=record["session_id"],
+        result_count_requested=record["result_count_requested"],
+        recency_filter=record["recency_filter"],
+        domain_filter=record["domain_filter"],
+        status=record["status"],
+        results_count=record["results_count"],
+        results=record["results"] or [],
+        error_type=record["error_type"],
+        error_message=record["error_message"],
+        error_stack_trace=record["error_stack_trace"],
+        http_status_code=record["http_status_code"],
+        api_response_time_ms=record["api_response_time_ms"],
+        api_session_id=record["api_session_id"],
+        raw_response=record["raw_response"],
+        raw_response_truncated=record["raw_response_truncated"],
+        total_duration_ms=record["total_duration_ms"],
+        init_duration_ms=record["init_duration_ms"],
+        tools_list_duration_ms=record["tools_list_duration_ms"],
+        search_call_duration_ms=record["search_call_duration_ms"],
+        provider_name=record["provider_name"],
+        tool_used=record["tool_used"],
+        created_at=record["created_at"],
+    )
+
+
+class WebSearchTelemetryRepository:
+    """Repository for web search telemetry operations."""
+
+    # Maximum size for raw_response before truncation (in bytes)
+    MAX_RAW_RESPONSE_SIZE = 50000
+
+    def __init__(self, db: DatabaseConnection | None = None) -> None:
+        """Initialize the repository.
+
+        Args:
+            db: Database connection. If not provided, uses the singleton.
+        """
+        self._db = db or get_database()
+
+    async def record_search(
+        self,
+        query: str,
+        status: str,
+        user_id: int | None = None,
+        session_id: str | None = None,
+        result_count_requested: int = 10,
+        recency_filter: str | None = None,
+        domain_filter: str | None = None,
+        results_count: int = 0,
+        results: list[dict[str, Any]] | None = None,
+        error_type: str | None = None,
+        error_message: str | None = None,
+        error_stack_trace: str | None = None,
+        http_status_code: int | None = None,
+        api_response_time_ms: int | None = None,
+        api_session_id: str | None = None,
+        raw_response: dict[str, Any] | None = None,
+        total_duration_ms: int | None = None,
+        init_duration_ms: int | None = None,
+        tools_list_duration_ms: int | None = None,
+        search_call_duration_ms: int | None = None,
+        provider_name: str | None = None,
+        tool_used: str | None = None,
+    ) -> WebSearchTelemetry:
+        """Record a web search telemetry event.
+
+        Args:
+            query: Search query.
+            status: Search status (success, error, timeout, empty).
+            user_id: User who initiated search.
+            session_id: Session identifier.
+            result_count_requested: Requested number of results.
+            recency_filter: Time filter applied.
+            domain_filter: Domain filter applied.
+            results_count: Actual number of results.
+            results: List of search results (limited data).
+            error_type: Exception class name if error.
+            error_message: Error message if error.
+            error_stack_trace: Full stack trace if error.
+            http_status_code: HTTP status code from API.
+            api_response_time_ms: API response time.
+            api_session_id: MCP session ID.
+            raw_response: Raw API response.
+            total_duration_ms: Total search duration.
+            init_duration_ms: MCP init duration.
+            tools_list_duration_ms: Tools list duration.
+            search_call_duration_ms: Search call duration.
+            provider_name: Search provider name.
+            tool_used: MCP tool name used.
+
+        Returns:
+            Created WebSearchTelemetry instance.
+        """
+        # Truncate raw_response if too large
+        raw_response_truncated = False
+        if raw_response is not None:
+            raw_response_str = json.dumps(raw_response)
+            if len(raw_response_str) > self.MAX_RAW_RESPONSE_SIZE:
+                raw_response = {"_truncated": True, "_original_size": len(raw_response_str)}
+                raw_response_truncated = True
+
+        query_sql = """
+            INSERT INTO web_search_telemetry (
+                query, user_id, session_id, result_count_requested, recency_filter,
+                domain_filter, status, results_count, results, error_type, error_message,
+                error_stack_trace, http_status_code, api_response_time_ms, api_session_id,
+                raw_response, raw_response_truncated, total_duration_ms, init_duration_ms,
+                tools_list_duration_ms, search_call_duration_ms, provider_name, tool_used
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+            RETURNING *
+        """
+        record = await self._db.fetchrow(
+            query_sql,
+            query,
+            user_id,
+            session_id,
+            result_count_requested,
+            recency_filter,
+            domain_filter,
+            status,
+            results_count,
+            json.dumps(results) if results else None,
+            error_type,
+            error_message,
+            error_stack_trace,
+            http_status_code,
+            api_response_time_ms,
+            api_session_id,
+            json.dumps(raw_response) if raw_response else None,
+            raw_response_truncated,
+            total_duration_ms,
+            init_duration_ms,
+            tools_list_duration_ms,
+            search_call_duration_ms,
+            provider_name,
+            tool_used,
+        )
+        return record_to_web_search_telemetry(record)
+
+    async def get_by_id(self, telemetry_id: UUID) -> WebSearchTelemetry | None:
+        """Get a telemetry record by ID.
+
+        Args:
+            telemetry_id: Telemetry record ID.
+
+        Returns:
+            WebSearchTelemetry instance or None if not found.
+        """
+        query = "SELECT * FROM web_search_telemetry WHERE id = $1"
+        record = await self._db.fetchrow(query, telemetry_id)
+        return record_to_web_search_telemetry(record) if record else None
+
+    async def get_recent(
+        self,
+        limit: int = 100,
+        status: str | None = None,
+        user_id: int | None = None,
+    ) -> list[WebSearchTelemetry]:
+        """Get recent telemetry records.
+
+        Args:
+            limit: Maximum number of records to return.
+            status: Optional filter by status.
+            user_id: Optional filter by user ID.
+
+        Returns:
+            List of WebSearchTelemetry instances.
+        """
+        conditions = []
+        params: list[Any] = []
+        param_idx = 1
+
+        if status:
+            conditions.append(f"status = ${param_idx}")
+            params.append(status)
+            param_idx += 1
+
+        if user_id:
+            conditions.append(f"user_id = ${param_idx}")
+            params.append(user_id)
+            param_idx += 1
+
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        params.append(limit)
+
+        query = f"""
+            SELECT * FROM web_search_telemetry
+            {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ${param_idx}
+        """
+        records = await self._db.fetch(query, *params)
+        return [record_to_web_search_telemetry(r) for r in records]
+
+    async def get_failures(self, limit: int = 50) -> list[WebSearchTelemetry]:
+        """Get failed search records.
+
+        Args:
+            limit: Maximum number of records to return.
+
+        Returns:
+            List of failed WebSearchTelemetry instances.
+        """
+        query = """
+            SELECT * FROM web_search_telemetry
+            WHERE status IN ('error', 'timeout')
+            ORDER BY created_at DESC
+            LIMIT $1
+        """
+        records = await self._db.fetch(query, limit)
+        return [record_to_web_search_telemetry(r) for r in records]
+
+    async def get_empty_results(self, limit: int = 50) -> list[WebSearchTelemetry]:
+        """Get searches with empty results.
+
+        Args:
+            limit: Maximum number of records to return.
+
+        Returns:
+            List of WebSearchTelemetry instances with no results.
+        """
+        query = """
+            SELECT * FROM web_search_telemetry
+            WHERE status = 'success' AND results_count = 0
+            ORDER BY created_at DESC
+            LIMIT $1
+        """
+        records = await self._db.fetch(query, limit)
+        return [record_to_web_search_telemetry(r) for r in records]
+
+    async def get_stats(
+        self,
+        days: int = 7,
+    ) -> dict[str, Any]:
+        """Get search statistics for a time period.
+
+        Args:
+            days: Number of days to include.
+
+        Returns:
+            Dictionary with statistics.
+        """
+        query = """
+            SELECT
+                COUNT(*) as total_searches,
+                COUNT(*) FILTER (WHERE status = 'success') as successful_searches,
+                COUNT(*) FILTER (WHERE status = 'error') as failed_searches,
+                COUNT(*) FILTER (WHERE status = 'timeout') as timed_out_searches,
+                COUNT(*) FILTER (WHERE status = 'success' AND results_count = 0) as empty_result_searches,
+                AVG(api_response_time_ms) FILTER (WHERE status = 'success') as avg_response_time_ms,
+                AVG(total_duration_ms) as avg_total_duration_ms,
+                AVG(results_count) FILTER (WHERE status = 'success') as avg_results_count,
+                MAX(results_count) as max_results_count
+            FROM web_search_telemetry
+            WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+        """
+        record = await self._db.fetchrow(query, days)
+
+        return {
+            "total_searches": record["total_searches"] or 0,
+            "successful_searches": record["successful_searches"] or 0,
+            "failed_searches": record["failed_searches"] or 0,
+            "timed_out_searches": record["timed_out_searches"] or 0,
+            "empty_result_searches": record["empty_result_searches"] or 0,
+            "avg_response_time_ms": record["avg_response_time_ms"],
+            "avg_total_duration_ms": record["avg_total_duration_ms"],
+            "avg_results_count": record["avg_results_count"],
+            "max_results_count": record["max_results_count"] or 0,
+        }
+
+    async def get_daily_stats(self, days: int = 30) -> list[dict[str, Any]]:
+        """Get daily search statistics.
+
+        Args:
+            days: Number of days to include.
+
+        Returns:
+            List of daily statistics.
+        """
+        query = """
+            SELECT
+                DATE(created_at) as search_date,
+                COUNT(*) as total_searches,
+                COUNT(*) FILTER (WHERE status = 'success') as successful_searches,
+                COUNT(*) FILTER (WHERE status = 'error') as failed_searches,
+                COUNT(*) FILTER (WHERE status = 'timeout') as timed_out_searches,
+                COUNT(*) FILTER (WHERE status = 'success' AND results_count = 0) as empty_result_searches,
+                AVG(api_response_time_ms) FILTER (WHERE status = 'success') as avg_response_time_ms,
+                AVG(total_duration_ms) as avg_total_duration_ms,
+                AVG(results_count) FILTER (WHERE status = 'success') as avg_results_count
+            FROM web_search_telemetry
+            WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+            GROUP BY DATE(created_at)
+            ORDER BY search_date DESC
+        """
+        records = await self._db.fetch(query, days)
+
+        return [
+            {
+                "date": str(record["search_date"]),
+                "total_searches": record["total_searches"] or 0,
+                "successful_searches": record["successful_searches"] or 0,
+                "failed_searches": record["failed_searches"] or 0,
+                "timed_out_searches": record["timed_out_searches"] or 0,
+                "empty_result_searches": record["empty_result_searches"] or 0,
+                "avg_response_time_ms": record["avg_response_time_ms"],
+                "avg_total_duration_ms": record["avg_total_duration_ms"],
+                "avg_results_count": record["avg_results_count"],
+            }
+            for record in records
+        ]
+
+    async def get_error_types(self, days: int = 7, limit: int = 20) -> list[dict[str, Any]]:
+        """Get most common error types.
+
+        Args:
+            days: Number of days to include.
+            limit: Maximum number of error types to return.
+
+        Returns:
+            List of error type statistics.
+        """
+        query = """
+            SELECT
+                error_type,
+                error_message,
+                COUNT(*) as count,
+                MAX(created_at) as last_occurrence
+            FROM web_search_telemetry
+            WHERE status IN ('error', 'timeout')
+              AND created_at >= NOW() - ($1 || ' days')::INTERVAL
+            GROUP BY error_type, error_message
+            ORDER BY count DESC
+            LIMIT $2
+        """
+        records = await self._db.fetch(query, days, limit)
+
+        return [
+            {
+                "error_type": record["error_type"],
+                "error_message": record["error_message"],
+                "count": record["count"],
+                "last_occurrence": str(record["last_occurrence"]) if record["last_occurrence"] else None,
+            }
+            for record in records
+        ]
+
+    async def get_popular_queries(
+        self,
+        days: int = 7,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Get most popular search queries.
+
+        Args:
+            days: Number of days to include.
+            limit: Maximum number of queries to return.
+
+        Returns:
+            List of query statistics.
+        """
+        query = """
+            SELECT
+                query,
+                COUNT(*) as search_count,
+                AVG(results_count) FILTER (WHERE status = 'success') as avg_results,
+                COUNT(*) FILTER (WHERE status = 'success') as success_count,
+                COUNT(*) FILTER (WHERE status = 'error') as error_count
+            FROM web_search_telemetry
+            WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+            GROUP BY query
+            ORDER BY search_count DESC
+            LIMIT $2
+        """
+        records = await self._db.fetch(query, days, limit)
+
+        return [
+            {
+                "query": record["query"],
+                "search_count": record["search_count"],
+                "avg_results": record["avg_results"],
+                "success_count": record["success_count"],
+                "error_count": record["error_count"],
+            }
+            for record in records
+        ]
+
+    async def cleanup_old(self, days_to_keep: int = 90) -> int:
+        """Delete old telemetry records.
+
+        Args:
+            days_to_keep: Number of days to keep.
+
+        Returns:
+            Number of deleted records.
+        """
+        query = "SELECT cleanup_old_telemetry($1)"
+        await self._db.execute(query, days_to_keep)
+        # Note: The function doesn't return count, so we return 0
+        # In production, you might want to modify the function to return count
+        return 0

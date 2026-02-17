@@ -125,6 +125,84 @@ class MemoryExtractionEvent(BaseModel):
     created_at: datetime | None = None
 
 
+class WebSearchTelemetry(BaseModel):
+    """Telemetry data for web search operations.
+
+    Captures comprehensive information about search requests,
+    responses, and any errors that occur.
+    """
+
+    id: UUID | None = None
+
+    # Request information
+    query: str
+    user_id: int | None = None
+    session_id: str | None = None
+
+    # Request parameters
+    result_count_requested: int = 10
+    recency_filter: str | None = None
+    domain_filter: str | None = None
+
+    # Response information
+    status: str  # success, error, timeout, empty
+    results_count: int = 0
+    results: list[dict[str, Any]] = Field(default_factory=list)
+
+    # Error information
+    error_type: str | None = None
+    error_message: str | None = None
+    error_stack_trace: str | None = None
+
+    # API response details
+    http_status_code: int | None = None
+    api_response_time_ms: int | None = None
+    api_session_id: str | None = None
+
+    # Raw response data for debugging
+    raw_response: dict[str, Any] | None = None
+    raw_response_truncated: bool = False
+
+    # Timing information
+    total_duration_ms: int | None = None
+    init_duration_ms: int | None = None
+    tools_list_duration_ms: int | None = None
+    search_call_duration_ms: int | None = None
+
+    # Provider information
+    provider_name: str | None = None
+    tool_used: str | None = None
+
+    created_at: datetime | None = None
+
+    def is_success(self) -> bool:
+        """Check if the search was successful."""
+        return self.status == "success"
+
+    def has_results(self) -> bool:
+        """Check if the search returned results."""
+        return self.results_count > 0
+
+    def is_error(self) -> bool:
+        """Check if the search resulted in an error."""
+        return self.status in ("error", "timeout")
+
+    def get_error_summary(self) -> str | None:
+        """Get a summary of the error if one occurred."""
+        if not self.is_error():
+            return None
+
+        parts = []
+        if self.error_type:
+            parts.append(self.error_type)
+        if self.error_message:
+            parts.append(self.error_message)
+        if self.http_status_code:
+            parts.append(f"HTTP {self.http_status_code}")
+
+        return ": ".join(parts) if parts else None
+
+
 class UserMemoryContext(BaseModel):
     """Complete memory context for a user, used by agents."""
 
