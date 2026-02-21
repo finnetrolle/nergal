@@ -63,12 +63,12 @@ async def is_migration_applied(db: DatabaseConnection, migration_id: str) -> boo
 
 async def apply_migration(db: DatabaseConnection, migration_id: str, sql: str) -> None:
     """Apply a single migration."""
-    async with db.transaction():
+    async with db.transaction() as conn:
         # Execute the migration SQL
-        await db.execute(sql)
+        await conn.execute(sql)
         
         # Record the migration
-        await db.execute(
+        await conn.execute(
             "INSERT INTO schema_migrations (id) VALUES ($1)",
             migration_id
         )

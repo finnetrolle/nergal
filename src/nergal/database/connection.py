@@ -184,6 +184,25 @@ class DatabaseConnection:
         """
         async with self.connection() as conn:
             return await conn.fetchval(query, *args)
+    
+    @asynccontextmanager
+    async def transaction(self) -> AsyncGenerator[Connection, None]:
+        """Get a database connection with transaction management.
+
+        Usage:
+            async with db.transaction() as conn:
+                await conn.execute("INSERT INTO ...")
+                await conn.execute("UPDATE ...")
+
+        Yields:
+            asyncpg Connection instance with active transaction.
+        """
+        if self._pool is None:
+            await self.connect()
+        
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                yield conn
 
 
 # Singleton instance

@@ -192,19 +192,23 @@ class BotApplication:
                 database=self._settings.database.name,
             )
             
-            # Run database migrations
+            # Run database migrations (always run for integrations)
             await self._run_database_migrations()
             
-            # Initialize memory service in dialog manager
-            memory_service = MemoryService()
-            self.dialog_manager.set_memory_service(memory_service)
-            await self.dialog_manager.initialize_memory()
-            
-            self._logger.info(
-                "Memory service initialized",
-                long_term_enabled=self._settings.memory.long_term_enabled,
-                extraction_enabled=self._settings.memory.long_term_extraction_enabled,
-            )
+            # Initialize memory service in dialog manager (if enabled)
+            if self._settings.memory.long_term_enabled:
+                memory_service = MemoryService()
+                self.dialog_manager.set_memory_service(memory_service)
+                await self.dialog_manager.initialize_memory()
+                
+                self._logger.info(
+                    "Memory service initialized",
+                    long_term_enabled=self._settings.memory.long_term_enabled,
+                    extraction_enabled=self._settings.memory.long_term_extraction_enabled,
+                )
+            else:
+                self._logger.info("Memory service disabled, but database is available for integrations")
+                
         except Exception as e:
             self._logger.error(
                 "Failed to initialize memory service",
