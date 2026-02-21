@@ -247,6 +247,9 @@ class AgentSettings(BaseSettings):
     tech_docs_enabled: bool = Field(
         default=False, description="Enable TechDocsAgent"
     )
+    todoist_enabled: bool = Field(
+        default=True, description="Enable TodoistAgent for task management"
+    )
 
 
 class Settings(BaseSettings):

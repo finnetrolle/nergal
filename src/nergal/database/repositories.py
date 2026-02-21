@@ -19,6 +19,7 @@ from nergal.database.models import (
     MemoryExtractionEvent,
     ProfileFact,
     User,
+    UserIntegration,
     UserProfile,
     WebSearchTelemetry,
 )
@@ -1247,3 +1248,236 @@ class WebSearchTelemetryRepository:
         # Note: The function doesn't return count, so we return 0
         # In production, you might want to modify the function to return count
         return 0
+
+
+def record_to_user_integration(record: Record) -> UserIntegration:
+    """Convert a database record to UserIntegration model."""
+    return UserIntegration(
+        id=record["id"],
+        user_id=record["user_id"],
+        integration_type=record["integration_type"],
+        encrypted_token=record["encrypted_token"],
+        token_hash=record["token_hash"],
+        config=record["config"] or {},
+        is_active=record["is_active"],
+        last_used_at=record["last_used_at"],
+        created_at=record["created_at"],
+        updated_at=record["updated_at"],
+    )
+
+
+class UserIntegrationRepository:
+    """Repository for UserIntegration CRUD operations."""
+
+    def __init__(self, db: DatabaseConnection | None = None):
+        """Initialize the repository.
+
+        Args:
+            db: Database connection. If not provided, uses the singleton.
+        """
+        self._db = db or get_database()
+
+    async def get_by_user_and_type(
+        self, user_id: int, integration_type: str
+    ) -> UserIntegration | None:
+        """Get a user integration by user ID and type.
+
+        Args:
+            user_id: Telegram user ID.
+            integration_type: Type of integration (e.g., "todoist").
+
+        Returns:
+            UserIntegration instance or None if not found.
+        """
+        query = """
+            SELECT id, user_id, integration_type, encrypted_token, token_hash,
+                   config, is_active, last_used_at, created_at, updated_at
+            FROM user_integrations
+            WHERE user_id = $1 AND integration_type = $2
+        """
+        record = await self._db.fetchrow(query, user_id, integration_type)
+        return record_to_user_integration(record) if record else None
+
+    async def get_all_for_user(self, user_id: int) -> list[UserIntegration]:
+        """Get all integrations for a user.
+
+        Args:
+            user_id: Telegram user ID.
+
+        Returns:
+            List of UserIntegration instances.
+        """
+        query = """
+            SELECT id, user_id, integration_type, encrypted_token, token_hash,
+                   config, is_active, last_used_at, created_at, updated_at
+            FROM user_integrations
+            WHERE user_id = $1
+        """
+        records = await self._db.fetch(query, user_id)
+        return [record_to_user_integration(record) for record in records]
+
+    async def get_active_for_user(self, user_id: int) -> list[UserIntegration]:
+        """Get all active integrations for a user.
+
+        Args:
+            user_id: Telegram user ID.
+
+        Returns:
+            List of active UserIntegration instances.
+        """
+        query = """
+            SELECT id, user_id, integration_type, encrypted_token, token_hash,
+                   config, is_active, last_used_at, created_at, updated_at
+            FROM user_integrations
+            WHERE user_id = $1 AND is_active = TRUE
+        """
+        records = await self._db.fetch(query, user_id)
+        return [record_to_user_integration(record) for record in records]
+
+    async def create(
+        self,
+        user_id: int,
+        integration_type: str,
+        encrypted_token: str | None = None,
+        token_hash: str | None = None,
+        config: dict[str, Any] | None = None,
+    ) -> UserIntegration:
+        """Create a new user integration.
+
+        Args:
+            user_id: Telegram user ID.
+            integration_type: Type of integration.
+            encrypted_token: Encrypted API token.
+            token_hash: Hash for token verification.
+            config: Integration-specific configuration.
+
+        Returns:
+            Created UserIntegration instance.
+        """
+        query = """
+            INSERT INTO user_integrations 
+                (user_id, integration_type, encrypted_token, token_hash, config)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, user_id, integration_type, encrypted_token, token_hash,
+                      config, is_active, last_used_at, created_at, updated_at
+        """
+        record = await self._db.fetchrow(
+            query,
+            user_id,
+            integration_type,
+            encrypted_token,
+            token_hash,
+            config or {},
+        )
+        return record_to_user_integration(record)
+
+    async def update(
+        self,
+        user_id: int,
+        integration_type: str,
+        encrypted_token: str | None = None,
+        token_hash: str | None = None,
+        config: dict[str, Any] | None = None,
+        is_active: bool | None = None,
+    ) -> UserIntegration | None:
+        """Update a user integration.
+
+        Args:
+            user_id: Telegram user ID.
+            integration_type: Type of integration.
+            encrypted_token: New encrypted API token.
+            token_hash: New hash for token verification.
+            config: New integration-specific configuration.
+            is_active: New active status.
+
+        Returns:
+            Updated UserIntegration instance or None if not found.
+        """
+        updates = []
+        params = []
+        param_idx = 3
+
+        if encrypted_token is not None:
+            updates.append(f"encrypted_token = ${param_idx}")
+            params.append(encrypted_token)
+            param_idx += 1
+
+        if token_hash is not None:
+            updates.append(f"token_hash = ${param_idx}")
+            params.append(token_hash)
+            param_idx += 1
+
+        if config is not None:
+            updates.append(f"config = ${param_idx}")
+            params.append(config)
+            param_idx += 1
+
+        if is_active is not None:
+            updates.append(f"is_active = ${param_idx}")
+            params.append(is_active)
+            param_idx += 1
+
+        if not updates:
+            return await self.get_by_user_and_type(user_id, integration_type)
+
+        query = f"""
+            UPDATE user_integrations
+            SET {', '.join(updates)}
+            WHERE user_id = $1 AND integration_type = $2
+            RETURNING id, user_id, integration_type, encrypted_token, token_hash,
+                      config, is_active, last_used_at, created_at, updated_at
+        """
+        record = await self._db.fetchrow(query, user_id, integration_type, *params)
+        return record_to_user_integration(record) if record else None
+
+    async def update_last_used(self, user_id: int, integration_type: str) -> None:
+        """Update the last_used_at timestamp for an integration.
+
+        Args:
+            user_id: Telegram user ID.
+            integration_type: Type of integration.
+        """
+        query = """
+            UPDATE user_integrations
+            SET last_used_at = NOW()
+            WHERE user_id = $1 AND integration_type = $2
+        """
+        await self._db.execute(query, user_id, integration_type)
+
+    async def delete(self, user_id: int, integration_type: str) -> bool:
+        """Delete a user integration.
+
+        Args:
+            user_id: Telegram user ID.
+            integration_type: Type of integration.
+
+        Returns:
+            True if deleted, False if not found.
+        """
+        query = """
+            DELETE FROM user_integrations
+            WHERE user_id = $1 AND integration_type = $2
+        """
+        result = await self._db.execute(query, user_id, integration_type)
+        return result == "DELETE 1"
+
+    async def set_active(
+        self, user_id: int, integration_type: str, is_active: bool
+    ) -> bool:
+        """Set the active status of an integration.
+
+        Args:
+            user_id: Telegram user ID.
+            integration_type: Type of integration.
+            is_active: New active status.
+
+        Returns:
+            True if updated, False if not found.
+        """
+        query = """
+            UPDATE user_integrations
+            SET is_active = $3
+            WHERE user_id = $1 AND integration_type = $2
+        """
+        result = await self._db.execute(query, user_id, integration_type, is_active)
+        return result == "UPDATE 1"

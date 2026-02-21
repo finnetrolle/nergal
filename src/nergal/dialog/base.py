@@ -34,7 +34,7 @@ class AgentType(str, Enum):
     - Core: default, dispatcher
     - Information: web_search, knowledge_base, tech_docs, code_analysis, metrics, news
     - Processing: analysis, fact_check, comparison, summary, clarification
-    - Specialized: expertise
+    - Specialized: expertise, todoist
     """
     
     # Core agents
@@ -58,6 +58,7 @@ class AgentType(str, Enum):
     
     # Specialized agents
     EXPERTISE = "expertise"
+    TODOIST = "todoist"  # Todoist task management agent
     
     # Legacy/deprecated - kept for backward compatibility
     FAQ = "faq"
@@ -76,7 +77,7 @@ class AgentType(str, Enum):
         elif agent_type in (cls.ANALYSIS, cls.FACT_CHECK, cls.COMPARISON,
                            cls.SUMMARY, cls.CLARIFICATION):
             return AgentCategory.PROCESSING
-        elif agent_type == cls.EXPERTISE:
+        elif agent_type in (cls.EXPERTISE, cls.TODOIST):
             return AgentCategory.SPECIALIZED
         else:
             return AgentCategory.CORE

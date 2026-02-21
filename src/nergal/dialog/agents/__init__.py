@@ -19,6 +19,7 @@ Available agents:
 - MetricsAgent: Retrieve metrics and statistics
 - ExpertiseAgent: Domain-specific expertise
 - NewsAgent: Aggregate and process news from multiple sources
+- TodoistAgent: Manage tasks in Todoist
 """
 
 # Import base classes first (from parent module base.py)
@@ -50,6 +51,7 @@ from nergal.dialog.agents.metrics_agent import MetricsAgent
 from nergal.dialog.agents.news_agent import NewsAgent, NewsCluster, NewsSource
 from nergal.dialog.agents.summary_agent import SummaryAgent
 from nergal.dialog.agents.tech_docs_agent import TechDocsAgent
+from nergal.dialog.agents.todoist_agent import TodoistAgent
 from nergal.dialog.agents.web_search_agent import WebSearchAgent
 
 __all__ = [
@@ -84,4 +86,5 @@ __all__ = [
     # Specialized agents
     "ExpertiseAgent",
     "ExpertiseDomain",
+    "TodoistAgent",
 ]

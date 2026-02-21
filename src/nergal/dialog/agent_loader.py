@@ -277,6 +277,27 @@ def create_tech_docs_agent(
     )
 
 
+def create_todoist_agent(
+    llm_provider: "BaseLLMProvider",
+    style_type: StyleType,
+) -> BaseAgent:
+    """Create a TodoistAgent instance.
+    
+    Args:
+        llm_provider: LLM provider instance.
+        style_type: Response style type.
+        
+    Returns:
+        TodoistAgent instance.
+    """
+    from nergal.dialog.agents.todoist_agent import TodoistAgent
+    
+    return TodoistAgent(
+        llm_provider=llm_provider,
+        style_type=style_type,
+    )
+
+
 def register_configured_agents(
     registry: "AgentRegistry",
     settings: Settings,
@@ -458,5 +479,18 @@ def register_configured_agents(
             logger.info(f"Registered agent: {agent.agent_type.value}")
         except Exception as e:
             logger.error(f"Failed to register TechDocsAgent: {e}")
+    
+    # TodoistAgent
+    if agent_settings.todoist_enabled:
+        try:
+            agent = create_todoist_agent(
+                llm_provider=llm_provider,
+                style_type=style_type,
+            )
+            registry.register(agent)
+            registered.append(agent.agent_type.value)
+            logger.info(f"Registered agent: {agent.agent_type.value}")
+        except Exception as e:
+            logger.error(f"Failed to register TodoistAgent: {e}")
     
     return registered

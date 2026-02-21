@@ -428,3 +428,44 @@ BEGIN
     WHERE created_at < NOW() - (days_to_keep || ' days')::INTERVAL;
 END;
 $$ LANGUAGE plpgsql;
+
+-- =============================================================================
+-- User Integrations Table (for storing external service tokens)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS user_integrations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- Integration type (todoist, notion, google_calendar, etc.)
+    integration_type VARCHAR(50) NOT NULL,
+    
+    -- Encrypted API token or credentials
+    encrypted_token TEXT,                          -- Encrypted API token
+    token_hash VARCHAR(255),                       -- Hash for token verification
+    
+    -- Additional configuration as JSONB
+    config JSONB DEFAULT '{}',                     -- Integration-specific settings
+    
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,                -- Whether integration is enabled
+    last_used_at TIMESTAMP WITH TIME ZONE,         -- Last time integration was used
+    
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure one integration per type per user
+    CONSTRAINT user_integrations_unique UNIQUE (user_id, integration_type)
+);
+
+-- Indexes for user integrations
+CREATE INDEX IF NOT EXISTS idx_user_integrations_user_id ON user_integrations(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_integrations_type ON user_integrations(integration_type);
+CREATE INDEX IF NOT EXISTS idx_user_integrations_active ON user_integrations(is_active) WHERE is_active = TRUE;
+
+-- Trigger for updated_at
+CREATE TRIGGER update_user_integrations_updated_at
+    BEFORE UPDATE ON user_integrations
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();

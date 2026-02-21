@@ -211,6 +211,21 @@ class WebSearchTelemetry(BaseModel):
         return ": ".join(parts) if parts else None
 
 
+class UserIntegration(BaseModel):
+    """User integration with external services (e.g., Todoist)."""
+    
+    id: UUID | None = None
+    user_id: int
+    integration_type: str  # "todoist", "notion", etc.
+    encrypted_token: str | None = None
+    token_hash: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+    is_active: bool = True
+    last_used_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class UserMemoryContext(BaseModel):
     """Complete memory context for a user, used by agents."""
 
@@ -219,6 +234,7 @@ class UserMemoryContext(BaseModel):
     facts: list[ProfileFact] = Field(default_factory=list)
     recent_messages: list[ConversationMessage] = Field(default_factory=list)
     current_session: ConversationSession | None = None
+    integrations: list[UserIntegration] = Field(default_factory=list)
 
     def get_profile_summary(self) -> str:
         """Get a human-readable summary of the user's profile."""

@@ -370,6 +370,101 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(status_text)
 
 
+async def todoist_token_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /todoist_token command to set Todoist API token."""
+    if not update.message or not update.message.from_user:
+        return
+    
+    user_id = update.message.from_user.id
+    
+    # Check if token was provided
+    if not context.args or len(context.args) == 0:
+        await update.message.reply_text(
+            "🔗 **Подключение Todoist**\n\n"
+            "Для подключения Todoist отправьте команду с вашим API токеном:\n"
+            "`/todoist_token ВАШ_ТОКЕН`\n\n"
+            "📌 Получить токен можно на: [todoist.com/app/settings/integrations/developer](https://todoist.com/app/settings/integrations/developer)\n\n"
+            "⚠️ Токен хранится безопасно и используется только для работы с вашими задачами.",
+            parse_mode="Markdown",
+            disable_web_page_preview=True,
+        )
+        return
+    
+    token = context.args[0].strip()
+    
+    # Validate token format (basic check)
+    if len(token) < 20:
+        await update.message.reply_text("❌ Неверный формат токена. Проверьте, что вы скопировали токен полностью.")
+        return
+    
+    try:
+        from nergal.database.repositories import UserIntegrationRepository
+        from nergal.integrations.todoist import TodoistService
+        
+        # Test the token
+        service = TodoistService(api_token=token)
+        is_valid = await service.test_connection()
+        await service.close()
+        
+        if not is_valid:
+            await update.message.reply_text("❌ Не удалось подключиться к Todoist. Проверьте правильность токена.")
+            return
+        
+        # Store the token
+        repo = UserIntegrationRepository()
+        existing = await repo.get_by_user_and_type(user_id, "todoist")
+        
+        if existing:
+            await repo.update(user_id, "todoist", encrypted_token=token, is_active=True)
+        else:
+            await repo.create(user_id, "todoist", encrypted_token=token)
+        
+        await update.message.reply_text(
+            "✅ Todoist успешно подключён!\n\n"
+            "Теперь вы можете:\n"
+            "• «Покажи мои задачи»\n"
+            "• «Задачи на сегодня»\n"
+            "• «Создай задачу Купить молоко завтра»\n"
+            "• «Просроченные задачи»\n\n"
+            "💡 Попробуйте написать мне что-нибудь про задачи!"
+        )
+        
+        # Delete the message with token for security
+        try:
+            await update.message.delete()
+        except Exception:
+            pass  # May fail if bot doesn't have permission
+        
+    except Exception as e:
+        logger = get_logger(__name__)
+        logger.error(f"Failed to setup Todoist integration: {e}")
+        await update.message.reply_text("❌ Произошла ошибка при подключении. Попробуйте позже.")
+
+
+async def todoist_disconnect_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /todoist_disconnect command to disconnect Todoist."""
+    if not update.message or not update.message.from_user:
+        return
+    
+    user_id = update.message.from_user.id
+    
+    try:
+        from nergal.database.repositories import UserIntegrationRepository
+        
+        repo = UserIntegrationRepository()
+        deleted = await repo.delete(user_id, "todoist")
+        
+        if deleted:
+            await update.message.reply_text("✅ Todoist отключён. Ваши данные удалены из базы.")
+        else:
+            await update.message.reply_text("ℹ️ Todoist не был подключён.")
+            
+    except Exception as e:
+        logger = get_logger(__name__)
+        logger.error(f"Failed to disconnect Todoist: {e}")
+        await update.message.reply_text("❌ Произошла ошибка при отключении. Попробуйте позже.")
+
+
 def should_respond_in_group(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Check if the bot should respond to a message in a group chat.
 
@@ -841,6 +936,8 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("todoist_token", todoist_token_command))
+    application.add_handler(CommandHandler("todoist_disconnect", todoist_disconnect_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Add voice message handler if STT is enabled
