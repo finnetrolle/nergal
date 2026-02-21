@@ -43,6 +43,7 @@ AGENT_DESCRIPTIONS: dict[AgentType, str] = {
     
     # Specialized agents
     AgentType.EXPERTISE: "агент для экспертных знаний в специфических доменах: безопасность, юридические вопросы, финансы, архитектура",
+    AgentType.TODOIST: "агент для работы с задачами Todoist: получение списка задач, создание задач, управление задачами, просмотр задач на сегодня/завтра/неделю",
     
     # Legacy agents (kept for backward compatibility)
     AgentType.FAQ: "агент для ответов на часто задаваемые вопросы",
@@ -424,12 +425,15 @@ class DispatcherAgent(BaseAgent):
             "expert": AgentType.EXPERTISE,
             "security": AgentType.EXPERTISE,
             "legal": AgentType.EXPERTISE,
+            "todoist": AgentType.TODOIST,
+            "tasks": AgentType.TODOIST,
+            "task": AgentType.TODOIST,
+            "todo": AgentType.TODOIST,
             
             # Legacy agents
             "faq": AgentType.FAQ,
             "small_talk": AgentType.SMALL_TALK,
             "smalltalk": AgentType.SMALL_TALK,
-            "task": AgentType.TASK,
         }
         return mapping.get(agent_str, AgentType.DEFAULT)
 

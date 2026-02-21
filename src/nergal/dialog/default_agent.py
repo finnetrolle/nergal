@@ -69,6 +69,8 @@ class DefaultAgent(BaseAgent):
         
         # Check if we have search results from a previous agent
         search_results = context.get("search_results")
+        previous_step_output = context.get("previous_step_output")
+        previous_agent = context.get("previous_agent", "")
         original_message = context.get("previous_step_metadata", {}).get("original_message", message)
         
         # Also try to get original message from context directly (fallback)
@@ -86,8 +88,18 @@ class DefaultAgent(BaseAgent):
                 history=history,
                 context=context,
             )
+        elif previous_step_output and previous_agent:
+            # Handle output from other agents (like TodoistAgent)
+            logger.info(f"DefaultAgent received output from {previous_agent}: {previous_step_output[:100]}..." if len(previous_step_output) > 100 else f"DefaultAgent received output from {previous_agent}: {previous_step_output}")
+            response = await self._generate_response_with_previous_output(
+                original_message=original_message,
+                previous_output=previous_step_output,
+                previous_agent=previous_agent,
+                history=history,
+                context=context,
+            )
         else:
-            logger.warning(f"DefaultAgent: NO search results found in context. Available keys: {list(context.keys())}")
+            logger.warning(f"DefaultAgent: NO search results or previous output found in context. Available keys: {list(context.keys())}")
             response = await self._generate_response_with_memory(message, history, context)
 
         # Calculate total tokens from usage
@@ -214,6 +226,50 @@ class DefaultAgent(BaseAgent):
         messages = [
             LLMMessage(role=MessageRole.SYSTEM, content=self.system_prompt),
             LLMMessage(role=MessageRole.SYSTEM, content=search_context),
+            *history,
+            LLMMessage(role=MessageRole.USER, content=original_message),
+        ]
+
+        return await self.llm_provider.generate(messages)
+
+    async def _generate_response_with_previous_output(
+        self,
+        original_message: str,
+        previous_output: str,
+        previous_agent: str,
+        history: list[LLMMessage],
+        context: dict[str, Any] | None = None,
+    ) -> Any:
+        """Generate response using output from a previous agent step.
+
+        Args:
+            original_message: The original user message.
+            previous_output: Output from the previous agent step.
+            previous_agent: Name of the previous agent (e.g., "todoist").
+            history: Conversation history.
+            context: Current dialog context (optional).
+
+        Returns:
+            LLMResponse with the generated answer.
+        """
+        # Build context message based on the previous agent type
+        agent_context = (
+            f"═══════════════════════════════════════════════════════════════════\n"
+            f"ВАЖНО: РЕЗУЛЬТАТЫ ОТ АГЕНТА '{previous_agent}' (используй ЭТУ информацию для ответа)\n"
+            f"═══════════════════════════════════════════════════════════════════\n\n"
+            f"{previous_output}\n\n"
+            f"═══════════════════════════════════════════════════════════════════\n"
+            f"ИНСТРУКЦИЯ:\n"
+            f"1. Используй информацию выше, чтобы ответить на вопрос пользователя\n"
+            f"2. Сохраняй свой стиль речи и характер\n"
+            f"3. Если информация выше уже содержит полный ответ — просто передай её пользователю в своём стиле\n"
+            f"4. Отвечай на том же языке, что и вопрос пользователя\n"
+            f"═══════════════════════════════════════════════════════════════════"
+        )
+
+        messages = [
+            LLMMessage(role=MessageRole.SYSTEM, content=self.system_prompt),
+            LLMMessage(role=MessageRole.SYSTEM, content=agent_context),
             *history,
             LLMMessage(role=MessageRole.USER, content=original_message),
         ]

@@ -333,6 +333,16 @@ class TodoistAgent(BaseSpecializedAgent):
         if any(kw in message_lower for kw in ["удали", "delete", "remove"]):
             return "delete_task"
         
+        # Check if user is searching for a specific task by name/content
+        # Phrases like "нет ли у меня задача...", "есть ли задача...", "найди задачу..."
+        if any(kw in message_lower for kw in ["нет ли", "есть ли", "найди", "find", "search", "ищи", "поиск"]):
+            return "search_tasks"
+        
+        # Check if message contains specific content that looks like a task search
+        # (question about a specific task with keywords like "задач" and specific terms)
+        if "задач" in message_lower and ("?" in message_lower or "если" in message_lower):
+            return "search_tasks"
+        
         # Default to showing today's tasks
         return "today_tasks"
     
@@ -434,6 +444,32 @@ class TodoistAgent(BaseSpecializedAgent):
             elif action == "delete_task":
                 data["needs_task_selection"] = True
                 data["summary"] = "Укажите номер или название задачи для удаления"
+            
+            elif action == "search_tasks":
+                # Search through ALL tasks (not just today's)
+                search_terms = self._extract_search_terms(message)
+                all_tasks = await todoist_service.get_tasks()
+                
+                # Filter tasks by search terms
+                matching_tasks = []
+                for task in all_tasks:
+                    task_text = task.content.lower()
+                    if any(term in task_text for term in search_terms):
+                        matching_tasks.append({
+                            "id": task.id,
+                            "content": task.content,
+                            "priority": task.priority,
+                            "due": task.due_string or task.due_date,
+                            "project_id": task.project_id,
+                            "completed": task.is_completed,
+                        })
+                
+                data["tasks"] = matching_tasks
+                data["search_terms"] = search_terms
+                if matching_tasks:
+                    data["summary"] = f"Найдено {len(matching_tasks)} задач по запросу '{' '.join(search_terms)}'"
+                else:
+                    data["summary"] = f"Задач по запросу '{' '.join(search_terms)}' не найдено (просмотрено {len(all_tasks)} задач)"
                 
         except TodoistError as e:
             data["error"] = str(e)
@@ -468,6 +504,41 @@ class TodoistAgent(BaseSpecializedAgent):
             content = content[0].upper() + content[1:]
         
         return content or message
+    
+    def _extract_search_terms(self, message: str) -> list[str]:
+        """Extract search terms from user message.
+        
+        Args:
+            message: User message.
+            
+        Returns:
+            List of search terms.
+        """
+        # Remove common question words and stop words in Russian and English
+        stop_words = {
+            # Russian
+            "нет", "ли", "у", "меня", "задача", "задачи", "задач", "есть", "если",
+            "найди", "ищи", "поиск", "покажи", "какие", "какая", "какой", "что",
+            "на", "в", "из", "от", "до", "по", "за", "с", "для", "о", "об",
+            "перенеси", "измени", "удали", "завершить", "выполнить",
+            # English
+            "is", "there", "a", "the", "task", "tasks", "do", "i", "have",
+            "find", "search", "show", "what", "which", "if", "move", "delete",
+            "complete", "any", "my", "me", "please",
+        }
+        
+        # Extract words from message
+        words = message.lower().split()
+        
+        # Filter out stop words and short words
+        search_terms = []
+        for word in words:
+            # Remove punctuation
+            clean_word = "".join(c for c in word if c.isalnum())
+            if len(clean_word) >= 3 and clean_word not in stop_words:
+                search_terms.append(clean_word)
+        
+        return search_terms if search_terms else [message.lower()]
     
     def _build_messages(
         self,

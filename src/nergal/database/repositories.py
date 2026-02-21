@@ -1367,7 +1367,7 @@ class UserIntegrationRepository:
             integration_type,
             encrypted_token,
             token_hash,
-            config or {},
+            json.dumps(config) if config else None,
         )
         return record_to_user_integration(record)
 
@@ -1409,7 +1409,7 @@ class UserIntegrationRepository:
 
         if config is not None:
             updates.append(f"config = ${param_idx}")
-            params.append(config)
+            params.append(json.dumps(config))
             param_idx += 1
 
         if is_active is not None:
