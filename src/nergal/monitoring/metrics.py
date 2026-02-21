@@ -81,6 +81,49 @@ bot_web_search_duration_seconds = Histogram(
     buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 30.0],
 )
 
+# Enhanced web search metrics
+bot_web_search_retries_total = Counter(
+    "bot_web_search_retries_total",
+    "Total number of search retry attempts",
+    ["reason"],  # Error category that triggered retry
+)
+
+bot_web_search_circuit_breaker_state = Gauge(
+    "bot_web_search_circuit_breaker_state",
+    "Circuit breaker state (0=closed, 1=half_open, 2=open)",
+)
+
+bot_web_search_query_generation_duration_seconds = Histogram(
+    "bot_web_search_query_generation_duration_seconds",
+    "Time spent generating search queries",
+    ["method"],  # llm or fallback
+    buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
+)
+
+bot_web_search_synthesis_duration_seconds = Histogram(
+    "bot_web_search_synthesis_duration_seconds",
+    "Time spent synthesizing search results into response",
+    buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 20.0],
+)
+
+bot_web_search_results_per_query = Histogram(
+    "bot_web_search_results_per_query",
+    "Number of results returned per search query",
+    buckets=[0, 1, 2, 3, 5, 10, 20, 50],
+)
+
+bot_web_search_queries_per_request = Histogram(
+    "bot_web_search_queries_per_request",
+    "Number of search queries generated per user request",
+    buckets=[1, 2, 3, 4, 5],
+)
+
+bot_web_search_errors_by_category = Counter(
+    "bot_web_search_errors_by_category_total",
+    "Web search errors categorized by type",
+    ["category"],  # transient, auth, quota, service_error, etc.
+)
+
 # =============================================================================
 # STT Metrics
 # =============================================================================

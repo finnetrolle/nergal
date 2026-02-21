@@ -301,9 +301,34 @@ CREATE TABLE IF NOT EXISTS web_search_telemetry (
     provider_name VARCHAR(255),                     -- Search provider name
     tool_used VARCHAR(255),                         -- MCP tool name used
     
+    -- Retry information
+    retry_count INTEGER DEFAULT 0,                  -- Number of retry attempts
+    retry_reasons JSONB DEFAULT '[]',               -- List of error categories that triggered retries
+    total_retry_delay_ms INTEGER,                   -- Total time spent in retry delays
+    
+    -- Error classification
+    error_category VARCHAR(50),                     -- Classified error category (transient, auth, quota, etc.)
+    
     -- Metadata
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Migration: Add retry columns if they don't exist (for existing databases)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'web_search_telemetry' AND column_name = 'retry_count') THEN
+        ALTER TABLE web_search_telemetry ADD COLUMN retry_count INTEGER DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'web_search_telemetry' AND column_name = 'retry_reasons') THEN
+        ALTER TABLE web_search_telemetry ADD COLUMN retry_reasons JSONB DEFAULT '[]';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'web_search_telemetry' AND column_name = 'total_retry_delay_ms') THEN
+        ALTER TABLE web_search_telemetry ADD COLUMN total_retry_delay_ms INTEGER;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'web_search_telemetry' AND column_name = 'error_category') THEN
+        ALTER TABLE web_search_telemetry ADD COLUMN error_category VARCHAR(50);
+    END IF;
+END $$;
 
 -- Indexes for web search telemetry
 CREATE INDEX IF NOT EXISTS idx_web_search_telemetry_user_id ON web_search_telemetry(user_id);
@@ -318,7 +343,7 @@ CREATE INDEX IF NOT EXISTS idx_web_search_telemetry_query ON web_search_telemetr
 
 -- View for failed searches with details
 CREATE OR REPLACE VIEW web_search_failures AS
-SELECT 
+SELECT
     id,
     query,
     user_id,
@@ -326,9 +351,11 @@ SELECT
     status,
     error_type,
     error_message,
+    error_category,
     http_status_code,
     api_response_time_ms,
     total_duration_ms,
+    retry_count,
     provider_name,
     created_at
 FROM web_search_telemetry
@@ -337,7 +364,7 @@ ORDER BY created_at DESC;
 
 -- View for empty searches (successful but no results)
 CREATE OR REPLACE VIEW web_search_empty_results AS
-SELECT 
+SELECT
     id,
     query,
     user_id,
@@ -362,10 +389,33 @@ SELECT
     COUNT(*) FILTER (WHERE status = 'success' AND results_count = 0) as empty_result_searches,
     AVG(api_response_time_ms) FILTER (WHERE status = 'success') as avg_response_time_ms,
     AVG(total_duration_ms) as avg_total_duration_ms,
-    AVG(results_count) FILTER (WHERE status = 'success') as avg_results_count
+    AVG(results_count) FILTER (WHERE status = 'success') as avg_results_count,
+    -- New retry statistics
+    SUM(retry_count) as total_retries,
+    AVG(retry_count) FILTER (WHERE retry_count > 0) as avg_retries_when_retried,
+    COUNT(*) FILTER (WHERE retry_count > 0) as searches_with_retries,
+    -- Error category breakdown
+    COUNT(*) FILTER (WHERE error_category = 'transient') as transient_errors,
+    COUNT(*) FILTER (WHERE error_category = 'auth') as auth_errors,
+    COUNT(*) FILTER (WHERE error_category = 'quota') as quota_errors,
+    COUNT(*) FILTER (WHERE error_category = 'service') as service_errors
 FROM web_search_telemetry
 GROUP BY DATE(created_at)
 ORDER BY search_date DESC;
+
+-- View for error category analysis
+CREATE OR REPLACE VIEW web_search_error_categories AS
+SELECT
+    error_category,
+    COUNT(*) as error_count,
+    COUNT(DISTINCT user_id) as affected_users,
+    AVG(retry_count) as avg_retries,
+    AVG(total_retry_delay_ms) as avg_retry_delay_ms,
+    MAX(created_at) as last_occurrence
+FROM web_search_telemetry
+WHERE error_category IS NOT NULL
+GROUP BY error_category
+ORDER BY error_count DESC;
 
 -- =============================================================================
 -- Cleanup Function for Old Telemetry

@@ -848,6 +848,11 @@ def record_to_web_search_telemetry(record: Record) -> WebSearchTelemetry:
         search_call_duration_ms=record["search_call_duration_ms"],
         provider_name=record["provider_name"],
         tool_used=record["tool_used"],
+        # New retry and classification fields
+        retry_count=record.get("retry_count", 0) or 0,
+        retry_reasons=record.get("retry_reasons", []) or [],
+        total_retry_delay_ms=record.get("total_retry_delay_ms"),
+        error_category=record.get("error_category"),
         created_at=record["created_at"],
     )
 
@@ -890,6 +895,10 @@ class WebSearchTelemetryRepository:
         search_call_duration_ms: int | None = None,
         provider_name: str | None = None,
         tool_used: str | None = None,
+        retry_count: int = 0,
+        retry_reasons: list[str] | None = None,
+        total_retry_delay_ms: int | None = None,
+        error_category: str | None = None,
     ) -> WebSearchTelemetry:
         """Record a web search telemetry event.
 
@@ -916,6 +925,10 @@ class WebSearchTelemetryRepository:
             search_call_duration_ms: Search call duration.
             provider_name: Search provider name.
             tool_used: MCP tool name used.
+            retry_count: Number of retry attempts.
+            retry_reasons: List of error categories that triggered retries.
+            total_retry_delay_ms: Total time spent in retry delays.
+            error_category: Classified error category.
 
         Returns:
             Created WebSearchTelemetry instance.
@@ -934,9 +947,10 @@ class WebSearchTelemetryRepository:
                 domain_filter, status, results_count, results, error_type, error_message,
                 error_stack_trace, http_status_code, api_response_time_ms, api_session_id,
                 raw_response, raw_response_truncated, total_duration_ms, init_duration_ms,
-                tools_list_duration_ms, search_call_duration_ms, provider_name, tool_used
+                tools_list_duration_ms, search_call_duration_ms, provider_name, tool_used,
+                retry_count, retry_reasons, total_retry_delay_ms, error_category
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
             RETURNING *
         """
         record = await self._db.fetchrow(
@@ -964,6 +978,10 @@ class WebSearchTelemetryRepository:
             search_call_duration_ms,
             provider_name,
             tool_used,
+            retry_count,
+            json.dumps(retry_reasons) if retry_reasons else None,
+            total_retry_delay_ms,
+            error_category,
         )
         return record_to_web_search_telemetry(record)
 

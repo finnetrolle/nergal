@@ -7,6 +7,8 @@ and synthesize responses using the LLM.
 import json
 import logging
 import re
+import time
+from dataclasses import dataclass, field
 from typing import Any
 
 from nergal.dialog.base import AgentResult, AgentType, BaseAgent
@@ -18,6 +20,12 @@ from nergal.dialog.constants import (
 )
 from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage, MessageRole
+from nergal.monitoring import (
+    bot_web_search_query_generation_duration_seconds,
+    bot_web_search_synthesis_duration_seconds,
+    bot_web_search_queries_per_request,
+    bot_web_search_results_per_query,
+)
 from nergal.web_search import BaseSearchProvider, SearchError, SearchRequest
 
 logger = logging.getLogger(__name__)
@@ -56,6 +64,57 @@ Output: ["новости Россия сегодня", "мировые ново�
 
 Now generate search queries for this user question:
 {question}"""
+
+
+@dataclass
+class AgentTelemetry:
+   """Telemetry data for a single agent execution."""
+
+   # Query generation
+   query_generation_start_ms: float | None = None
+   query_generation_duration_ms: int | None = None
+   query_generation_method: str = "llm"  # "llm" or "fallback"
+   query_generation_error: str | None = None
+
+   # Search execution
+   search_start_ms: float | None = None
+   search_duration_ms: int | None = None
+   queries_executed: int = 0
+   queries_failed: int = 0
+   total_results: int = 0
+
+   # Response synthesis
+   synthesis_start_ms: float | None = None
+   synthesis_duration_ms: int | None = None
+   synthesis_error: str | None = None
+
+   # Overall
+   total_duration_ms: int | None = None
+   fallback_used: bool = False
+
+   def to_dict(self) -> dict[str, Any]:
+       """Convert to dictionary for metadata."""
+       return {
+           "query_generation": {
+               "duration_ms": self.query_generation_duration_ms,
+               "method": self.query_generation_method,
+               "error": self.query_generation_error,
+           },
+           "search": {
+               "duration_ms": self.search_duration_ms,
+               "queries_executed": self.queries_executed,
+               "queries_failed": self.queries_failed,
+               "total_results": self.total_results,
+           },
+           "synthesis": {
+               "duration_ms": self.synthesis_duration_ms,
+               "error": self.synthesis_error,
+           },
+           "overall": {
+               "total_duration_ms": self.total_duration_ms,
+               "fallback_used": self.fallback_used,
+           },
+       }
 
 
 class WebSearchAgent(BaseAgent):
@@ -288,38 +347,84 @@ class WebSearchAgent(BaseAgent):
         Returns:
             AgentResult containing the response.
         """
+        # Initialize telemetry tracking
+        telemetry = AgentTelemetry()
+        start_time = time.time()
+
         # Initialize variables for error handling
         search_queries = []
         formatted_results = None
         all_sources = []
-        
+
         try:
             # Step 1: Generate search queries using LLM
-            search_queries = await self._generate_search_queries(message)
+            telemetry.query_generation_start_ms = time.time()
+            try:
+                search_queries = await self._generate_search_queries(message)
+                telemetry.query_generation_method = "llm"
+            except Exception as e:
+                logger.warning(f"LLM query generation failed, using fallback: {e}")
+                search_queries = [self._fallback_extract_query(message)]
+                telemetry.query_generation_method = "fallback"
+                telemetry.query_generation_error = str(e)
+                telemetry.fallback_used = True
+
+            telemetry.query_generation_duration_ms = int(
+                (time.time() - telemetry.query_generation_start_ms) * 1000
+            )
+
+            # Track query generation metrics
+            bot_web_search_query_generation_duration_seconds.labels(
+                method=telemetry.query_generation_method
+            ).observe(telemetry.query_generation_duration_ms / 1000)
 
             if not search_queries:
                 search_queries = [self._fallback_extract_query(message)]
 
             logger.info(f"Performing web searches for: {search_queries}")
 
+            # Track queries per request
+            bot_web_search_queries_per_request.observe(len(search_queries))
+            telemetry.queries_executed = len(search_queries)
+
             # Step 2: Execute all searches and collect results
+            telemetry.search_start_ms = time.time()
             all_results = await self._execute_multiple_searches(search_queries)
+            telemetry.search_duration_ms = int(
+                (time.time() - telemetry.search_start_ms) * 1000
+            )
+
+            # Track results per query
+            total_results = sum(len(r.results) for _, r in all_results)
+            telemetry.total_results = total_results
+            for query, results in all_results:
+                bot_web_search_results_per_query.observe(len(results.results))
 
             if not all_results:
+                telemetry.synthesis_start_ms = time.time()
                 response, tokens_used = await self._generate_no_results_response(
                     message, search_queries, history
                 )
+                telemetry.synthesis_duration_ms = int(
+                    (time.time() - telemetry.synthesis_start_ms) * 1000
+                )
+                telemetry.total_duration_ms = int((time.time() - start_time) * 1000)
+
                 return AgentResult(
                     response=response,
                     agent_type=self.agent_type,
                     confidence=0.5,
-                    metadata={"search_queries": search_queries, "results_count": 0},
+                    metadata={
+                        "search_queries": search_queries,
+                        "results_count": 0,
+                        "telemetry": telemetry.to_dict(),
+                    },
                     tokens_used=tokens_used,
                 )
 
             # Format results for passing to next agent
             formatted_results = self._format_multiple_results(all_results)
-            
+
             # Collect all unique sources
             seen_links = set()
             for query, results in all_results:
@@ -329,9 +434,20 @@ class WebSearchAgent(BaseAgent):
                         seen_links.add(r.link)
 
             # Step 3: Generate response with combined results
+            telemetry.synthesis_start_ms = time.time()
             response, tokens_used = await self._generate_response_with_results(
                 message, search_queries, formatted_results, history
             )
+            telemetry.synthesis_duration_ms = int(
+                (time.time() - telemetry.synthesis_start_ms) * 1000
+            )
+
+            # Track synthesis duration
+            bot_web_search_synthesis_duration_seconds.observe(
+                telemetry.synthesis_duration_ms / 1000
+            )
+
+            telemetry.total_duration_ms = int((time.time() - start_time) * 1000)
 
             return AgentResult(
                 response=response,
@@ -339,11 +455,13 @@ class WebSearchAgent(BaseAgent):
                 confidence=0.9,
                 metadata={
                     "search_queries": search_queries,
-                    "results_count": sum(len(r.results) for _, r in all_results),
+                    "results_count": total_results,
                     "sources": all_sources[:5],
                     # Store formatted results for subsequent agents
                     "search_results": formatted_results,
                     "original_message": message,
+                    # Agent telemetry
+                    "telemetry": telemetry.to_dict(),
                 },
                 tokens_used=tokens_used,
             )

@@ -102,6 +102,10 @@ class SearchResults:
         """Check if there are no results."""
         return len(self.results) == 0
 
+    def has_results(self) -> bool:
+        """Check if there are results."""
+        return len(self.results) > 0
+
     def to_text(self, max_results: int | None = None) -> str:
         """Convert results to a formatted text string.
 

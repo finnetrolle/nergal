@@ -18,6 +18,14 @@ from nergal.web_search.base import (
     SearchResult,
     SearchResults,
 )
+from nergal.web_search.reliability import (
+    CircuitBreaker,
+    ClassifiedError,
+    RetryConfig,
+    RetryStats,
+    classify_search_error,
+    execute_with_retry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +51,15 @@ class TelemetryContext:
         self.error_type: str | None = None
         self.error_message: str | None = None
         self.error_stack_trace: str | None = None
+
+        # Retry telemetry
+        self.retry_count: int = 0
+        self.retry_reasons: list[str] = []
+        self.total_retry_delay_ms: int = 0
+
+        # Error classification
+        self.error_category: str | None = None
+        self.should_retry: bool = False
 
     def start_init(self) -> None:
         """Mark the start of MCP initialization."""
@@ -75,11 +92,33 @@ class TelemetryContext:
         """Get total duration in milliseconds."""
         return int((time.time() - self.start_time) * 1000)
 
-    def set_error(self, error: Exception) -> None:
-        """Set error information from an exception."""
+    def set_error(self, error: Exception, classified: ClassifiedError | None = None) -> None:
+        """Set error information from an exception.
+
+        Args:
+            error: The exception that occurred.
+            classified: Optional pre-classified error. If not provided, will classify.
+        """
         self.error_type = type(error).__name__
         self.error_message = str(error)
         self.error_stack_trace = traceback.format_exc()
+
+        # Classify error if not provided
+        if classified is None:
+            classified = classify_search_error(error)
+
+        self.error_category = classified.category.value
+        self.should_retry = classified.should_retry
+
+    def update_from_retry_stats(self, stats: RetryStats) -> None:
+        """Update telemetry from retry statistics.
+
+        Args:
+            stats: Retry statistics to merge into telemetry.
+        """
+        self.retry_count = stats.attempts - 1  # First attempt is not a retry
+        self.retry_reasons = stats.retry_reasons
+        self.total_retry_delay_ms = stats.total_delay_ms
 
 
 class ZaiMcpHttpSearchProvider(BaseSearchProvider):
@@ -97,6 +136,8 @@ class ZaiMcpHttpSearchProvider(BaseSearchProvider):
         mcp_url: str | None = None,
         timeout: float = 30.0,
         telemetry_enabled: bool = True,
+        retry_config: RetryConfig | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize Z.AI web search provider.
@@ -106,6 +147,8 @@ class ZaiMcpHttpSearchProvider(BaseSearchProvider):
             mcp_url: Optional custom MCP endpoint URL.
             timeout: Request timeout in seconds.
             telemetry_enabled: Whether to save telemetry to database.
+            retry_config: Configuration for retry behavior. Uses defaults if not provided.
+            circuit_breaker: Circuit breaker instance. Creates new one if not provided.
             **kwargs: Additional configuration options.
         """
         super().__init__(api_key, timeout, **kwargs)
@@ -113,6 +156,10 @@ class ZaiMcpHttpSearchProvider(BaseSearchProvider):
         self._session_id: str | None = None
         self._telemetry_enabled = telemetry_enabled
         self._telemetry_repo: Any = None  # Lazy-loaded WebSearchTelemetryRepository
+
+        # Reliability components
+        self._retry_config = retry_config or RetryConfig()
+        self._circuit_breaker = circuit_breaker or CircuitBreaker()
 
     @property
     def provider_name(self) -> str:
@@ -446,10 +493,73 @@ class ZaiMcpHttpSearchProvider(BaseSearchProvider):
                 search_call_duration_ms=telemetry.search_call_duration_ms,
                 provider_name=self.provider_name,
                 tool_used=telemetry.tool_used,
+                # New retry and classification fields
+                retry_count=telemetry.retry_count,
+                retry_reasons=telemetry.retry_reasons,
+                error_category=telemetry.error_category,
             )
         except Exception as e:
             # Don't let telemetry failures affect search
             logger.warning(f"Failed to save search telemetry: {e}")
+
+    async def _do_search(
+        self,
+        request: SearchRequest,
+        telemetry: TelemetryContext,
+    ) -> SearchResults:
+        """Execute a single search attempt without retry logic.
+
+        This is the core search implementation that communicates with the MCP server.
+
+        Args:
+            request: Search request parameters.
+            telemetry: Telemetry context for tracking this attempt.
+
+        Returns:
+            SearchResults containing the search results.
+
+        Raises:
+            Various exceptions for different failure modes.
+        """
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            await self._initialize_session(client, telemetry)
+
+            tools = await self._list_tools(client, telemetry)
+            tool_names = [t.get("name") for t in tools if t.get("name")]
+            logger.debug(f"Available tools: {tool_names}")
+
+            tool_name = self._find_search_tool(tool_names)
+            if not tool_name:
+                raise SearchError(
+                    "No tools available on MCP server",
+                    provider=self.provider_name,
+                )
+
+            telemetry.tool_used = tool_name
+
+            result = await self._call_tool(
+                client,
+                tool_name,
+                {"search_query": request.query, "count": request.count},
+                telemetry,
+            )
+
+            if "error" in result:
+                raise SearchProviderError(
+                    str(result["error"]),
+                    provider=self.provider_name,
+                )
+
+            results: list[SearchResult] = []
+            if "result" in result:
+                content = result["result"].get("content", [])
+                results = self._parse_content_response(content)
+
+            return SearchResults(
+                results=results,
+                query=request.query,
+                total=len(results),
+            )
 
     async def search(
         self,
@@ -457,7 +567,12 @@ class ZaiMcpHttpSearchProvider(BaseSearchProvider):
         user_id: int | None = None,
         session_id: str | None = None,
     ) -> SearchResults:
-        """Perform a web search using Z.AI MCP.
+        """Perform a web search using Z.AI MCP with retry logic.
+
+        This method wraps the core search implementation with:
+        - Circuit breaker pattern to prevent cascading failures
+        - Retry with exponential backoff for transient errors
+        - Comprehensive telemetry tracking
 
         Args:
             request: Search request parameters.
@@ -474,104 +589,88 @@ class ZaiMcpHttpSearchProvider(BaseSearchProvider):
         """
         logger.info(f"Searching for: {request.query}")
         telemetry = TelemetryContext()
+        retry_stats = RetryStats()
 
         async with track_web_search():
             try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    await self._initialize_session(client, telemetry)
+                # Execute search with retry logic
+                async def _search_operation() -> SearchResults:
+                    return await self._do_search(request, telemetry)
 
-                    tools = await self._list_tools(client, telemetry)
-                    tool_names = [t.get("name") for t in tools if t.get("name")]
-                    logger.debug(f"Available tools: {tool_names}")
+                results, retry_stats = await execute_with_retry(
+                    operation=_search_operation,
+                    config=self._retry_config,
+                    circuit_breaker=self._circuit_breaker,
+                    operation_name="web_search",
+                )
 
-                    tool_name = self._find_search_tool(tool_names)
-                    if not tool_name:
-                        error = SearchError(
-                            "No tools available on MCP server",
-                            provider=self.provider_name,
-                        )
-                        telemetry.set_error(error)
-                        await self._save_telemetry(
-                            request, telemetry, "error", user_id=user_id, session_id=session_id
-                        )
-                        raise error
+                # Update telemetry with retry info
+                telemetry.update_from_retry_stats(retry_stats)
 
-                    telemetry.tool_used = tool_name
+                # Determine status
+                status = "success" if results.has_results() else "empty"
 
-                    result = await self._call_tool(
-                        client,
-                        tool_name,
-                        {"search_query": request.query, "count": request.count},
-                        telemetry,
-                    )
+                # Convert results to dict for telemetry
+                results_dict = [r.to_dict() for r in results.results[:10]]
 
-                    if "error" in result:
-                        error = SearchProviderError(
-                            str(result["error"]),
-                            provider=self.provider_name,
-                        )
-                        telemetry.set_error(error)
-                        await self._save_telemetry(
-                            request, telemetry, "error", user_id=user_id, session_id=session_id
-                        )
-                        raise error
+                logger.info(
+                    f"Search completed: {len(results.results)} results for '{request.query}' "
+                    f"(attempts: {retry_stats.attempts})"
+                )
 
-                    results: list[SearchResult] = []
-                    if "result" in result:
-                        content = result["result"].get("content", [])
-                        results = self._parse_content_response(content)
+                # Save telemetry
+                await self._save_telemetry(
+                    request,
+                    telemetry,
+                    status,
+                    results_count=len(results.results),
+                    results=results_dict,
+                    user_id=user_id,
+                    session_id=session_id,
+                )
 
-                    # Determine status
-                    status = "success" if results else "empty"
+                return results
 
-                    # Convert results to dict for telemetry
-                    results_dict = [r.to_dict() for r in results[:10]]  # Limit to 10 for storage
-
-                    logger.info(f"Search completed: {len(results)} results for '{request.query}'")
-
-                    # Save telemetry
-                    await self._save_telemetry(
-                        request,
-                        telemetry,
-                        status,
-                        results_count=len(results),
-                        results=results_dict,
-                        user_id=user_id,
-                        session_id=session_id,
-                    )
-
-                    return SearchResults(
-                        results=results,
-                        query=request.query,
-                        total=len(results),
-                    )
+            except SearchError:
+                # Re-raise SearchError as-is (already classified)
+                telemetry.set_error(ClassifiedError(
+                    category=classify_search_error(Exception()).category,
+                    original_error=Exception(),
+                    should_retry=False,
+                    alert_severity="warning",
+                    suggested_action="Search error",
+                ))
+                telemetry.update_from_retry_stats(retry_stats)
+                await self._save_telemetry(
+                    request, telemetry, "error", user_id=user_id, session_id=session_id
+                )
+                raise
 
             except httpx.TimeoutException as e:
-                logger.error(f"Timeout for query '{request.query}'")
-                telemetry.set_error(e)
+                logger.error(f"Timeout for query '{request.query}' after {retry_stats.attempts} attempts")
+                classified = classify_search_error(e)
+                telemetry.set_error(e, classified)
+                telemetry.update_from_retry_stats(retry_stats)
                 await self._save_telemetry(
                     request, telemetry, "timeout", user_id=user_id, session_id=session_id
                 )
                 raise SearchError("Request timeout", provider=self.provider_name) from e
 
             except httpx.RequestError as e:
-                logger.error(f"Request error: {e}")
-                telemetry.set_error(e)
+                logger.error(f"Request error: {e} after {retry_stats.attempts} attempts")
+                classified = classify_search_error(e)
+                telemetry.set_error(e, classified)
+                telemetry.update_from_retry_stats(retry_stats)
                 await self._save_telemetry(
                     request, telemetry, "error", user_id=user_id, session_id=session_id
                 )
                 raise SearchError(f"Request failed: {e}", provider=self.provider_name) from e
 
-            except (SearchRateLimitError, SearchProviderError) as e:
-                telemetry.set_error(e)
-                await self._save_telemetry(
-                    request, telemetry, "error", user_id=user_id, session_id=session_id
-                )
-                raise
-
             except Exception as e:
                 logger.error(f"Search failed: {type(e).__name__}: {e}", exc_info=True)
-                telemetry.set_error(e)
+                classified = classify_search_error(e)
+                telemetry.set_error(e, classified)
+                telemetry.update_from_retry_stats(retry_stats)
                 await self._save_telemetry(
                     request, telemetry, "error", user_id=user_id, session_id=session_id
                 )

@@ -322,7 +322,8 @@ HTML_TELEMETRY_TABLE = """
                 <th>Статус</th>
                 <th>Результатов</th>
                 <th>Время (мс)</th>
-                <th>Ошибка</th>
+                <th>Категория</th>
+                <th>Retries</th>
                 <th class="actions">Действия</th>
             </tr>
         </thead>
@@ -340,7 +341,8 @@ HTML_TELEMETRY_ROW = """
     <td><span class="badge {badge_class}">{status}</span></td>
     <td>{results_count}</td>
     <td>{duration}</td>
-    <td>{error_summary}</td>
+    <td>{error_category}</td>
+    <td>{retry_info}</td>
     <td class="actions">
         <a href="/admin/telemetry/{id}" class="btn-primary" style="text-decoration:none; padding: 5px 10px;">Детали</a>
     </td>
@@ -355,12 +357,15 @@ HTML_TELEMETRY_DETAIL = """
     <table>
         <tr><th>Запрос</th><td>{query}</td></tr>
         <tr><th>Статус</th><td><span class="badge {badge_class}">{status}</span></td></tr>
+        <tr><th>Категория ошибки</th><td>{error_category}</td></tr>
         <tr><th>Результатов</th><td>{results_count}</td></tr>
         <tr><th>Время</th><td>{created_at}</td></tr>
         <tr><th>User ID</th><td>{user_id}</td></tr>
         <tr><th>Session ID</th><td>{session_id}</td></tr>
     </table>
 </div>
+
+{retry_section}
 
 {error_section}
 
@@ -371,6 +376,7 @@ HTML_TELEMETRY_DETAIL = """
         <tr><th>MCP Init</th><td>{init_duration_ms} ms</td></tr>
         <tr><th>Tools List</th><td>{tools_list_duration_ms} ms</td></tr>
         <tr><th>Search Call</th><td>{search_call_duration_ms} ms</td></tr>
+        <tr><th>Retry Delay</th><td>{total_retry_delay_ms} ms</td></tr>
     </table>
 </div>
 
@@ -407,6 +413,26 @@ HTML_STACK_TRACE = """
 <div style="margin-top: 10px;">
     <strong>Stack Trace:</strong>
     <div class="telemetry-details">{error_stack_trace}</div>
+</div>
+"""
+
+HTML_RETRY_SECTION = """
+<div class="card">
+    <h2>🔄 Информация о повторных попытках</h2>
+    <table>
+        <tr><th>Количество попыток</th><td>{retry_count}</td></tr>
+        <tr><th>Общая задержка</th><td>{total_retry_delay_ms} ms</td></tr>
+    </table>
+    {retry_reasons_section}
+</div>
+"""
+
+HTML_RETRY_REASONS_SECTION = """
+<div style="margin-top: 10px;">
+    <strong>Причины повторных попыток:</strong>
+    <ul style="margin: 5px 0; padding-left: 20px;">
+        {retry_reasons_list}
+    </ul>
 </div>
 """
 
@@ -819,6 +845,21 @@ class AdminServer:
             "empty": "badge-warning",
         }.get(telemetry.status, "badge-info")
         
+        # Build retry section if applicable
+        retry_section = ""
+        if telemetry.retry_count and telemetry.retry_count > 0:
+            retry_reasons_section = ""
+            if telemetry.retry_reasons:
+                reasons_list = "".join([f"<li>{r}</li>" for r in telemetry.retry_reasons])
+                retry_reasons_section = HTML_RETRY_REASONS_SECTION.format(
+                    retry_reasons_list=reasons_list
+                )
+            retry_section = HTML_RETRY_SECTION.format(
+                retry_count=telemetry.retry_count,
+                total_retry_delay_ms=telemetry.total_retry_delay_ms or 0,
+                retry_reasons_section=retry_reasons_section,
+            )
+        
         # Build error section if applicable
         error_section = ""
         if telemetry.is_error():
@@ -832,6 +873,9 @@ class AdminServer:
                 error_message=telemetry.error_message or "-",
                 stack_trace_section=stack_trace_section,
             )
+        
+        # Format error category
+        error_category_display = telemetry.error_category or "-"
         
         # Build results section
         results_section = ""
@@ -864,15 +908,18 @@ class AdminServer:
             query=telemetry.query,
             status=telemetry.status,
             badge_class=badge_class,
+            error_category=error_category_display,
             results_count=telemetry.results_count,
             created_at=telemetry.created_at.strftime("%Y-%m-%d %H:%M:%S") if telemetry.created_at else "-",
             user_id=telemetry.user_id or "-",
             session_id=telemetry.session_id or "-",
+            retry_section=retry_section,
             error_section=error_section,
             total_duration_ms=telemetry.total_duration_ms or "-",
             init_duration_ms=telemetry.init_duration_ms or "-",
             tools_list_duration_ms=telemetry.tools_list_duration_ms or "-",
             search_call_duration_ms=telemetry.search_call_duration_ms or "-",
+            total_retry_delay_ms=telemetry.total_retry_delay_ms or "-",
             provider_name=telemetry.provider_name or "-",
             tool_used=telemetry.tool_used or "-",
             http_status_code=telemetry.http_status_code or "-",
@@ -893,11 +940,24 @@ class AdminServer:
             "empty": "badge-warning",
         }.get(telemetry.status, "badge-info")
         
-        error_summary = "-"
-        if telemetry.is_error():
-            error_summary = telemetry.error_type or telemetry.error_message or "Unknown error"
-            if len(error_summary) > 50:
-                error_summary = error_summary[:50] + "..."
+        # Format error category with color coding
+        error_category = "-"
+        if telemetry.error_category:
+            category_colors = {
+                "TRANSIENT": "badge-warning",
+                "AUTHENTICATION": "badge-error",
+                "QUOTA": "badge-error",
+                "INVALID_REQUEST": "badge-info",
+                "SERVICE_ERROR": "badge-error",
+                "INVALID_RESPONSE": "badge-warning",
+            }
+            cat_class = category_colors.get(telemetry.error_category, "badge-info")
+            error_category = f'<span class="badge {cat_class}">{telemetry.error_category}</span>'
+        
+        # Format retry info
+        retry_info = "-"
+        if telemetry.retry_count and telemetry.retry_count > 0:
+            retry_info = f'<span class="badge badge-warning">{telemetry.retry_count} retries</span>'
         
         return HTML_TELEMETRY_ROW.format(
             id=telemetry.id,
@@ -907,7 +967,8 @@ class AdminServer:
             badge_class=badge_class,
             results_count=telemetry.results_count,
             duration=telemetry.total_duration_ms or "-",
-            error_summary=error_summary,
+            error_category=error_category,
+            retry_info=retry_info,
         )
 
     async def handle_user_add(self, request: web.Request) -> web.Response:

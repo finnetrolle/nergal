@@ -173,6 +173,14 @@ class WebSearchTelemetry(BaseModel):
     provider_name: str | None = None
     tool_used: str | None = None
 
+    # Retry information
+    retry_count: int = 0
+    retry_reasons: list[str] = Field(default_factory=list)
+    total_retry_delay_ms: int | None = None
+
+    # Error classification
+    error_category: str | None = None  # transient, auth, quota, service_error, etc.
+
     created_at: datetime | None = None
 
     def is_success(self) -> bool:

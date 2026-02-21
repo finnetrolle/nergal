@@ -132,6 +132,79 @@ groups:
           summary: "Web search latency is high"
           description: "95th percentile web search latency is {{ $value | humanizeDuration }}."
 
+      - alert: WebSearchHighFailureRate
+        expr: |
+          (
+            rate(bot_web_search_requests_total{status="error"}[5m])
+            /
+            rate(bot_web_search_requests_total[5m])
+          ) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High web search failure rate"
+          description: "{{ $value | humanizePercentage }} of web searches are failing."
+
+      - alert: WebSearchOutage
+        expr: |
+          (
+            rate(bot_web_search_requests_total{status="error"}[5m])
+            /
+            rate(bot_web_search_requests_total[5m])
+          ) > 0.5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Web search service outage"
+          description: "More than 50% of web searches are failing. Check API key and provider status."
+
+      - alert: WebSearchSlowResponses
+        expr: |
+          histogram_quantile(0.95,
+            rate(bot_web_search_duration_seconds_bucket[5m])
+          ) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Web search responses are slow"
+          description: "P95 latency is {{ $value | humanizeDuration }}. Users may be experiencing delays."
+
+      - alert: WebSearchNoTraffic
+        expr: |
+          rate(bot_web_search_requests_total[5m]) == 0
+          and
+          rate(bot_messages_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "No web search traffic despite message activity"
+          description: "No web searches in the last 10 minutes while messages are being processed. Circuit breaker may be open."
+
+      - alert: WebSearchCircuitBreakerOpen
+        expr: bot_web_search_circuit_breaker_state == 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Web search circuit breaker is open"
+          description: "The web search circuit breaker has been open for more than 1 minute. Searches are being rejected."
+
+      - alert: WebSearchHighRetryRate
+        expr: |
+          rate(bot_web_search_retries_total[5m])
+          /
+          rate(bot_web_search_requests_total[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High web search retry rate"
+          description: "More than 20% of searches require retries. This indicates transient issues with the search provider."
+
       # ===========================================================================
       # STT Alerts
       # ===========================================================================

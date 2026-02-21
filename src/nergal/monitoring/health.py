@@ -232,6 +232,8 @@ async def check_telegram_health(bot_application: Any) -> ComponentHealth:
 async def check_web_search_health(web_search_provider: Any | None) -> ComponentHealth:
     """Check web search provider health.
 
+    Includes circuit breaker status and recent success rate.
+
     Args:
         web_search_provider: The web search provider instance or None.
 
@@ -247,12 +249,63 @@ async def check_web_search_health(web_search_provider: Any | None) -> ComponentH
         )
 
     try:
-        # Check if the provider is configured
+        details: dict[str, Any] = {"enabled": True}
+
+        # Check circuit breaker status
+        if hasattr(web_search_provider, "_circuit_breaker"):
+            cb = web_search_provider._circuit_breaker
+            cb_state = cb.state.value  # type: ignore
+            details["circuit_breaker_state"] = cb_state
+
+            if cb_state == "open":
+                return ComponentHealth(
+                    name="web_search",
+                    status=HealthStatus.UNHEALTHY,
+                    message="Web search circuit breaker is open - too many recent failures",
+                    details=details,
+                )
+            elif cb_state == "half_open":
+                return ComponentHealth(
+                    name="web_search",
+                    status=HealthStatus.DEGRADED,
+                    message="Web search is recovering from failures",
+                    details=details,
+                )
+
+        # Check provider name
+        if hasattr(web_search_provider, "provider_name"):
+            details["provider"] = web_search_provider.provider_name
+
+        # Try to get recent telemetry for success rate
+        try:
+            from nergal.database.repositories import WebSearchTelemetryRepository
+
+            repo = WebSearchTelemetryRepository()
+            # This is a quick check - we don't want to block
+            import asyncio
+
+            recent = asyncio.get_event_loop().run_until_complete(repo.get_recent(limit=20))
+            if recent:
+                successes = sum(1 for r in recent if r.is_success())
+                success_rate = successes / len(recent)
+                details["recent_success_rate"] = round(success_rate, 2)
+
+                if success_rate < 0.5:
+                    return ComponentHealth(
+                        name="web_search",
+                        status=HealthStatus.DEGRADED,
+                        message=f"Web search success rate is low ({success_rate:.0%})",
+                        details=details,
+                    )
+        except Exception:
+            # Telemetry check failed, don't fail the health check
+            pass
+
         return ComponentHealth(
             name="web_search",
             status=HealthStatus.HEALTHY,
             message="Web search provider ready",
-            details={"enabled": True},
+            details=details,
         )
     except Exception as e:
         return ComponentHealth(
@@ -261,6 +314,107 @@ async def check_web_search_health(web_search_provider: Any | None) -> ComponentH
             message=f"Web search provider error: {str(e)}",
             details={"error": str(e), "enabled": True},
         )
+
+
+async def check_web_search_health_detailed(
+    web_search_provider: Any | None,
+    include_telemetry: bool = True,
+) -> dict[str, Any]:
+    """Get detailed web search health information.
+
+    This provides more detailed health information for admin endpoints.
+
+    Args:
+        web_search_provider: The web search provider instance or None.
+        include_telemetry: Whether to include telemetry statistics.
+
+    Returns:
+        Dictionary with detailed health information.
+    """
+    if web_search_provider is None:
+        return {
+            "enabled": False,
+            "status": "disabled",
+            "message": "Web search is not configured",
+        }
+
+    result: dict[str, Any] = {
+        "enabled": True,
+        "provider": getattr(web_search_provider, "provider_name", "unknown"),
+    }
+
+    # Circuit breaker info
+    if hasattr(web_search_provider, "_circuit_breaker"):
+        cb = web_search_provider._circuit_breaker
+        result["circuit_breaker"] = {
+            "state": cb.state.value,  # type: ignore
+            "failure_count": cb._failure_count,
+            "failure_threshold": cb.failure_threshold,
+            "recovery_timeout_seconds": cb.recovery_timeout_seconds,
+        }
+
+    # Retry config
+    if hasattr(web_search_provider, "_retry_config"):
+        rc = web_search_provider._retry_config
+        result["retry_config"] = {
+            "max_retries": rc.max_retries,
+            "base_delay_ms": rc.base_delay_ms,
+            "max_delay_ms": rc.max_delay_ms,
+        }
+
+    # Telemetry stats
+    if include_telemetry:
+        try:
+            from nergal.database.repositories import WebSearchTelemetryRepository
+
+            repo = WebSearchTelemetryRepository()
+            recent = await repo.get_recent(limit=100)
+
+            if recent:
+                successes = [r for r in recent if r.is_success()]
+                failures = [r for r in recent if r.is_error()]
+
+                result["telemetry"] = {
+                    "recent_searches": len(recent),
+                    "success_count": len(successes),
+                    "failure_count": len(failures),
+                    "success_rate": round(len(successes) / len(recent), 2) if recent else 0,
+                    "avg_response_time_ms": (
+                        sum(r.api_response_time_ms or 0 for r in successes) / len(successes)
+                        if successes
+                        else None
+                    ),
+                }
+
+                # Error breakdown
+                error_categories: dict[str, int] = {}
+                for r in failures:
+                    if r.error_category:
+                        error_categories[r.error_category] = error_categories.get(r.error_category, 0) + 1
+                if error_categories:
+                    result["telemetry"]["error_categories"] = error_categories
+
+        except Exception as e:
+            result["telemetry_error"] = str(e)
+
+    # Determine overall status
+    cb_state = result.get("circuit_breaker", {}).get("state", "closed")
+    if cb_state == "open":
+        result["status"] = "unhealthy"
+        result["message"] = "Circuit breaker is open"
+    elif cb_state == "half_open":
+        result["status"] = "degraded"
+        result["message"] = "Circuit breaker is half-open (recovering)"
+    else:
+        success_rate = result.get("telemetry", {}).get("success_rate", 1.0)
+        if success_rate < 0.5:
+            result["status"] = "degraded"
+            result["message"] = f"Low success rate ({success_rate:.0%})"
+        else:
+            result["status"] = "healthy"
+            result["message"] = "Web search is operating normally"
+
+    return result
 
 
 async def check_stt_health(stt_provider: Any | None) -> ComponentHealth:
