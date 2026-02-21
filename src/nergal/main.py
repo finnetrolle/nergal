@@ -218,6 +218,7 @@ class BotApplication:
         """Run database migrations for schema updates."""
         try:
             from nergal.database.connection import get_database
+            from nergal.database.migrations import run_migrations
             
             db = get_database()
             
@@ -235,6 +236,12 @@ class BotApplication:
                 END $$;
             """
             await db.execute(migration_sql)
+            
+            # Run structured migrations
+            applied = await run_migrations(db)
+            if applied:
+                self._logger.info("Applied database migrations", migrations=applied)
+            
             self._logger.info("Database migrations completed successfully")
         except Exception as e:
             self._logger.warning(
