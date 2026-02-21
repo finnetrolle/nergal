@@ -38,6 +38,7 @@ Rules:
 3. Queries should be concise and focused
 4. Queries should be in the same language as the user's question
 5. Return ONLY a JSON array of strings, nothing else
+6. IMPORTANT: If the question is about location-specific information (weather, events, places) and a user location is provided, ALWAYS include that location in the search query
 
 CRITICAL: Do NOT generate multiple queries for the same topic. One well-formed query is sufficient.
 
@@ -61,6 +62,9 @@ Output: ["Champions League 2024 winner"]
 User: "Какие новости в России и в мире сегодня?"
 Output: ["новости Россия сегодня", "мировые новости сегодня"]
 (TWO queries because TWO different topics - domestic vs world news)
+
+User context (use this to infer location if not explicitly mentioned in the question):
+{user_context}
 
 Now generate search queries for this user question:
 {question}"""
@@ -220,7 +224,45 @@ class WebSearchAgent(BaseAgent):
 
         return unique_queries if unique_queries else queries[:1]
 
-    async def _generate_search_queries(self, message: str) -> list[str]:
+    def _extract_user_context(self, context: dict[str, Any] | None) -> str:
+        """Extract user context information for location-aware search queries.
+
+        Args:
+            context: Current dialog context with user profile information.
+
+        Returns:
+            Formatted user context string for the prompt.
+        """
+        if not context:
+            return "No user context available."
+
+        context_parts = []
+
+        # Try to get profile summary from memory
+        memory = context.get("memory", {})
+        profile_summary = memory.get("profile_summary", "")
+        if profile_summary and profile_summary != "Информация о пользователе отсутствует.":
+            context_parts.append(f"User profile: {profile_summary}")
+
+        # Try to get user profile directly
+        user_profile = context.get("user_profile", {})
+        if user_profile:
+            # Extract location-related fields
+            location_fields = ["city", "город", "location", "место", "address", "адрес"]
+            for field in location_fields:
+                if field in user_profile:
+                    value = user_profile[field]
+                    if value and isinstance(value, str):
+                        context_parts.append(f"User {field}: {value}")
+                        break  # Only use first matching location field
+
+        if context_parts:
+            return "\n".join(context_parts)
+        return "No specific location information available."
+
+    async def _generate_search_queries(
+        self, message: str, context: dict[str, Any] | None = None
+    ) -> list[str]:
         """Generate optimal search queries using LLM.
 
         This method uses the LLM to analyze the user's question and
@@ -228,11 +270,16 @@ class WebSearchAgent(BaseAgent):
 
         Args:
             message: User's message.
+            context: Current dialog context with user profile information.
 
         Returns:
             List of search queries.
         """
-        prompt = SEARCH_QUERY_GENERATION_PROMPT.format(question=message)
+        # Extract user context for location-aware queries
+        user_context = self._extract_user_context(context)
+        prompt = SEARCH_QUERY_GENERATION_PROMPT.format(
+            question=message, user_context=user_context
+        )
 
         messages = [
             LLMMessage(role=MessageRole.USER, content=prompt),
@@ -360,7 +407,7 @@ class WebSearchAgent(BaseAgent):
             # Step 1: Generate search queries using LLM
             telemetry.query_generation_start_ms = time.time()
             try:
-                search_queries = await self._generate_search_queries(message)
+                search_queries = await self._generate_search_queries(message, context)
                 telemetry.query_generation_method = "llm"
             except Exception as e:
                 logger.warning(f"LLM query generation failed, using fallback: {e}")
