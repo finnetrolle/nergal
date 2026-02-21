@@ -537,10 +537,17 @@ class ZaiMcpHttpSearchProvider(BaseSearchProvider):
 
             telemetry.tool_used = tool_name
 
+            # Build search arguments with location parameter
+            # Default to "us" for better results for Russian/European users
+            search_args = {
+                "search_query": request.query,
+                "count": request.count,
+                "location": "us",  # Use US region to avoid Chinese-only results
+            }
             result = await self._call_tool(
                 client,
                 tool_name,
-                {"search_query": request.query, "count": request.count},
+                search_args,
                 telemetry,
             )
 

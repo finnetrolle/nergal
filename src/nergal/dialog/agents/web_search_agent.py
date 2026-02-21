@@ -36,9 +36,10 @@ Rules:
 1. Generate ONLY ONE search query unless the question asks for clearly DIFFERENT information
 2. Each query must search for UNIQUE, NON-OVERLAPPING information - never generate synonyms or rephrasings of the same query
 3. Queries should be concise and focused
-4. Queries should be in the same language as the user's question
-5. Return ONLY a JSON array of strings, nothing else
-6. IMPORTANT: If the question is about location-specific information (weather, events, places) and a user location is provided, ALWAYS include that location in the search query
+4. IMPORTANT: For WEATHER queries, ALWAYS use ENGLISH (e.g., "weather Moscow today" not "погода Москва сегодня")
+5. For other topics, queries should be in the same language as the user's question
+6. Return ONLY a JSON array of strings, nothing else
+7. IMPORTANT: If the question is about location-specific information (weather, events, places) and a user location is provided, ALWAYS include that location in the search query
 
 CRITICAL: Do NOT generate multiple queries for the same topic. One well-formed query is sufficient.
 
@@ -48,8 +49,12 @@ Output: ["weather Moscow today", "weather St. Petersburg today"]
 ( TWO queries because TWO different cities - this is correct)
 
 User: "Какая погода будет в Питере завтра утром?"
-Output: ["погода Санкт-Петербург завтра утром"]
-(ONE query is enough - do NOT add "прогноз погоды Питер завтра" or similar)
+Output: ["weather Saint Petersburg tomorrow morning"]
+(NOTE: English for weather queries, even if question is in Russian)
+
+User: "Какая сегодня погода?"
+Output: ["weather today"]
+(User context will provide location - use English for weather)
 
 User: "Сравни iPhone 15 и Samsung Galaxy S24"
 Output: ["iPhone 15 vs Samsung Galaxy S24 сравнение"]
