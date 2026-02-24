@@ -116,12 +116,12 @@ class BotApplication:
     async def initialize_memory(self) -> None:
         """Initialize the memory service and database connection."""
         try:
-            from nergal.database.connection import create_pool, get_database
+            from nergal.container import init_database
 
             settings = self._settings
 
-            # Create database connection pool
-            await create_pool(settings.database)
+            # Initialize database connection pool through DI container
+            db = await init_database()
             self._logger.info(
                 "Database connection pool created",
                 host=settings.database.host,
@@ -129,7 +129,7 @@ class BotApplication:
             )
 
             # Run database migrations (always run for integrations)
-            await self._run_database_migrations()
+            await self._run_database_migrations(db)
 
             # Initialize memory service in dialog manager (if enabled)
             if settings.memory.long_term_enabled:
@@ -155,13 +155,14 @@ class BotApplication:
             # Continue without memory - it's not critical for bot operation
             self._logger.warning("Bot will continue without persistent memory")
 
-    async def _run_database_migrations(self) -> None:
-        """Run database migrations for schema updates."""
-        try:
-            from nergal.database.connection import get_database
-            from nergal.database.migrations import run_migrations
+    async def _run_database_migrations(self, db) -> None:
+        """Run database migrations for schema updates.
 
-            db = get_database()
+        Args:
+            db: DatabaseConnection instance from DI container.
+        """
+        try:
+            from nergal.database.migrations import run_migrations
 
             # Migration 1: Add is_allowed column to users table if not exists
             migration_sql = """
@@ -194,9 +195,9 @@ class BotApplication:
     async def shutdown_memory(self) -> None:
         """Shutdown the memory service and close database connections."""
         try:
-            from nergal.database.connection import close_pool
+            from nergal.container import shutdown_database
 
-            await close_pool()
+            await shutdown_database()
             self._logger.info("Database connections closed")
         except Exception as e:
             self._logger.error(

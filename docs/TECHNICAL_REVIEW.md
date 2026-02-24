@@ -142,13 +142,70 @@ reset_container()
 
 ## Pending Improvements
 
-### Database Connection Pool Management
+### ✅ Database Connection Pool Management (2026-02-24)
 
-**Status**: Pending
+**Status**: Completed
 
-**Problem**: Database connection pool is managed with global variables in [`src/nergal/database/connection.py`](src/nergal/database/connection.py).
+**Problem**: Database connection pool was managed with global variables in [`src/nergal/database/connection.py`](src/nergal/database/connection.py), making testing difficult and violating DI principles.
 
-**Proposed Solution**: Integrate database pool lifecycle into DI container with async initialization.
+**Solution**: Integrated database pool lifecycle into DI container with async initialization.
+
+**Changes Made**:
+
+1. **Refactored [`src/nergal/database/connection.py`](src/nergal/database/connection.py)**
+   - Removed global `_pool` and `_db_connection` singleton variables
+   - `DatabaseConnection` class now manages its own pool internally
+   - Added `is_connected` property to check pool status
+   - Added safety checks in `connect()` and `disconnect()` for idempotency
+   - Legacy functions (`create_pool`, `get_pool`, `close_pool`, `get_connection`, `get_database`) marked as deprecated with warnings
+   - Clear separation between class-based DI approach and deprecated global functions
+
+2. **Updated [`src/nergal/container.py`](src/nergal/container.py)**
+   - Added async lifecycle management functions:
+     - `init_database()` - Initialize connection pool at startup
+     - `shutdown_database()` - Gracefully close connections at shutdown
+   - Updated `_create_memory_service()` to accept `database` parameter for proper DI
+   - Updated `memory_service` provider to inject database dependency
+
+3. **Updated [`src/nergal/main.py`](src/nergal/main.py)**
+   - `initialize_memory()` now uses `init_database()` from container
+   - `shutdown_memory()` now uses `shutdown_database()` from container
+   - `_run_database_migrations()` accepts database instance as parameter
+
+**Benefits**:
+- **Testability**: Database connections can be easily mocked in tests
+- **Lifecycle management**: Clear control over connection pool initialization/shutdown
+- **DI integration**: Database is now properly integrated with the DI container
+- **Backward compatibility**: Legacy functions still work with deprecation warnings
+
+**Usage Example**:
+```python
+# Production usage (through DI container)
+from nergal.container import get_container, init_database, shutdown_database
+
+# At startup
+await init_database()
+
+# Get database from container
+container = get_container()
+db = container.database()
+
+# At shutdown
+await shutdown_database()
+
+# Testing with mocks
+from nergal.container import override_container, reset_container
+from unittest.mock import AsyncMock
+
+container = Container()
+mock_db = AsyncMock()
+container.database.override(mock_db)
+override_container(container)
+
+# ... run tests ...
+
+reset_container()
+```
 
 ---
 

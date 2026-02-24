@@ -8,6 +8,11 @@ The container uses:
 - Singleton providers for stateful services (database, memory)
 - Factory providers for stateless services (LLM, STT, web search)
 - Async providers for async initialization
+
+Database Connection Lifecycle:
+- The database provider creates a DatabaseConnection instance
+- Call init_database() at startup to establish the connection pool
+- Call shutdown_database() at shutdown to close connections gracefully
 """
 
 from __future__ import annotations
@@ -74,9 +79,10 @@ class Container(containers.DeclarativeContainer):
     
     # ============== Memory Service ==============
     
-    # Memory service - Singleton
+    # Memory service - Singleton (depends on database)
     memory_service = providers.Singleton(
-        lambda: _create_memory_service(),
+        lambda db: _create_memory_service(db),
+        db=database,
     )
     
     # ============== Dialog Manager ==============
@@ -189,18 +195,22 @@ def _create_database(settings: "Settings") -> "DatabaseConnection":
     return DatabaseConnection(settings.database)
 
 
-def _create_memory_service() -> "MemoryService | None":
-    """Create memory service instance."""
+def _create_memory_service(database: "DatabaseConnection") -> "MemoryService | None":
+    """Create memory service instance.
+
+    Args:
+        database: DatabaseConnection instance from DI container.
+    """
     from nergal.memory.service import MemoryService
-    
+
     settings = _load_settings()
-    
+
     if not settings.memory.long_term_enabled:
         logger.info("Memory service disabled")
         return None
-    
+
     logger.info("Creating memory service")
-    return MemoryService()
+    return MemoryService(db=database)
 
 
 def _create_dialog_manager(
@@ -297,3 +307,46 @@ def reset_container() -> None:
     """Reset the global container (useful for testing)."""
     global _container
     _container = None
+
+
+# ============== Async Lifecycle Management ==============
+
+async def init_database() -> "DatabaseConnection":
+    """Initialize the database connection pool.
+
+    This should be called once at application startup after
+    the container is initialized.
+
+    Returns:
+        The initialized DatabaseConnection instance.
+
+    Raises:
+        RuntimeError: If container is not initialized.
+    """
+    container = get_container()
+    db = container.database()
+
+    if not db.is_connected:
+        logger.info("Initializing database connection pool")
+        await db.connect()
+        logger.info("Database connection pool initialized")
+
+    return db
+
+
+async def shutdown_database() -> None:
+    """Shutdown the database connection pool.
+
+    This should be called at application shutdown to gracefully
+    close all database connections.
+    """
+    global _container
+
+    if _container is None:
+        return
+
+    db = _container.database()
+    if db is not None and db.is_connected:
+        logger.info("Shutting down database connection pool")
+        await db.disconnect()
+        logger.info("Database connection pool shut down")
