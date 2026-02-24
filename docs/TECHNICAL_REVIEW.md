@@ -4,6 +4,72 @@ This document tracks technical debt, code quality issues, and completed improvem
 
 ## Completed Improvements
 
+### ✅ main.py Refactoring - Handler Extraction (2026-02-24)
+
+**Status**: Completed
+
+**Problem**: The [`src/nergal/main.py`](src/nergal/main.py) file was 913 lines long and contained multiple concerns mixed together:
+- Command handlers (`/start`, `/help`, `/status`, `/todoist_token`, `/todoist_disconnect`)
+- Message handlers (text and voice)
+- Group chat logic (`should_respond_in_group`, `clean_message_text`)
+- Bot application lifecycle management
+- Main entry point
+
+This made the file difficult to maintain, test, and understand.
+
+**Solution**: Extracted handlers into a dedicated module with clear separation of concerns.
+
+**Changes Made**:
+
+1. **Created [`src/nergal/handlers/__init__.py`](src/nergal/handlers/__init__.py)**
+   - New module for all Telegram bot handlers
+   - Clean exports for all handler functions
+
+2. **Created [`src/nergal/handlers/commands.py`](src/nergal/handlers/commands.py)**
+   - Extracted all command handlers:
+     - `start_command` - Handles `/start`
+     - `help_command` - Handles `/help`
+     - `status_command` - Handles `/status` for health checks
+     - `todoist_token_command` - Handles `/todoist_token` for Todoist integration
+     - `todoist_disconnect_command` - Handles `/todoist_disconnect`
+
+3. **Created [`src/nergal/handlers/messages.py`](src/nergal/handlers/messages.py)**
+   - Extracted message handlers:
+     - `handle_message` - Processes text messages
+     - `handle_voice` - Processes voice messages with STT
+   - Extracted utility functions:
+     - `should_respond_in_group` - Group chat response logic
+     - `clean_message_text` - Removes bot mentions from messages
+
+4. **Refactored [`src/nergal/main.py`](src/nergal/main.py)**
+   - Reduced from 913 lines to 371 lines (59% reduction)
+   - Now imports handlers from `nergal.handlers`
+   - Contains only:
+     - `BotApplication` class (lifecycle management)
+     - `HttpxLogFilter` class (logging utility)
+     - `configure_logging` function
+     - `main` entry point
+   - Cleaner imports and better organization
+
+**Benefits**:
+- **Maintainability**: Each file has a single responsibility
+- **Testability**: Handlers can be tested independently
+- **Readability**: Smaller files are easier to understand
+- **Reusability**: Handlers can be imported and reused
+
+**File Structure After Refactoring**:
+```
+src/nergal/
+├── main.py                    # BotApplication + entry point (371 lines)
+├── handlers/
+│   ├── __init__.py           # Module exports (27 lines)
+│   ├── commands.py           # Command handlers (156 lines)
+│   └── messages.py           # Message handlers + utilities (435 lines)
+└── ...
+```
+
+---
+
 ### ✅ DI Container Implementation (2026-02-24)
 
 **Status**: Completed
