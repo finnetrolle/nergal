@@ -89,7 +89,7 @@ async def todoist_token_command(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     try:
-        from nergal.database.repositories import UserIntegrationRepository
+        from nergal.container import get_container
         from nergal.integrations.todoist import TodoistService
 
         # Test the token
@@ -101,8 +101,9 @@ async def todoist_token_command(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text("❌ Не удалось подключиться к Todoist. Проверьте правильность токена.")
             return
 
-        # Store the token
-        repo = UserIntegrationRepository()
+        # Store the token using DI container
+        container = get_container()
+        repo = container.user_integration_repository()
         existing = await repo.get_by_user_and_type(user_id, "todoist")
 
         if existing:
@@ -140,9 +141,11 @@ async def todoist_disconnect_command(update: Update, context: ContextTypes.DEFAU
     user_id = update.message.from_user.id
 
     try:
-        from nergal.database.repositories import UserIntegrationRepository
+        from nergal.container import get_container
 
-        repo = UserIntegrationRepository()
+        # Use DI container for repository
+        container = get_container()
+        repo = container.user_integration_repository()
         deleted = await repo.delete(user_id, "todoist")
 
         if deleted:

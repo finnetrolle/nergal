@@ -8,11 +8,6 @@ from typing import Optional
 from aiohttp import web
 
 from nergal.auth import AuthorizationService, get_auth_service
-from nergal.database.repositories import (
-    ConversationRepository,
-    UserRepository,
-    WebSearchTelemetryRepository,
-)
 from nergal.monitoring.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -577,7 +572,9 @@ class AdminServer:
         # Get user statistics with error handling
         all_stats: dict[int, dict[str, int]] = {}
         try:
-            conv_repo = ConversationRepository()
+            from nergal.container import get_container
+            container = get_container()
+            conv_repo = container.conversation_repository()
             all_stats = await conv_repo.get_all_users_stats()
         except Exception as e:
             logger.warning("Could not fetch user statistics", error=str(e))
@@ -657,7 +654,9 @@ class AdminServer:
 
     async def handle_telemetry_dashboard(self, request: web.Request) -> web.Response:
         """Show telemetry dashboard with recent searches."""
-        repo = WebSearchTelemetryRepository()
+        from nergal.container import get_container
+        container = get_container()
+        repo = container.web_search_telemetry_repository()
         
         # Get stats and recent searches
         stats = await repo.get_stats(days=7)
@@ -689,7 +688,9 @@ class AdminServer:
 
     async def handle_telemetry_failures(self, request: web.Request) -> web.Response:
         """Show failed searches."""
-        repo = WebSearchTelemetryRepository()
+        from nergal.container import get_container
+        container = get_container()
+        repo = container.web_search_telemetry_repository()
         
         stats = await repo.get_stats(days=7)
         failures = await repo.get_failures(limit=100)
@@ -719,7 +720,9 @@ class AdminServer:
 
     async def handle_telemetry_empty(self, request: web.Request) -> web.Response:
         """Show searches with empty results."""
-        repo = WebSearchTelemetryRepository()
+        from nergal.container import get_container
+        container = get_container()
+        repo = container.web_search_telemetry_repository()
         
         stats = await repo.get_stats(days=7)
         empty = await repo.get_empty_results(limit=100)
@@ -749,7 +752,9 @@ class AdminServer:
 
     async def handle_telemetry_stats(self, request: web.Request) -> web.Response:
         """Show telemetry statistics."""
-        repo = WebSearchTelemetryRepository()
+        from nergal.container import get_container
+        container = get_container()
+        repo = container.web_search_telemetry_repository()
         
         days = int(request.query.get("days", 30))
         stats = await repo.get_stats(days=7)
@@ -829,9 +834,11 @@ class AdminServer:
         """Show detailed telemetry for a single search."""
         import json
         from uuid import UUID
+        from nergal.container import get_container
         
         telemetry_id = UUID(request.match_info["telemetry_id"])
-        repo = WebSearchTelemetryRepository()
+        container = get_container()
+        repo = container.web_search_telemetry_repository()
         
         telemetry = await repo.get_by_id(telemetry_id)
         if not telemetry:
@@ -1006,7 +1013,9 @@ class AdminServer:
         user_id = int(request.match_info["user_id"])
         
         try:
-            repo = UserRepository()
+            from nergal.container import get_container
+            container = get_container()
+            repo = container.user_repository()
             result = await repo.set_allowed(user_id, True)
             if result:
                 logger.info("User authorized via admin panel", user_id=user_id)

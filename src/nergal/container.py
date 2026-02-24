@@ -13,6 +13,11 @@ Database Connection Lifecycle:
 - The database provider creates a DatabaseConnection instance
 - Call init_database() at startup to establish the connection pool
 - Call shutdown_database() at shutdown to close connections gracefully
+
+Repository Pattern:
+- All repositories are provided as Factory providers
+- Repositories receive database connection via constructor injection
+- Use container.user_repository(), container.profile_repository(), etc.
 """
 
 from __future__ import annotations
@@ -30,6 +35,13 @@ if TYPE_CHECKING:
     from nergal.dialog.manager import DialogManager
     from nergal.memory.service import MemoryService
     from nergal.database.connection import DatabaseConnection
+    from nergal.database.repositories import (
+        UserRepository,
+        ProfileRepository,
+        ConversationRepository,
+        WebSearchTelemetryRepository,
+        UserIntegrationRepository,
+    )
     from nergal.monitoring.metrics import MetricsServer
 
 logger = logging.getLogger(__name__)
@@ -75,6 +87,38 @@ class Container(containers.DeclarativeContainer):
     database = providers.Singleton(
         lambda settings: _create_database(settings),
         settings=settings,
+    )
+    
+    # ============== Repositories ==============
+    
+    # User repository - Factory (receives db via constructor injection)
+    user_repository = providers.Factory(
+        lambda db: _create_user_repository(db),
+        db=database,
+    )
+    
+    # Profile repository - Factory
+    profile_repository = providers.Factory(
+        lambda db: _create_profile_repository(db),
+        db=database,
+    )
+    
+    # Conversation repository - Factory
+    conversation_repository = providers.Factory(
+        lambda db: _create_conversation_repository(db),
+        db=database,
+    )
+    
+    # Web search telemetry repository - Factory
+    web_search_telemetry_repository = providers.Factory(
+        lambda db: _create_web_search_telemetry_repository(db),
+        db=database,
+    )
+    
+    # User integration repository - Factory
+    user_integration_repository = providers.Factory(
+        lambda db: _create_user_integration_repository(db),
+        db=database,
     )
     
     # ============== Memory Service ==============
@@ -193,6 +237,38 @@ def _create_database(settings: "Settings") -> "DatabaseConnection":
     )
     
     return DatabaseConnection(settings.database)
+
+
+# ============== Repository Factory Functions ==============
+
+def _create_user_repository(db: "DatabaseConnection") -> "UserRepository":
+    """Create user repository instance with injected database connection."""
+    from nergal.database.repositories import UserRepository
+    return UserRepository(db=db)
+
+
+def _create_profile_repository(db: "DatabaseConnection") -> "ProfileRepository":
+    """Create profile repository instance with injected database connection."""
+    from nergal.database.repositories import ProfileRepository
+    return ProfileRepository(db=db)
+
+
+def _create_conversation_repository(db: "DatabaseConnection") -> "ConversationRepository":
+    """Create conversation repository instance with injected database connection."""
+    from nergal.database.repositories import ConversationRepository
+    return ConversationRepository(db=db)
+
+
+def _create_web_search_telemetry_repository(db: "DatabaseConnection") -> "WebSearchTelemetryRepository":
+    """Create web search telemetry repository instance with injected database connection."""
+    from nergal.database.repositories import WebSearchTelemetryRepository
+    return WebSearchTelemetryRepository(db=db)
+
+
+def _create_user_integration_repository(db: "DatabaseConnection") -> "UserIntegrationRepository":
+    """Create user integration repository instance with injected database connection."""
+    from nergal.database.repositories import UserIntegrationRepository
+    return UserIntegrationRepository(db=db)
 
 
 def _create_memory_service(database: "DatabaseConnection") -> "MemoryService | None":

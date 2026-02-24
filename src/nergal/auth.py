@@ -7,9 +7,6 @@ to use the bot and manage the allowed users list.
 import logging
 from typing import Literal
 
-from nergal.database.connection import get_database
-from nergal.database.repositories import UserRepository
-
 logger = logging.getLogger(__name__)
 
 
@@ -20,13 +17,18 @@ class AuthorizationService:
     to use the bot and manage the list of allowed users.
     """
 
-    def __init__(self, user_repo: UserRepository | None = None) -> None:
+    def __init__(self, user_repo: "UserRepository | None" = None) -> None:
         """Initialize the authorization service.
 
         Args:
-            user_repo: User repository. If not provided, creates one with default database.
+            user_repo: User repository. If not provided, uses DI container.
         """
-        self._user_repo = user_repo or UserRepository()
+        if user_repo is not None:
+            self._user_repo = user_repo
+        else:
+            from nergal.container import get_container
+            container = get_container()
+            self._user_repo = container.user_repository()
 
     async def is_user_authorized(self, user_id: int) -> bool:
         """Check if a user is authorized to use the bot.

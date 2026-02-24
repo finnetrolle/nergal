@@ -209,13 +209,84 @@ reset_container()
 
 ---
 
-### Repository Pattern Enhancement
+### ✅ Repository Pattern Enhancement (2026-02-24)
 
-**Status**: Pending
+**Status**: Completed
 
-**Problem**: Repositories in [`src/nergal/database/repositories.py`](src/nergal/database/repositories.py) create database connections internally.
+**Problem**: Repositories in [`src/nergal/database/repositories.py`](src/nergal/database/repositories.py) created database connections internally using `get_database()` singleton, making testing difficult and violating DI principles.
 
-**Proposed Solution**: Inject database connection through DI container constructor injection.
+**Solution**: Integrated repositories with DI container using constructor injection pattern.
+
+**Changes Made**:
+
+1. **Updated [`src/nergal/container.py`](src/nergal/container.py)**
+   - Added repository providers as Factory providers:
+     - `user_repository` - Factory for `UserRepository`
+     - `profile_repository` - Factory for `ProfileRepository`
+     - `conversation_repository` - Factory for `ConversationRepository`
+     - `web_search_telemetry_repository` - Factory for `WebSearchTelemetryRepository`
+     - `user_integration_repository` - Factory for `UserIntegrationRepository`
+   - Each repository receives `DatabaseConnection` via constructor injection
+   - Added factory functions for each repository type
+
+2. **Updated [`src/nergal/handlers/commands.py`](src/nergal/handlers/commands.py)**
+   - `todoist_token_command()` now uses `container.user_integration_repository()`
+   - `todoist_disconnect_command()` now uses `container.user_integration_repository()`
+
+3. **Updated [`src/nergal/monitoring/health.py`](src/nergal/monitoring/health.py)**
+   - `check_web_search_health()` now uses `container.web_search_telemetry_repository()`
+   - `check_web_search_health_detailed()` now uses `container.web_search_telemetry_repository()`
+
+4. **Updated [`src/nergal/dialog/agents/todoist_agent.py`](src/nergal/dialog/agents/todoist_agent.py)**
+   - `_get_integration_repo()` now uses `container.user_integration_repository()`
+   - Removed direct import of `UserIntegrationRepository`
+
+5. **Updated [`src/nergal/auth.py`](src/nergal/auth.py)**
+   - `AuthorizationService.__init__()` now uses `container.user_repository()`
+   - Removed direct imports of `get_database` and `UserRepository`
+
+6. **Updated [`src/nergal/admin/server.py`](src/nergal/admin/server.py)**
+   - All handlers now use DI container for repositories:
+     - `handle_users_dashboard()` uses `container.conversation_repository()`
+     - `handle_telemetry_dashboard()` uses `container.web_search_telemetry_repository()`
+     - `handle_telemetry_failures()` uses `container.web_search_telemetry_repository()`
+     - `handle_telemetry_empty()` uses `container.web_search_telemetry_repository()`
+     - `handle_telemetry_stats()` uses `container.web_search_telemetry_repository()`
+     - `handle_telemetry_detail()` uses `container.web_search_telemetry_repository()`
+     - `handle_user_allow()` uses `container.user_repository()`
+   - Removed direct imports of repository classes
+
+7. **Updated [`src/nergal/web_search/zai_mcp_http.py`](src/nergal/web_search/zai_mcp_http.py)**
+   - `_get_telemetry_repo()` now uses `container.web_search_telemetry_repository()`
+
+**Benefits**:
+- **Testability**: Repositories can be easily mocked by overriding the container
+- **Consistency**: All dependencies are managed through the same DI container
+- **Loose coupling**: Components depend on abstractions through container, not concrete implementations
+- **Single source of truth**: All repository creation logic in one place
+
+**Usage Example**:
+```python
+# Production usage
+from nergal.container import get_container
+
+container = get_container()
+user_repo = container.user_repository()
+user = await user_repo.get_by_id(123)
+
+# Testing with mocks
+from nergal.container import override_container, reset_container
+from unittest.mock import AsyncMock
+
+container = Container()
+mock_repo = AsyncMock()
+container.user_repository.override(lambda: mock_repo)
+override_container(container)
+
+# ... run tests ...
+
+reset_container()
+```
 
 ---
 
@@ -231,6 +302,12 @@ Container
 ├── stt_provider (Singleton)               │
 ├── web_search_provider (Singleton)        │
 ├── database (Singleton)                   │
+├── Repositories (Factory)                 │
+│   ├── user_repository                    │
+│   ├── profile_repository                 │
+│   ├── conversation_repository            │
+│   ├── web_search_telemetry_repository    │
+│   └── user_integration_repository        │
 ├── memory_service (Singleton)             │
 ├── dialog_manager (Singleton) ◄───────────┘
 │   └── Depends on: settings, llm_provider, web_search_provider, memory_service
@@ -251,7 +328,18 @@ main.py
               ├── stt_provider()
               │     └── LocalWhisperProvider(model, device, compute_type)
               ├── memory_service()
-              │     └── MemoryService()
+              │     └── MemoryService(db=database)
+              ├── Repositories
+              │     ├── user_repository()
+              │     │     └── UserRepository(db=database)
+              │     ├── profile_repository()
+              │     │     └── ProfileRepository(db=database)
+              │     ├── conversation_repository()
+              │     │     └── ConversationRepository(db=database)
+              │     ├── web_search_telemetry_repository()
+              │     │     └── WebSearchTelemetryRepository(db=database)
+              │     └── user_integration_repository()
+              │           └── UserIntegrationRepository(db=database)
               └── metrics_server()
                     └── MetricsServer(port)
 ```
