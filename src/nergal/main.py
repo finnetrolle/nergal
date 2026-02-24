@@ -15,6 +15,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 from nergal.auth import check_user_authorized
 from nergal.config import get_settings
+from nergal.container import get_container, init_container, Container
 from nergal.dialog import DialogManager
 from nergal.llm import create_llm_provider
 from nergal.monitoring import (
@@ -67,21 +68,18 @@ class BotApplication:
     """Telegram bot application with singleton pattern.
 
     Manages dialog manager and web search provider lifecycle.
+    This class now delegates to the DI container for dependency management.
     """
 
     _instance: "BotApplication | None" = None
 
     def __init__(self) -> None:
         """Initialize the bot application."""
-        self._dialog_manager: DialogManager | None = None
-        self._web_search_provider: ZaiMcpHttpSearchProvider | None = None
-        self._stt_provider: BaseSTTProvider | None = None
-        self._settings = get_settings()
-        self._logger = get_logger(__name__)
-        self._metrics_server: MetricsServer | None = None
+        self._container: Container | None = None
+        self._startup_time: float | None = None
         self._admin_server = None  # Admin web interface
         self._admin_runner = None  # aiohttp runner
-        self._startup_time: float | None = None
+        self._logger = get_logger(__name__)
 
     @classmethod
     def get_instance(cls) -> "BotApplication":
@@ -91,120 +89,61 @@ class BotApplication:
         return cls._instance
 
     @property
+    def container(self) -> Container:
+        """Get the DI container instance."""
+        if self._container is None:
+            self._container = get_container()
+        return self._container
+
+    @property
     def dialog_manager(self) -> DialogManager:
-        """Get or create the dialog manager instance."""
-        if self._dialog_manager is None:
-            self._dialog_manager = self._create_dialog_manager()
-        return self._dialog_manager
+        """Get or create the dialog manager instance from DI container."""
+        return self.container.dialog_manager()
 
     @property
     def web_search_provider(self) -> ZaiMcpHttpSearchProvider | None:
-        """Get or create the web search provider instance."""
-        if self._web_search_provider is None and self._settings.web_search.enabled:
-            self._web_search_provider = self._create_web_search_provider()
-        return self._web_search_provider
+        """Get or create the web search provider instance from DI container."""
+        return self.container.web_search_provider()
 
     @property
     def stt_provider(self) -> BaseSTTProvider | None:
-        """Get or create the STT provider instance."""
-        if self._stt_provider is None and self._settings.stt.enabled:
-            self._stt_provider = self._create_stt_provider()
-        return self._stt_provider
+        """Get or create the STT provider instance from DI container."""
+        return self.container.stt_provider()
 
-    def _create_stt_provider(self) -> BaseSTTProvider:
-        """Create a new STT provider instance."""
-        provider = create_stt_provider(
-            provider_type=self._settings.stt.provider,
-            model=self._settings.stt.model,
-            device=self._settings.stt.device,
-            compute_type=self._settings.stt.compute_type,
-            api_key=self._settings.stt.api_key or None,
-            timeout=self._settings.stt.timeout,
-        )
-        self._logger.info(
-            "Initialized STT provider",
-            provider=provider.provider_name,
-            model=self._settings.stt.model,
-        )
-        return provider
-
-    def _create_web_search_provider(self) -> ZaiMcpHttpSearchProvider:
-        """Create a new web search provider instance."""
-        api_key = self._settings.web_search.api_key or self._settings.llm.api_key
-        provider = ZaiMcpHttpSearchProvider(
-            api_key=api_key,
-            mcp_url=self._settings.web_search.mcp_url,
-            timeout=self._settings.web_search.timeout,
-        )
-        self._logger.info(
-            "Initialized web search provider",
-            mcp_url=self._settings.web_search.mcp_url,
-        )
-        return provider
-
-    def _create_dialog_manager(self) -> DialogManager:
-        """Create a new dialog manager instance."""
-        from nergal.dialog.agent_loader import register_configured_agents
-        
-        llm_provider = create_llm_provider(
-            provider_type=self._settings.llm.provider,
-            api_key=self._settings.llm.api_key,
-            model=self._settings.llm.model,
-            base_url=self._settings.llm.base_url,
-            temperature=self._settings.llm.temperature,
-            max_tokens=self._settings.llm.max_tokens,
-            timeout=self._settings.llm.timeout,
-        )
-        manager = DialogManager(
-            llm_provider=llm_provider,
-            style_type=self._settings.style,
-        )
-        self._logger.info(
-            "Initialized DialogManager",
-            llm_provider=llm_provider.provider_name,
-            style=self._settings.style.value,
-        )
-
-        # Register agents based on configuration
-        search_provider = self.web_search_provider
-        registered = register_configured_agents(
-            registry=manager.agent_registry,
-            settings=self._settings,
-            llm_provider=llm_provider,
-            search_provider=search_provider,
-        )
-        if registered:
-            self._logger.info("Registered agents", agents=registered)
-
-        return manager
+    @property
+    def _settings(self):
+        """Get settings from DI container."""
+        return self.container.settings()
 
     async def initialize_memory(self) -> None:
         """Initialize the memory service and database connection."""
         try:
             from nergal.database.connection import create_pool, get_database
-            from nergal.memory.service import MemoryService
+            
+            settings = self._settings
             
             # Create database connection pool
-            await create_pool(self._settings.database)
+            await create_pool(settings.database)
             self._logger.info(
                 "Database connection pool created",
-                host=self._settings.database.host,
-                database=self._settings.database.name,
+                host=settings.database.host,
+                database=settings.database.name,
             )
             
             # Run database migrations (always run for integrations)
             await self._run_database_migrations()
             
             # Initialize memory service in dialog manager (if enabled)
-            if self._settings.memory.long_term_enabled:
-                memory_service = MemoryService()
-                self.dialog_manager.set_memory_service(memory_service)
-                await self.dialog_manager.initialize_memory()
+            if settings.memory.long_term_enabled:
+                memory_service = self.container.memory_service()
+                if memory_service:
+                    self.dialog_manager.set_memory_service(memory_service)
+                    await self.dialog_manager.initialize_memory()
                 
                 self._logger.info(
                     "Memory service initialized",
-                    long_term_enabled=self._settings.memory.long_term_enabled,
-                    extraction_enabled=self._settings.memory.long_term_extraction_enabled,
+                    long_term_enabled=settings.memory.long_term_enabled,
+                    extraction_enabled=settings.memory.long_term_extraction_enabled,
                 )
             else:
                 self._logger.info("Memory service disabled, but database is available for integrations")
@@ -269,13 +208,15 @@ class BotApplication:
 
     def start_metrics_server(self) -> None:
         """Start the Prometheus metrics server."""
-        if self._settings.monitoring.enabled:
-            self._metrics_server = MetricsServer(port=self._settings.monitoring.metrics_port)
-            self._metrics_server.start()
-            self._logger.info(
-                "Metrics server started",
-                port=self._settings.monitoring.metrics_port,
-            )
+        settings = self._settings
+        if settings.monitoring.enabled:
+            metrics_server = self.container.metrics_server()
+            if metrics_server:
+                metrics_server.start()
+                self._logger.info(
+                    "Metrics server started",
+                    port=settings.monitoring.metrics_port,
+                )
 
     def set_startup_time(self) -> None:
         """Record the application startup time."""
@@ -284,7 +225,8 @@ class BotApplication:
 
     async def start_admin_server(self) -> None:
         """Start the admin web interface server."""
-        if not self._settings.auth.admin_enabled:
+        settings = self._settings
+        if not settings.auth.admin_enabled:
             return
         
         try:
@@ -292,17 +234,17 @@ class BotApplication:
             from nergal.admin.server import AdminServer
             
             self._admin_server = AdminServer(
-                port=self._settings.auth.admin_port,
+                port=settings.auth.admin_port,
             )
             self._admin_runner = web.AppRunner(self._admin_server.app)
             await self._admin_runner.setup()
-            site = web.TCPSite(self._admin_runner, "0.0.0.0", self._settings.auth.admin_port)
+            site = web.TCPSite(self._admin_runner, "0.0.0.0", settings.auth.admin_port)
             await site.start()
             
             self._logger.info(
                 "Admin web interface started",
-                port=self._settings.auth.admin_port,
-                url=f"http://localhost:{self._settings.auth.admin_port}/admin",
+                port=settings.auth.admin_port,
+                url=f"http://localhost:{settings.auth.admin_port}/admin",
             )
         except Exception as e:
             self._logger.error(
@@ -355,7 +297,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     # Run health checks
     await run_health_checks(
-        llm_provider=app.dialog_manager._llm_provider if app._dialog_manager else None,
+        llm_provider=app.dialog_manager._llm_provider if app._container else None,
         bot_application=app,
         web_search_provider=app.web_search_provider,
         stt_provider=app.stt_provider,
@@ -886,7 +828,10 @@ def main() -> None:
     """Start the bot."""
     import asyncio
 
-    settings = get_settings()
+    # Initialize DI container first
+    container = init_container()
+    
+    settings = container.settings()
 
     # Configure logging with monitoring settings
     configure_logging(
