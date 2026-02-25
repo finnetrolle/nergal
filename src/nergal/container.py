@@ -22,8 +22,9 @@ Repository Pattern:
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
+
+from nergal.monitoring.logging_config import get_logger
 
 from dependency_injector import containers, providers
 
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
     )
     from nergal.monitoring.metrics import MetricsServer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Container(containers.DeclarativeContainer):
