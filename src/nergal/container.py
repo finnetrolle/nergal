@@ -43,6 +43,7 @@ if TYPE_CHECKING:
         ConversationRepository,
         WebSearchTelemetryRepository,
         UserIntegrationRepository,
+        HealthMetricsRepository,
     )
     from nergal.monitoring.metrics import MetricsServer
 
@@ -120,6 +121,12 @@ class Container(containers.DeclarativeContainer):
     # User integration repository - Factory
     user_integration_repository = providers.Factory(
         lambda db: _create_user_integration_repository(db),
+        db=database,
+    )
+    
+    # Health metrics repository - Factory
+    health_metrics_repository = providers.Factory(
+        lambda db: _create_health_metrics_repository(db),
         db=database,
     )
     
@@ -280,6 +287,12 @@ def _create_user_integration_repository(db: "DatabaseConnection") -> "UserIntegr
     """Create user integration repository instance with injected database connection."""
     from nergal.database.repositories import UserIntegrationRepository
     return UserIntegrationRepository(db=db)
+
+
+def _create_health_metrics_repository(db: "DatabaseConnection") -> "HealthMetricsRepository":
+    """Create health metrics repository instance with injected database connection."""
+    from nergal.database.repositories import HealthMetricsRepository
+    return HealthMetricsRepository(db=db)
 
 
 def _create_memory_service(database: "DatabaseConnection") -> "MemoryService | None":

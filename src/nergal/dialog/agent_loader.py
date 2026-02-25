@@ -353,6 +353,20 @@ def _create_tech_docs_agent(
     )
 
 
+@AgentFactory.register(AgentType.HEALTH)
+def _create_health_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a HealthAgent instance."""
+    from nergal.dialog.agents.health_agent import HealthAgent
+
+    return HealthAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
 # =============================================================================
 # Configuration-based Registration
 # =============================================================================
@@ -373,6 +387,7 @@ AGENT_CONFIG_MAP: dict[str, AgentType] = {
     "knowledge_base_enabled": AgentType.KNOWLEDGE_BASE,
     "tech_docs_enabled": AgentType.TECH_DOCS,
     "todoist_enabled": AgentType.TODOIST,
+    "health_enabled": AgentType.HEALTH,
 }
 
 

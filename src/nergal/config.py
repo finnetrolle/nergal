@@ -271,6 +271,9 @@ class AgentSettings(BaseSettings):
     todoist_enabled: bool = Field(
         default=True, description="Enable TodoistAgent for task management"
     )
+    health_enabled: bool = Field(
+        default=True, description="Enable HealthAgent for health metrics tracking"
+    )
 
     # Timeout settings (in seconds)
     default_timeout: float = Field(

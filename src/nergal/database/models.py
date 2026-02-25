@@ -226,6 +226,137 @@ class UserIntegration(BaseModel):
     updated_at: datetime | None = None
 
 
+class BloodPressureMeasurement(BaseModel):
+    """Blood pressure measurement record.
+    
+    Stores a single blood pressure measurement session with three readings
+    as is standard practice for accurate blood pressure monitoring.
+    """
+    
+    id: UUID | None = None
+    user_id: int
+    
+    # Measurement time (in user's timezone, stored as UTC)
+    measured_at: datetime
+    
+    # Three consecutive readings (systolic/diastolic in mmHg)
+    # Reading 1
+    systolic_1: int
+    diastolic_1: int
+    
+    # Reading 2
+    systolic_2: int
+    diastolic_2: int
+    
+    # Reading 3
+    systolic_3: int
+    diastolic_3: int
+    
+    # Calculated averages (stored for quick retrieval)
+    systolic_avg: float
+    diastolic_avg: float
+    
+    # Optional notes
+    notes: str | None = None
+    
+    # User's timezone at time of measurement
+    user_timezone: str | None = None
+    
+    created_at: datetime | None = None
+    
+    @property
+    def is_valid_reading(self) -> bool:
+        """Check if systolic is greater than diastolic for all readings.
+        
+        Physiologically, systolic should always be higher than diastolic.
+        Returns False if any reading has systolic <= diastolic.
+        """
+        return (
+            self.systolic_1 > self.diastolic_1 and
+            self.systolic_2 > self.diastolic_2 and
+            self.systolic_3 > self.diastolic_3 and
+            self.systolic_avg > self.diastolic_avg
+        )
+    
+    @property
+    def has_extreme_values(self) -> bool:
+        """Check if any values are in extreme/dangerous ranges.
+        
+        Returns True if readings suggest medical emergency.
+        """
+        # Check for extremely low (shock) or extremely high (crisis) values
+        return (
+            self.systolic_avg < 90 or self.diastolic_avg < 60 or  # Too low
+            self.systolic_avg > 180 or self.diastolic_avg > 120   # Crisis level
+        )
+    
+    @property
+    def category(self) -> str:
+        """Classify blood pressure category based on average values.
+        
+        Based on American Heart Association guidelines.
+        Order matters: check most severe conditions first.
+        """
+        # Hypertensive crisis - check first (most severe)
+        if self.systolic_avg > 180 or self.diastolic_avg > 120:
+            return "Гипертонический кризис"
+        # Hypertension Stage 2: ≥140 OR ≥90
+        elif self.systolic_avg >= 140 or self.diastolic_avg >= 90:
+            return "Гипертония 2 стадии"
+        # Hypertension Stage 1: 130-139 OR 80-89
+        elif self.systolic_avg >= 130 or self.diastolic_avg >= 80:
+            return "Гипертония 1 стадии"
+        # Elevated: 120-129 AND <80
+        elif self.systolic_avg >= 120 and self.diastolic_avg < 80:
+            return "Повышенное"
+        # Normal: <120 AND <80
+        else:
+            return "Нормальное"
+    
+    def to_table_row(self) -> str:
+        """Format measurement as a table row for display."""
+        return (
+            f"| {self.measured_at.strftime('%d.%m %H:%M')} | "
+            f"{self.systolic_1}/{self.diastolic_1} | "
+            f"{self.systolic_2}/{self.diastolic_2} | "
+            f"{self.systolic_3}/{self.diastolic_3} | "
+            f"**{self.systolic_avg:.0f}/{self.diastolic_avg:.0f}** |"
+        )
+
+
+class HealthReminder(BaseModel):
+    """Health reminder for scheduled notifications.
+    
+    Stores user-configured reminders for health-related tasks
+    like measuring blood pressure.
+    """
+    
+    id: UUID | None = None
+    user_id: int
+    
+    # Reminder type (blood_pressure, weight, medication, etc.)
+    reminder_type: str
+    
+    # Reminder time (hour and minute in user's timezone)
+    reminder_time: str  # Format: "HH:MM"
+    
+    # User's timezone
+    user_timezone: str | None = None
+    
+    # Whether reminder is active
+    is_active: bool = True
+    
+    # Last reminder sent
+    last_sent_at: datetime | None = None
+    
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    
+    def format_time(self) -> str:
+        """Format reminder time for display."""
+        return self.reminder_time
+
+
 class UserMemoryContext(BaseModel):
     """Complete memory context for a user, used by agents."""
 
