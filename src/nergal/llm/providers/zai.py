@@ -6,6 +6,12 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 import httpx
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from nergal.llm.base import (
     BaseLLMProvider,
@@ -19,6 +25,14 @@ from nergal.llm.base import (
 from nergal.monitoring import track_llm_request, track_tokens
 
 logger = logging.getLogger(__name__)
+
+# Retry configuration for transient errors
+retry_on_error = retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((httpx.TimeoutException, httpx.NetworkError)),
+    reraise=True,
+)
 
 # Z.ai API configuration
 ZAI_DEFAULT_BASE_URL = "https://api.z.ai/api/coding/paas/v4"
@@ -131,6 +145,7 @@ class ZaiProvider(BaseLLMProvider):
                 provider=self.provider_name,
             )
 
+    @retry_on_error
     async def generate(
         self,
         messages: list[LLMMessage],

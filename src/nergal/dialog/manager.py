@@ -4,9 +4,11 @@ This module provides the main DialogManager class that coordinates
 between agents, manages context, and handles logging.
 """
 
+import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from nergal.dialog.base import (
@@ -16,8 +18,10 @@ from nergal.dialog.base import (
     BaseAgent,
     ExecutionPlan,
     PlanStep,
+    StepResult,
 )
-from nergal.dialog.context import ContextManager, DialogContext, UserInfo
+from nergal.dialog.cache import AgentResultCache
+from nergal.dialog.context import ContextManager, DialogContext, ExecutionContext, UserInfo
 from nergal.dialog.default_agent import DefaultAgent
 from nergal.dialog.dispatcher_agent import DispatcherAgent
 from nergal.dialog.styles import StyleType
@@ -68,6 +72,7 @@ class DialogManager:
         style_type: StyleType = StyleType.DEFAULT,
         use_dispatcher: bool = True,
         memory_service: MemoryService | None = None,
+        cache: AgentResultCache | None = None,
     ) -> None:
         """Initialize the dialog manager.
 
@@ -78,6 +83,7 @@ class DialogManager:
             style_type: Response style to use for agents.
             use_dispatcher: Whether to use dispatcher for agent routing.
             memory_service: Optional memory service for persistent storage.
+            cache: Optional cache for agent results.
         """
         self.llm_provider = llm_provider
         self.agent_registry = AgentRegistry()
@@ -88,6 +94,9 @@ class DialogManager:
         # Memory services
         self._memory_service = memory_service
         self._extraction_service: MemoryExtractionService | None = None
+
+        # Agent result cache
+        self._cache = cache
 
         # Initialize dispatcher agent (will be configured with registry after agents are registered)
         self._dispatcher: DispatcherAgent | None = None
@@ -104,8 +113,36 @@ class DialogManager:
         logger.info(
             f"DialogManager initialized with provider: {llm_provider.provider_name}, "
             f"style: {style_type.value}, dispatcher: {use_dispatcher}, "
-            f"memory_enabled: {memory_service is not None}"
+            f"memory_enabled: {memory_service is not None}, "
+            f"cache_enabled: {cache is not None and cache.enabled}"
         )
+
+    def set_cache(self, cache: AgentResultCache) -> None:
+        """Set the cache for agent results.
+
+        Args:
+            cache: AgentResultCache instance.
+        """
+        self._cache = cache
+        logger.info(f"Cache configured for DialogManager (enabled: {cache.enabled})")
+
+    def get_cache_stats(self) -> dict[str, Any] | None:
+        """Get cache statistics.
+
+        Returns:
+            Cache statistics dict or None if cache is not configured.
+        """
+        if self._cache is None:
+            return None
+        stats = self._cache.get_stats()
+        return {
+            "hits": stats.hits,
+            "misses": stats.misses,
+            "evictions": stats.evictions,
+            "size": stats.size,
+            "max_size": stats.max_size,
+            "hit_rate": stats.hit_rate,
+        }
 
     def set_memory_service(self, memory_service: MemoryService) -> None:
         """Set the memory service for persistent storage.
@@ -196,7 +233,7 @@ class DialogManager:
         Returns:
             ProcessResult containing the response and metadata.
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(UTC)
 
         # Extract user info
         info = user_info or {}
@@ -311,7 +348,7 @@ class DialogManager:
                         content=final_response,
                         agent_type=final_agent_type.value if hasattr(final_agent_type, 'value') else str(final_agent_type),
                         tokens_used=total_tokens_used if total_tokens_used > 0 else None,
-                        processing_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000),
+                        processing_time_ms=int((datetime.now(UTC) - start_time).total_seconds() * 1000),
                     )
                     
                     # Extract facts from user message (async, non-blocking)
@@ -332,7 +369,7 @@ class DialogManager:
                     logger.warning(f"Memory storage error (non-critical): {mem_error}")
 
             # Calculate processing time
-            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            processing_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
             # Log successful processing
             logger.info(
@@ -360,7 +397,7 @@ class DialogManager:
             )
 
             # Return error response
-            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            processing_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
             return ProcessResult(
                 response="Извините, произошла ошибка при обработке вашего сообщения. Попробуйте позже.",
                 agent_type=AgentType.DEFAULT,
@@ -397,13 +434,17 @@ class DialogManager:
         Returns:
             PlanExecutionResult with the final response and execution details.
         """
-        import asyncio
-
         result = PlanExecutionResult(
             success=False,
             final_response="",
             missing_agents=[a.value for a in plan.missing_agents],
             missing_agents_reason=plan.missing_agents_reason,
+        )
+
+        # Create execution context for sharing data between agents
+        exec_context = ExecutionContext(
+            original_message=original_message,
+            user_context=dict(context),
         )
 
         accumulated_context = dict(context)
@@ -429,6 +470,7 @@ class DialogManager:
                     step_results=step_results,
                     history=history,
                     result=result,
+                    exec_context=exec_context,
                 )
                 if step_result:
                     step_results[step_idx] = step_result
@@ -438,15 +480,18 @@ class DialogManager:
                 # Multiple independent steps - execute in parallel
                 logger.debug(f"Executing {len(group)} steps in parallel: {group}")
                 
+                # Create a copy of context for each parallel task to avoid race conditions
+                # Each parallel step gets its own context copy to prevent concurrent modifications
                 tasks = [
                     self._execute_single_step(
                         step=plan.steps[idx],
                         step_index=idx,
                         original_message=original_message,
-                        accumulated_context=accumulated_context,
+                        accumulated_context=dict(accumulated_context),  # Copy context for each task
                         step_results=step_results,
                         history=history,
                         result=result,
+                        exec_context=exec_context,
                     )
                     for idx in group
                 ]
@@ -478,9 +523,10 @@ class DialogManager:
     def _group_steps_by_dependency(self, steps: list[PlanStep]) -> list[list[int]]:
         """Group steps by their dependency level for parallel execution.
 
-        By default, steps are executed SEQUENTIALLY (one at a time).
-        Parallel execution only happens when steps explicitly have depends_on set
-        to indicate they can run independently.
+        Steps are grouped based on their dependencies:
+        - Steps with no dependencies can run in the first group
+        - Steps with satisfied dependencies can run in subsequent groups
+        - Steps in the same parallel_group are executed together
 
         This ensures proper context passing between agents (e.g., web_search results
         are available to default agent).
@@ -494,44 +540,102 @@ class DialogManager:
         groups: list[list[int]] = []
         assigned: set[int] = set()
 
-        # First group: only the first step (or steps that explicitly depend on nothing)
-        # We start with step 0 to ensure sequential execution by default
-        if steps:
+        # First, group steps by parallel_group if specified
+        parallel_groups: dict[int, list[int]] = {}
+        for i, step in enumerate(steps):
+            if step.parallel_group is not None:
+                if step.parallel_group not in parallel_groups:
+                    parallel_groups[step.parallel_group] = []
+                parallel_groups[step.parallel_group].append(i)
+
+        # Find steps with no dependencies (can start immediately)
+        initial_steps = []
+        for i, step in enumerate(steps):
+            if not step.depends_on:  # Empty list means no dependencies
+                initial_steps.append(i)
+
+        # If we have parallel_group members with no dependencies, group them
+        if parallel_groups:
+            # Process parallel groups first
+            used_parallel_groups: set[int] = set()
+            for step_idx in initial_steps:
+                step = steps[step_idx]
+                if step.parallel_group is not None and step.parallel_group not in used_parallel_groups:
+                    # Add all steps in this parallel group that have no dependencies
+                    group_members = []
+                    for member_idx in parallel_groups[step.parallel_group]:
+                        if not steps[member_idx].depends_on:
+                            group_members.append(member_idx)
+                            assigned.add(member_idx)
+                    if group_members:
+                        groups.append(group_members)
+                        used_parallel_groups.add(step.parallel_group)
+                    continue
+                elif step.parallel_group is None and step_idx not in assigned:
+                    # Standalone step with no dependencies
+                    groups.append([step_idx])
+                    assigned.add(step_idx)
+        else:
+            # No parallel groups, use simple dependency-based grouping
+            for step_idx in initial_steps:
+                groups.append([step_idx])
+                assigned.add(step_idx)
+
+        # If no steps were assigned (all have dependencies), start with first step
+        if not assigned and steps:
             groups.append([0])
             assigned.add(0)
 
         # Subsequent groups: steps whose dependencies are satisfied
-        while len(assigned) < len(steps):
+        max_iterations = len(steps) * 2  # Prevent infinite loops
+        iteration = 0
+        while len(assigned) < len(steps) and iteration < max_iterations:
+            iteration += 1
             next_group = []
+            
             for i, step in enumerate(steps):
                 if i in assigned:
                     continue
-                # A step can run if:
-                # 1. It has explicit depends_on and that dependency is satisfied
-                # 2. It has no explicit depends_on AND the previous step (i-1) is done
-                #    This ensures sequential execution by default
-                can_run = False
-                if step.depends_on is not None and step.depends_on in assigned:
-                    # Explicit dependency is satisfied
-                    can_run = True
-                elif step.depends_on is None and (i - 1) in assigned:
-                    # No explicit dependency, but previous step is done (sequential)
-                    can_run = True
-                
-                if can_run:
-                    next_group.append(i)
-                    assigned.add(i)
+                    
+                # A step can run if all its dependencies are satisfied
+                if step.depends_on:
+                    # Check if all dependencies are satisfied
+                    if all(dep in assigned for dep in step.depends_on):
+                        next_group.append(i)
+                        assigned.add(i)
+                else:
+                    # No explicit dependencies - can run if previous step is done (sequential default)
+                    # But only if not already in a parallel group
+                    if step.parallel_group is None and (i - 1) in assigned:
+                        next_group.append(i)
+                        assigned.add(i)
+                    elif step.parallel_group is not None:
+                        # Check if all parallel group members' dependencies are satisfied
+                        can_run = True
+                        for member_idx in parallel_groups.get(step.parallel_group, []):
+                            for dep in steps[member_idx].depends_on:
+                                if dep not in assigned:
+                                    can_run = False
+                                    break
+                            if not can_run:
+                                break
+                        if can_run:
+                            # Add all members of this parallel group
+                            for member_idx in parallel_groups.get(step.parallel_group, []):
+                                if member_idx not in assigned:
+                                    next_group.append(member_idx)
+                                    assigned.add(member_idx)
             
             if not next_group:
-                # No progress - remaining steps have unsatisfied dependencies
-                # Add remaining steps to be executed sequentially
+                # No progress - add remaining steps sequentially
                 remaining = [i for i in range(len(steps)) if i not in assigned]
                 for i in remaining:
                     groups.append([i])
                     assigned.add(i)
                 break
             
-            groups.append(next_group)
+            if next_group:
+                groups.append(next_group)
 
         return groups
 
@@ -544,6 +648,7 @@ class DialogManager:
         step_results: dict[int, AgentResult],
         history: list[LLMMessage],
         result: PlanExecutionResult,
+        exec_context: ExecutionContext | None = None,
     ) -> AgentResult | None:
         """Execute a single plan step.
 
@@ -555,11 +660,13 @@ class DialogManager:
             step_results: Results from previously executed steps.
             history: Message history for LLM.
             result: PlanExecutionResult to update with execution info.
+            exec_context: Optional ExecutionContext for sharing data between agents.
 
         Returns:
             AgentResult if successful, None otherwise.
         """
         agent = self.agent_registry.get(step.agent_type)
+        start_time = time.time()
 
         if agent is None:
             # Agent not available
@@ -595,17 +702,71 @@ class DialogManager:
                 # Use output from previous step
                 prev_idx = max(step_results.keys())
                 step_input = step_results[prev_idx].response
-            elif step.depends_on is not None and step.depends_on in step_results:
-                # Use output from the step this depends on
-                step_input = step_results[step.depends_on].response
+            elif step.depends_on:
+                # Use output from the steps this depends on (combine if multiple)
+                if len(step.depends_on) == 1:
+                    # Single dependency
+                    dep_idx = step.depends_on[0]
+                    if dep_idx in step_results:
+                        step_input = step_results[dep_idx].response
+                    else:
+                        step_input = original_message
+                else:
+                    # Multiple dependencies - combine outputs
+                    combined_inputs = []
+                    for dep_idx in step.depends_on:
+                        if dep_idx in step_results:
+                            combined_inputs.append(step_results[dep_idx].response)
+                    if combined_inputs:
+                        step_input = "\n\n".join(combined_inputs)
+                    else:
+                        step_input = original_message
             else:
                 step_input = original_message
 
-            # Execute the step
-            logger.info(f"Executing step: {step.agent_type.value} - {step.description}")
-            logger.debug(f"Step input: {step_input[:100]}..." if len(step_input) > 100 else f"Step input: {step_input}")
-            logger.debug(f"Context has search_results: {'search_results' in accumulated_context}")
-            step_result = await agent.process(step_input, accumulated_context, history)
+            # Check cache before executing
+            step_result = None
+            cache_hit = False
+            if self._cache is not None:
+                step_result = self._cache.get(step.agent_type, step_input)
+                if step_result is not None:
+                    cache_hit = True
+                    logger.info(
+                        f"Cache hit for step: {step.agent_type.value} - {step.description}"
+                    )
+
+            # Execute the step if not in cache
+            if step_result is None:
+                logger.info(f"Executing step: {step.agent_type.value} - {step.description}")
+                logger.debug(f"Step input: {step_input[:100]}..." if len(step_input) > 100 else f"Step input: {step_input}")
+                logger.debug(f"Context has search_results: {'search_results' in accumulated_context}")
+                
+                # Add execution context to accumulated context if available
+                if exec_context is not None:
+                    accumulated_context["exec_context"] = exec_context
+                
+                step_result = await agent.process(step_input, accumulated_context, history)
+
+                # Store result in cache
+                if self._cache is not None:
+                    self._cache.set(step.agent_type, step_input, step_result)
+                    logger.debug(f"Cached result for step: {step.agent_type.value}")
+
+            # Calculate execution time
+            execution_time_ms = (time.time() - start_time) * 1000
+
+            # Create StepResult and add to ExecutionContext
+            if exec_context is not None:
+                step_result_obj = StepResult(
+                    step_index=step_index,
+                    agent_type=step.agent_type,
+                    output=step_result.response,
+                    structured_data=step_result.metadata,
+                    confidence=step_result.confidence,
+                    execution_time_ms=execution_time_ms,
+                    success=True,
+                )
+                exec_context.add_result(step_result_obj)
 
             # Record the step execution
             result.executed_steps.append({
@@ -615,17 +776,36 @@ class DialogManager:
                 "confidence": step_result.confidence,
                 "response_preview": step_result.response[:200] if step_result.response else "",
                 "tokens_used": step_result.tokens_used,
+                "cache_hit": cache_hit,
+                "execution_time_ms": execution_time_ms,
             })
 
             return step_result
 
         except Exception as e:
+            execution_time_ms = (time.time() - start_time) * 1000
             logger.error(f"Error executing step {step.agent_type.value}: {e}")
+            
+            # Create failed StepResult
+            if exec_context is not None:
+                failed_result = StepResult(
+                    step_index=step_index,
+                    agent_type=step.agent_type,
+                    output="",
+                    structured_data={},
+                    confidence=0.0,
+                    execution_time_ms=execution_time_ms,
+                    success=False,
+                    error_message=str(e),
+                )
+                exec_context.add_result(failed_result)
+            
             result.executed_steps.append({
                 "agent": step.agent_type.value,
                 "description": step.description,
                 "status": "error",
                 "error": str(e),
+                "execution_time_ms": execution_time_ms,
             })
 
             if not step.is_optional:

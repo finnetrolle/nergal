@@ -278,9 +278,10 @@ async def check_web_search_health(web_search_provider: Any | None) -> ComponentH
 
         # Try to get recent telemetry for success rate
         try:
-            from nergal.database.repositories import WebSearchTelemetryRepository
+            from nergal.container import get_container
 
-            repo = WebSearchTelemetryRepository()
+            container = get_container()
+            repo = container.web_search_telemetry_repository()
             # This is a quick check - we don't want to block
             import asyncio
 
@@ -365,9 +366,10 @@ async def check_web_search_health_detailed(
     # Telemetry stats
     if include_telemetry:
         try:
-            from nergal.database.repositories import WebSearchTelemetryRepository
+            from nergal.container import get_container
 
-            repo = WebSearchTelemetryRepository()
+            container = get_container()
+            repo = container.web_search_telemetry_repository()
             recent = await repo.get_recent(limit=100)
 
             if recent:

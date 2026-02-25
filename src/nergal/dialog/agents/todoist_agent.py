@@ -8,7 +8,6 @@ import logging
 import re
 from typing import Any
 
-from nergal.database.repositories import UserIntegrationRepository
 from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
 from nergal.dialog.base import AgentResult, AgentType
 from nergal.dialog.styles import StyleType
@@ -100,22 +99,24 @@ class TodoistAgent(BaseSpecializedAgent):
         self,
         llm_provider: BaseLLMProvider,
         style_type: StyleType = StyleType.DEFAULT,
-        integration_repo: UserIntegrationRepository | None = None,
+        integration_repo: "UserIntegrationRepository | None" = None,
     ) -> None:
         """Initialize the Todoist agent.
         
         Args:
             llm_provider: LLM provider for generating responses.
             style_type: Response style to use.
-            integration_repo: Repository for user integrations.
+            integration_repo: Repository for user integrations (optional, uses DI container if not provided).
         """
         super().__init__(llm_provider, style_type)
         self._integration_repo = integration_repo
     
-    def _get_integration_repo(self) -> UserIntegrationRepository:
-        """Get or create the integration repository."""
+    def _get_integration_repo(self) -> "UserIntegrationRepository":
+        """Get or create the integration repository using DI container."""
         if self._integration_repo is None:
-            self._integration_repo = UserIntegrationRepository()
+            from nergal.container import get_container
+            container = get_container()
+            self._integration_repo = container.user_integration_repository()
         return self._integration_repo
     
     @property

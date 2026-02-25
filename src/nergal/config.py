@@ -200,6 +200,27 @@ class GroupChatSettings(BaseSettings):
     )
 
 
+class CacheSettings(BaseSettings):
+    """Cache settings for agent results."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="CACHE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    enabled: bool = Field(
+        default=True, description="Enable caching of agent results"
+    )
+    ttl_seconds: int = Field(
+        default=300, ge=0, description="Time-to-live for cache entries in seconds (default: 5 minutes)"
+    )
+    max_size: int = Field(
+        default=1000, ge=1, description="Maximum number of entries in the cache"
+    )
+
+
 class AgentSettings(BaseSettings):
     """Agent registration settings."""
 
@@ -251,6 +272,23 @@ class AgentSettings(BaseSettings):
         default=True, description="Enable TodoistAgent for task management"
     )
 
+    # Timeout settings (in seconds)
+    default_timeout: float = Field(
+        default=30.0, ge=1.0, description="Default timeout for agent execution"
+    )
+    web_search_timeout: float = Field(
+        default=45.0, ge=1.0, description="Timeout for web search agent"
+    )
+    todoist_timeout: float = Field(
+        default=20.0, ge=1.0, description="Timeout for Todoist agent"
+    )
+    news_timeout: float = Field(
+        default=40.0, ge=1.0, description="Timeout for news agent"
+    )
+    default_agent_timeout: float = Field(
+        default=30.0, ge=1.0, description="Timeout for default/conversation agent"
+    )
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -296,6 +334,9 @@ class Settings(BaseSettings):
 
     # Group chat settings (nested)
     group_chat: GroupChatSettings = Field(default_factory=GroupChatSettings)
+
+    # Cache settings (nested)
+    cache: CacheSettings = Field(default_factory=CacheSettings)
 
 
 @lru_cache

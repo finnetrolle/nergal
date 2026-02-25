@@ -1,14 +1,21 @@
 """Agent registration and loading utilities.
 
-This module provides functions to dynamically register agents
-based on configuration settings.
+This module provides a decorator-based registry for creating and registering agents.
+Agents can register themselves using the @AgentFactory.register decorator.
+
+Example:
+    ```python
+    @AgentFactory.register(AgentType.WEB_SEARCH)
+    def create_web_search_agent(llm_provider, **kwargs):
+        return WebSearchAgent(llm_provider, kwargs.get('style_type', StyleType.DEFAULT))
+    ```
 """
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from nergal.config import Settings
-from nergal.dialog.base import BaseAgent
+from nergal.dialog.base import AgentType, BaseAgent
 from nergal.dialog.styles import StyleType
 
 if TYPE_CHECKING:
@@ -19,6 +26,433 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class AgentFactory:
+    """Registry for agent factories using decorator pattern.
+
+    This class provides a centralized way to register and create agents.
+    Agents register themselves using the @AgentFactory.register decorator.
+
+    Attributes:
+        _factories: Dictionary mapping AgentType to factory functions.
+        _dependencies: Dictionary mapping AgentType to required dependencies.
+    """
+
+    _factories: dict[AgentType, Callable] = {}
+    _dependencies: dict[AgentType, list[str]] = {}
+
+    @classmethod
+    def register(
+        cls,
+        agent_type: AgentType,
+        requires_search: bool = False,
+        requires_todoist: bool = False,
+    ) -> Callable:
+        """Decorator to register an agent factory.
+
+        Args:
+            agent_type: The type of agent this factory creates.
+            requires_search: Whether this agent requires a search provider.
+            requires_todoist: Whether this agent requires Todoist integration.
+
+        Returns:
+            Decorator function.
+
+        Example:
+            ```python
+            @AgentFactory.register(AgentType.WEB_SEARCH, requires_search=True)
+            def create_web_search_agent(llm_provider, search_provider, **kwargs):
+                return WebSearchAgent(llm_provider, search_provider)
+            ```
+        """
+
+        def decorator(factory_func: Callable) -> Callable:
+            cls._factories[agent_type] = factory_func
+            cls._dependencies[agent_type] = []
+            if requires_search:
+                cls._dependencies[agent_type].append("search")
+            if requires_todoist:
+                cls._dependencies[agent_type].append("todoist")
+            logger.debug(f"Registered agent factory: {agent_type.value}")
+            return factory_func
+
+        return decorator
+
+    @classmethod
+    def create(
+        cls,
+        agent_type: AgentType,
+        llm_provider: "BaseLLMProvider",
+        search_provider: "BaseWebSearchProvider | None" = None,
+        todoist_client: "TodoistClient | None" = None,
+        **kwargs,
+    ) -> BaseAgent | None:
+        """Create an agent instance by type.
+
+        Args:
+            agent_type: Type of agent to create.
+            llm_provider: LLM provider instance.
+            search_provider: Optional web search provider.
+            todoist_client: Optional Todoist client.
+            **kwargs: Additional arguments passed to the factory.
+
+        Returns:
+            Agent instance or None if factory not found.
+        """
+        factory = cls._factories.get(agent_type)
+        if factory is None:
+            logger.warning(f"No factory registered for agent type: {agent_type.value}")
+            return None
+
+        # Check dependencies
+        deps = cls._dependencies.get(agent_type, [])
+        if "search" in deps and search_provider is None:
+            logger.warning(
+                f"Agent {agent_type.value} requires search_provider but none provided"
+            )
+            return None
+        if "todoist" in deps and todoist_client is None:
+            logger.warning(
+                f"Agent {agent_type.value} requires todoist_client but none provided"
+            )
+            return None
+
+        # Call factory with appropriate arguments
+        return factory(
+            llm_provider=llm_provider,
+            search_provider=search_provider,
+            todoist_client=todoist_client,
+            **kwargs,
+        )
+
+    @classmethod
+    def get_registered_types(cls) -> list[AgentType]:
+        """Get list of all registered agent types.
+
+        Returns:
+            List of registered AgentType values.
+        """
+        return list(cls._factories.keys())
+
+    @classmethod
+    def has_factory(cls, agent_type: AgentType) -> bool:
+        """Check if a factory is registered for an agent type.
+
+        Args:
+            agent_type: Agent type to check.
+
+        Returns:
+            True if factory exists, False otherwise.
+        """
+        return agent_type in cls._factories
+
+    @classmethod
+    def clear(cls) -> None:
+        """Clear all registered factories.
+
+        Useful for testing.
+        """
+        cls._factories.clear()
+        cls._dependencies.clear()
+
+
+# =============================================================================
+# Agent Factory Registrations
+# =============================================================================
+
+
+@AgentFactory.register(AgentType.WEB_SEARCH, requires_search=True)
+def _create_web_search_agent(
+    llm_provider: "BaseLLMProvider",
+    search_provider: "BaseWebSearchProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a WebSearchAgent instance."""
+    from nergal.dialog.agents.web_search_agent import WebSearchAgent
+
+    return WebSearchAgent(
+        llm_provider=llm_provider,
+        search_provider=search_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+        max_search_results=kwargs.get("max_search_results", 5),
+    )
+
+
+@AgentFactory.register(AgentType.TODOIST, requires_todoist=True)
+def _create_todoist_agent(
+    llm_provider: "BaseLLMProvider",
+    todoist_client: "TodoistClient | None" = None,
+    **kwargs,
+) -> BaseAgent:
+    """Create a TodoistAgent instance."""
+    from nergal.dialog.agents.todoist_agent import TodoistAgent
+    from nergal.integrations.todoist import TodoistClient
+
+    # Create client if not provided
+    client = todoist_client
+    if client is None:
+        client = TodoistClient()
+
+    return TodoistAgent(
+        llm_provider=llm_provider,
+        todoist_client=client,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+@AgentFactory.register(AgentType.NEWS)
+def _create_news_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a NewsAgent instance."""
+    from nergal.dialog.agents.news_agent import NewsAgent
+
+    return NewsAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+@AgentFactory.register(AgentType.ANALYSIS)
+def _create_analysis_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create an AnalysisAgent instance."""
+    from nergal.dialog.agents.analysis_agent import AnalysisAgent
+
+    return AnalysisAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+@AgentFactory.register(AgentType.FACT_CHECK)
+def _create_fact_check_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a FactCheckAgent instance."""
+    from nergal.dialog.agents.fact_check_agent import FactCheckAgent
+
+    return FactCheckAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+@AgentFactory.register(AgentType.COMPARISON)
+def _create_comparison_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a ComparisonAgent instance."""
+    from nergal.dialog.agents.comparison_agent import ComparisonAgent
+
+    return ComparisonAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+@AgentFactory.register(AgentType.SUMMARY)
+def _create_summary_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a SummaryAgent instance."""
+    from nergal.dialog.agents.summary_agent import SummaryAgent
+
+    return SummaryAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+@AgentFactory.register(AgentType.CODE_ANALYSIS)
+def _create_code_analysis_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a CodeAnalysisAgent instance."""
+    from nergal.dialog.agents.code_analysis_agent import CodeAnalysisAgent
+
+    return CodeAnalysisAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+@AgentFactory.register(AgentType.METRICS)
+def _create_metrics_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a MetricsAgent instance."""
+    from nergal.dialog.agents.metrics_agent import MetricsAgent
+
+    return MetricsAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+@AgentFactory.register(AgentType.EXPERTISE)
+def _create_expertise_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create an ExpertiseAgent instance."""
+    from nergal.dialog.agents.expertise_agent import ExpertiseAgent
+
+    return ExpertiseAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+@AgentFactory.register(AgentType.CLARIFICATION)
+def _create_clarification_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a ClarificationAgent instance."""
+    from nergal.dialog.agents.clarification_agent import ClarificationAgent
+
+    return ClarificationAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+@AgentFactory.register(AgentType.KNOWLEDGE_BASE)
+def _create_knowledge_base_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a KnowledgeBaseAgent instance."""
+    from nergal.dialog.agents.knowledge_base_agent import KnowledgeBaseAgent
+
+    return KnowledgeBaseAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+@AgentFactory.register(AgentType.TECH_DOCS)
+def _create_tech_docs_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a TechDocsAgent instance."""
+    from nergal.dialog.agents.tech_docs_agent import TechDocsAgent
+
+    return TechDocsAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
+# =============================================================================
+# Configuration-based Registration
+# =============================================================================
+
+
+# Mapping from config settings to agent types
+AGENT_CONFIG_MAP: dict[str, AgentType] = {
+    "web_search_enabled": AgentType.WEB_SEARCH,
+    "news_enabled": AgentType.NEWS,
+    "analysis_enabled": AgentType.ANALYSIS,
+    "fact_check_enabled": AgentType.FACT_CHECK,
+    "comparison_enabled": AgentType.COMPARISON,
+    "summary_enabled": AgentType.SUMMARY,
+    "code_analysis_enabled": AgentType.CODE_ANALYSIS,
+    "metrics_enabled": AgentType.METRICS,
+    "expertise_enabled": AgentType.EXPERTISE,
+    "clarification_enabled": AgentType.CLARIFICATION,
+    "knowledge_base_enabled": AgentType.KNOWLEDGE_BASE,
+    "tech_docs_enabled": AgentType.TECH_DOCS,
+    "todoist_enabled": AgentType.TODOIST,
+}
+
+
+def register_configured_agents(
+    registry: "AgentRegistry",
+    settings: Settings,
+    llm_provider: "BaseLLMProvider",
+    search_provider: "BaseWebSearchProvider | None" = None,
+    todoist_client: "TodoistClient | None" = None,
+) -> list[str]:
+    """Register agents based on configuration settings.
+
+    This function creates and registers agents according to the
+    enabled flags in the AgentSettings configuration.
+
+    Args:
+        registry: Agent registry to register agents with.
+        settings: Application settings.
+        llm_provider: LLM provider instance.
+        search_provider: Optional web search provider instance.
+        todoist_client: Optional Todoist client instance.
+
+    Returns:
+        List of registered agent names.
+    """
+    registered = []
+    agent_settings = settings.agents
+    style_type = settings.style
+
+    # Iterate through config mapping and register enabled agents
+    for config_key, agent_type in AGENT_CONFIG_MAP.items():
+        # Check if this agent type is enabled in config
+        enabled = getattr(agent_settings, config_key, False)
+        if not enabled:
+            continue
+
+        # Check if factory exists
+        if not AgentFactory.has_factory(agent_type):
+            logger.warning(f"No factory for {agent_type.value}, skipping")
+            continue
+
+        # Check dependencies
+        deps = AgentFactory._dependencies.get(agent_type, [])
+        if "search" in deps and search_provider is None:
+            logger.debug(f"Skipping {agent_type.value} - requires search_provider")
+            continue
+        if "todoist" in deps and todoist_client is None:
+            logger.debug(f"Skipping {agent_type.value} - requires todoist_client")
+            continue
+
+        # Create and register agent
+        try:
+            agent = AgentFactory.create(
+                agent_type=agent_type,
+                llm_provider=llm_provider,
+                search_provider=search_provider,
+                todoist_client=todoist_client,
+                style_type=style_type,
+                max_results=settings.web_search.max_results if agent_type == AgentType.WEB_SEARCH else None,
+            )
+
+            if agent is not None:
+                registry.register(agent)
+                registered.append(agent.agent_type.value)
+                logger.info(f"Registered agent: {agent.agent_type.value}")
+        except Exception as e:
+            logger.error(f"Failed to register {agent_type.value}: {e}")
+
+    return registered
+
+
+# =============================================================================
+# Legacy Compatibility Functions
+# =============================================================================
+
+
+# These functions are kept for backward compatibility
+# They delegate to the new AgentFactory system
+
+
 def create_web_search_agent(
     llm_provider: "BaseLLMProvider",
     search_provider: "BaseWebSearchProvider",
@@ -26,23 +460,22 @@ def create_web_search_agent(
     max_results: int = 5,
 ) -> BaseAgent:
     """Create a WebSearchAgent instance.
-    
+
     Args:
         llm_provider: LLM provider instance.
         search_provider: Web search provider instance.
         style_type: Response style type.
         max_results: Maximum search results.
-        
+
     Returns:
         WebSearchAgent instance.
     """
-    from nergal.dialog.agents.web_search_agent import WebSearchAgent
-    
-    return WebSearchAgent(
+    return AgentFactory.create(
+        AgentType.WEB_SEARCH,
         llm_provider=llm_provider,
         search_provider=search_provider,
         style_type=style_type,
-        max_search_results=max_results,
+        max_results=max_results,
     )
 
 
@@ -50,18 +483,9 @@ def create_news_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
 ) -> BaseAgent:
-    """Create a NewsAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        NewsAgent instance.
-    """
-    from nergal.dialog.agents.news_agent import NewsAgent
-    
-    return NewsAgent(
+    """Create a NewsAgent instance."""
+    return AgentFactory.create(
+        AgentType.NEWS,
         llm_provider=llm_provider,
         style_type=style_type,
     )
@@ -71,18 +495,9 @@ def create_analysis_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
 ) -> BaseAgent:
-    """Create an AnalysisAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        AnalysisAgent instance.
-    """
-    from nergal.dialog.agents.analysis_agent import AnalysisAgent
-    
-    return AnalysisAgent(
+    """Create an AnalysisAgent instance."""
+    return AgentFactory.create(
+        AgentType.ANALYSIS,
         llm_provider=llm_provider,
         style_type=style_type,
     )
@@ -92,18 +507,9 @@ def create_fact_check_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
 ) -> BaseAgent:
-    """Create a FactCheckAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        FactCheckAgent instance.
-    """
-    from nergal.dialog.agents.fact_check_agent import FactCheckAgent
-    
-    return FactCheckAgent(
+    """Create a FactCheckAgent instance."""
+    return AgentFactory.create(
+        AgentType.FACT_CHECK,
         llm_provider=llm_provider,
         style_type=style_type,
     )
@@ -113,18 +519,9 @@ def create_comparison_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
 ) -> BaseAgent:
-    """Create a ComparisonAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        ComparisonAgent instance.
-    """
-    from nergal.dialog.agents.comparison_agent import ComparisonAgent
-    
-    return ComparisonAgent(
+    """Create a ComparisonAgent instance."""
+    return AgentFactory.create(
+        AgentType.COMPARISON,
         llm_provider=llm_provider,
         style_type=style_type,
     )
@@ -134,18 +531,9 @@ def create_summary_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
 ) -> BaseAgent:
-    """Create a SummaryAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        SummaryAgent instance.
-    """
-    from nergal.dialog.agents.summary_agent import SummaryAgent
-    
-    return SummaryAgent(
+    """Create a SummaryAgent instance."""
+    return AgentFactory.create(
+        AgentType.SUMMARY,
         llm_provider=llm_provider,
         style_type=style_type,
     )
@@ -155,18 +543,9 @@ def create_code_analysis_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
 ) -> BaseAgent:
-    """Create a CodeAnalysisAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        CodeAnalysisAgent instance.
-    """
-    from nergal.dialog.agents.code_analysis_agent import CodeAnalysisAgent
-    
-    return CodeAnalysisAgent(
+    """Create a CodeAnalysisAgent instance."""
+    return AgentFactory.create(
+        AgentType.CODE_ANALYSIS,
         llm_provider=llm_provider,
         style_type=style_type,
     )
@@ -176,18 +555,9 @@ def create_metrics_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
 ) -> BaseAgent:
-    """Create a MetricsAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        MetricsAgent instance.
-    """
-    from nergal.dialog.agents.metrics_agent import MetricsAgent
-    
-    return MetricsAgent(
+    """Create a MetricsAgent instance."""
+    return AgentFactory.create(
+        AgentType.METRICS,
         llm_provider=llm_provider,
         style_type=style_type,
     )
@@ -197,18 +567,9 @@ def create_expertise_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
 ) -> BaseAgent:
-    """Create an ExpertiseAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        ExpertiseAgent instance.
-    """
-    from nergal.dialog.agents.expertise_agent import ExpertiseAgent
-    
-    return ExpertiseAgent(
+    """Create an ExpertiseAgent instance."""
+    return AgentFactory.create(
+        AgentType.EXPERTISE,
         llm_provider=llm_provider,
         style_type=style_type,
     )
@@ -218,18 +579,9 @@ def create_clarification_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
 ) -> BaseAgent:
-    """Create a ClarificationAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        ClarificationAgent instance.
-    """
-    from nergal.dialog.agents.clarification_agent import ClarificationAgent
-    
-    return ClarificationAgent(
+    """Create a ClarificationAgent instance."""
+    return AgentFactory.create(
+        AgentType.CLARIFICATION,
         llm_provider=llm_provider,
         style_type=style_type,
     )
@@ -239,18 +591,9 @@ def create_knowledge_base_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
 ) -> BaseAgent:
-    """Create a KnowledgeBaseAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        KnowledgeBaseAgent instance.
-    """
-    from nergal.dialog.agents.knowledge_base_agent import KnowledgeBaseAgent
-    
-    return KnowledgeBaseAgent(
+    """Create a KnowledgeBaseAgent instance."""
+    return AgentFactory.create(
+        AgentType.KNOWLEDGE_BASE,
         llm_provider=llm_provider,
         style_type=style_type,
     )
@@ -260,18 +603,9 @@ def create_tech_docs_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
 ) -> BaseAgent:
-    """Create a TechDocsAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        TechDocsAgent instance.
-    """
-    from nergal.dialog.agents.tech_docs_agent import TechDocsAgent
-    
-    return TechDocsAgent(
+    """Create a TechDocsAgent instance."""
+    return AgentFactory.create(
+        AgentType.TECH_DOCS,
         llm_provider=llm_provider,
         style_type=style_type,
     )
@@ -279,218 +613,13 @@ def create_tech_docs_agent(
 
 def create_todoist_agent(
     llm_provider: "BaseLLMProvider",
-    style_type: StyleType,
+    todoist_client: "TodoistClient | None" = None,
+    style_type: StyleType = StyleType.DEFAULT,
 ) -> BaseAgent:
-    """Create a TodoistAgent instance.
-    
-    Args:
-        llm_provider: LLM provider instance.
-        style_type: Response style type.
-        
-    Returns:
-        TodoistAgent instance.
-    """
-    from nergal.dialog.agents.todoist_agent import TodoistAgent
-    
-    return TodoistAgent(
+    """Create a TodoistAgent instance."""
+    return AgentFactory.create(
+        AgentType.TODOIST,
         llm_provider=llm_provider,
+        todoist_client=todoist_client,
         style_type=style_type,
     )
-
-
-def register_configured_agents(
-    registry: "AgentRegistry",
-    settings: Settings,
-    llm_provider: "BaseLLMProvider",
-    search_provider: "BaseWebSearchProvider | None" = None,
-) -> list[str]:
-    """Register agents based on configuration settings.
-    
-    This function creates and registers agents according to the
-    enabled flags in the AgentSettings configuration.
-    
-    Args:
-        registry: Agent registry to register agents with.
-        settings: Application settings.
-        llm_provider: LLM provider instance.
-        search_provider: Optional web search provider instance.
-        
-    Returns:
-        List of registered agent names.
-    """
-    registered = []
-    agent_settings = settings.agents
-    style_type = settings.style
-    
-    # WebSearchAgent - requires search_provider
-    if agent_settings.web_search_enabled and search_provider:
-        try:
-            agent = create_web_search_agent(
-                llm_provider=llm_provider,
-                search_provider=search_provider,
-                style_type=style_type,
-                max_results=settings.web_search.max_results,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register WebSearchAgent: {e}")
-    
-    # NewsAgent
-    if agent_settings.news_enabled:
-        try:
-            agent = create_news_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register NewsAgent: {e}")
-    
-    # AnalysisAgent
-    if agent_settings.analysis_enabled:
-        try:
-            agent = create_analysis_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register AnalysisAgent: {e}")
-    
-    # FactCheckAgent
-    if agent_settings.fact_check_enabled:
-        try:
-            agent = create_fact_check_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register FactCheckAgent: {e}")
-    
-    # ComparisonAgent
-    if agent_settings.comparison_enabled:
-        try:
-            agent = create_comparison_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register ComparisonAgent: {e}")
-    
-    # SummaryAgent
-    if agent_settings.summary_enabled:
-        try:
-            agent = create_summary_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register SummaryAgent: {e}")
-    
-    # CodeAnalysisAgent
-    if agent_settings.code_analysis_enabled:
-        try:
-            agent = create_code_analysis_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register CodeAnalysisAgent: {e}")
-    
-    # MetricsAgent
-    if agent_settings.metrics_enabled:
-        try:
-            agent = create_metrics_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register MetricsAgent: {e}")
-    
-    # ExpertiseAgent
-    if agent_settings.expertise_enabled:
-        try:
-            agent = create_expertise_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register ExpertiseAgent: {e}")
-    
-    # ClarificationAgent
-    if agent_settings.clarification_enabled:
-        try:
-            agent = create_clarification_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register ClarificationAgent: {e}")
-    
-    # KnowledgeBaseAgent
-    if agent_settings.knowledge_base_enabled:
-        try:
-            agent = create_knowledge_base_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register KnowledgeBaseAgent: {e}")
-    
-    # TechDocsAgent
-    if agent_settings.tech_docs_enabled:
-        try:
-            agent = create_tech_docs_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register TechDocsAgent: {e}")
-    
-    # TodoistAgent
-    if agent_settings.todoist_enabled:
-        try:
-            agent = create_todoist_agent(
-                llm_provider=llm_provider,
-                style_type=style_type,
-            )
-            registry.register(agent)
-            registered.append(agent.agent_type.value)
-            logger.info(f"Registered agent: {agent.agent_type.value}")
-        except Exception as e:
-            logger.error(f"Failed to register TodoistAgent: {e}")
-    
-    return registered

@@ -167,11 +167,12 @@ class ZaiMcpHttpSearchProvider(BaseSearchProvider):
         return "Z.AI Web Search (MCP/HTTP)"
 
     def _get_telemetry_repo(self) -> Any:
-        """Get the telemetry repository (lazy-loaded to avoid circular imports)."""
+        """Get the telemetry repository using DI container (lazy-loaded to avoid circular imports)."""
         if self._telemetry_repo is None:
-            from nergal.database.repositories import WebSearchTelemetryRepository
+            from nergal.container import get_container
 
-            self._telemetry_repo = WebSearchTelemetryRepository()
+            container = get_container()
+            self._telemetry_repo = container.web_search_telemetry_repository()
         return self._telemetry_repo
 
     def _parse_sse_response(self, text: str) -> dict[str, Any]:

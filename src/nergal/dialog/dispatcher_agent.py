@@ -44,11 +44,6 @@ AGENT_DESCRIPTIONS: dict[AgentType, str] = {
     # Specialized agents
     AgentType.EXPERTISE: "агент для экспертных знаний в специфических доменах: безопасность, юридические вопросы, финансы, архитектура",
     AgentType.TODOIST: "агент для работы с задачами Todoist: получение списка задач, создание задач, управление задачами, просмотр задач на сегодня/завтра/неделю",
-    
-    # Legacy agents (kept for backward compatibility)
-    AgentType.FAQ: "агент для ответов на часто задаваемые вопросы",
-    AgentType.SMALL_TALK: "агент для легких разговоров и светской беседы",
-    AgentType.TASK: "агент для выполнения конкретных задач",
 }
 
 # Example execution plans for different scenarios
@@ -81,6 +76,27 @@ EXAMPLE_PLANS = """
         {"agent": "default", "description": "ответить на вопрос пользователя"}
     ],
     "reasoning": "вопрос не требует актуальной информации, можно ответить напрямую"
+}
+
+4. Параллельный поиск из нескольких источников:
+{
+    "steps": [
+        {"agent": "web_search", "description": "найти информацию в интернете", "parallel_group": 1},
+        {"agent": "knowledge_base", "description": "найти информацию в базе знаний", "parallel_group": 1},
+        {"agent": "default", "description": "сформировать ответ на основе всех источников", "depends_on": [0, 1]}
+    ],
+    "reasoning": "поиск в двух источниках параллельно, затем формирование ответа"
+}
+
+5. Сравнение с зависимостями:
+{
+    "steps": [
+        {"agent": "web_search", "description": "найти информацию о первом объекте", "parallel_group": 1},
+        {"agent": "web_search", "description": "найти информацию о втором объекте", "parallel_group": 1},
+        {"agent": "comparison", "description": "сравнить найденную информацию", "depends_on": [0, 1]},
+        {"agent": "default", "description": "сформировать финальный ответ"}
+    ],
+    "reasoning": "параллельный поиск, затем сравнение и формирование ответа"
 }
 """
 
@@ -150,7 +166,7 @@ class DispatcherAgent(BaseAgent):
 Отвечай ТОЛЬКО в формате JSON:
 {{
     "steps": [
-        {{"agent": "имя_агента", "description": "описание что делает этот шаг", "is_optional": false}}
+        {{"agent": "имя_агента", "description": "описание что делает этот шаг", "is_optional": false, "depends_on": [], "parallel_group": null}}
     ],
     "reasoning": "краткое обоснование плана на русском языке",
     "missing_agents": ["агент1", "агент2"],
@@ -164,6 +180,8 @@ class DispatcherAgent(BaseAgent):
 - Всегда завершай план агентом default для формирования финального ответа
 - Если нужного агента нет в списке доступных, добавь его в missing_agents
 - is_optional: true если шаг можно пропустить при отсутствии агента
+- depends_on: массив индексов шагов, от которых зависит этот шаг (например, [0, 1])
+- parallel_group: число для группировки шагов, которые можно выполнять параллельно
 
 {EXAMPLE_PLANS}
 """
@@ -334,11 +352,25 @@ class DispatcherAgent(BaseAgent):
                 for step_data in data.get("steps", []):
                     agent_str = step_data.get("agent", "default").lower()
                     agent_type = self._map_agent_type(agent_str)
+                    
+                    # Parse depends_on - can be int or list
+                    depends_on_raw = step_data.get("depends_on", [])
+                    if depends_on_raw is None:
+                        depends_on = []
+                    elif isinstance(depends_on_raw, int):
+                        depends_on = [depends_on_raw]
+                    elif isinstance(depends_on_raw, list):
+                        depends_on = depends_on_raw
+                    else:
+                        depends_on = []
+                    
                     steps.append(PlanStep(
                         agent_type=agent_type,
                         description=step_data.get("description", ""),
                         input_transform=step_data.get("input_transform"),
                         is_optional=step_data.get("is_optional", False),
+                        depends_on=depends_on,
+                        parallel_group=step_data.get("parallel_group"),
                     ))
 
                 # Parse missing agents
@@ -429,11 +461,6 @@ class DispatcherAgent(BaseAgent):
             "tasks": AgentType.TODOIST,
             "task": AgentType.TODOIST,
             "todo": AgentType.TODOIST,
-            
-            # Legacy agents
-            "faq": AgentType.FAQ,
-            "small_talk": AgentType.SMALL_TALK,
-            "smalltalk": AgentType.SMALL_TALK,
         }
         return mapping.get(agent_str, AgentType.DEFAULT)
 
