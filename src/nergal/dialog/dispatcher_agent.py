@@ -44,6 +44,7 @@ AGENT_DESCRIPTIONS: dict[AgentType, str] = {
     # Specialized agents
     AgentType.EXPERTISE: "агент для экспертных знаний в специфических доменах: безопасность, юридические вопросы, финансы, архитектура",
     AgentType.TODOIST: "агент для работы с задачами Todoist: получение списка задач, создание задач, управление задачами, просмотр задач на сегодня/завтра/неделю",
+    AgentType.HEALTH: "агент для отслеживания здоровья: запись показателей давления, пульса, веса, анализ трендов, напоминания о приёме лекарств",
 }
 
 # Example execution plans for different scenarios
@@ -269,7 +270,7 @@ class DispatcherAgent(BaseAgent):
         ]
 
         try:
-            response = await self.llm_provider.generate(messages, max_tokens=500)
+            response = await self.llm_provider.generate(messages, max_tokens=1500)
             logger.info(f"Dispatcher LLM response: {response.content[:1000]}")
             plan = self._parse_plan_response(response.content)
 
@@ -461,6 +462,10 @@ class DispatcherAgent(BaseAgent):
             "tasks": AgentType.TODOIST,
             "task": AgentType.TODOIST,
             "todo": AgentType.TODOIST,
+            "health": AgentType.HEALTH,
+            "здоровье": AgentType.HEALTH,
+            "давление": AgentType.HEALTH,
+            "пульс": AgentType.HEALTH,
         }
         return mapping.get(agent_str, AgentType.DEFAULT)
 
