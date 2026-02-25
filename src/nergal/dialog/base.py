@@ -60,12 +60,6 @@ class AgentType(str, Enum):
     EXPERTISE = "expertise"
     TODOIST = "todoist"  # Todoist task management agent
     
-    # Legacy/deprecated - kept for backward compatibility
-    FAQ = "faq"
-    SMALL_TALK = "small_talk"
-    TASK = "task"
-    UNKNOWN = "unknown"
-    
     @classmethod
     def get_category(cls, agent_type: "AgentType") -> AgentCategory:
         """Get the category for an agent type."""
@@ -92,14 +86,16 @@ class PlanStep:
         description: Human-readable description of what this step does.
         input_transform: Optional transformation to apply to input (e.g., use previous output).
         is_optional: Whether this step can be skipped if agent is unavailable.
-        depends_on: Index of step this step depends on (None = no dependency, can run in parallel).
+        depends_on: List of step indices this step depends on (empty = no dependency, can run in parallel).
+        parallel_group: Optional group ID for steps that can run in parallel.
     """
 
     agent_type: AgentType
     description: str
     input_transform: str | None = None  # "original", "previous", or custom instruction
     is_optional: bool = False
-    depends_on: int | None = None  # Index of step this depends on, None = independent
+    depends_on: list[int] = field(default_factory=list)  # List of step indices this depends on
+    parallel_group: int | None = None  # Group ID for parallel execution
 
 
 @dataclass
@@ -132,7 +128,17 @@ class ExecutionPlan:
 
 @dataclass
 class AgentResult:
-    """Result of agent processing."""
+    """Result of agent processing.
+
+    Attributes:
+        response: The text response from the agent.
+        agent_type: The type of agent that produced this result.
+        confidence: Confidence score of the result (0.0 to 1.0).
+        metadata: Additional metadata about the result.
+        should_handoff: Whether this agent should hand off to another.
+        handoff_agent: The agent type to hand off to, if applicable.
+        tokens_used: Total tokens consumed (prompt + completion).
+    """
 
     response: str
     agent_type: AgentType
@@ -141,6 +147,63 @@ class AgentResult:
     should_handoff: bool = False
     handoff_agent: AgentType | None = None
     tokens_used: int | None = None  # Total tokens (prompt + completion)
+
+    def get_typed_metadata(self) -> "BaseAgentMetadata | None":
+        """Get typed metadata based on agent type.
+
+        Returns:
+            Typed metadata instance if metadata exists, None otherwise.
+        """
+        if not self.metadata:
+            return None
+
+        from nergal.dialog.metadata import create_metadata_from_dict
+
+        return create_metadata_from_dict(self.agent_type.value, self.metadata)
+
+
+@dataclass
+class StepResult:
+    """Result of executing a single step in an execution plan.
+
+    Captures all information about a step execution for use by subsequent steps.
+
+    Attributes:
+        step_index: Index of the step in the execution plan.
+        agent_type: Type of agent that executed this step.
+        output: The text output from the agent.
+        structured_data: Structured data extracted from the result (e.g., search results).
+        confidence: Confidence score of the result (0.0 to 1.0).
+        execution_time_ms: Time taken to execute the step in milliseconds.
+        success: Whether the step completed successfully.
+        error_message: Error message if the step failed.
+    """
+
+    step_index: int
+    agent_type: AgentType
+    output: str
+    structured_data: dict[str, Any] = field(default_factory=dict)
+    confidence: float = 1.0
+    execution_time_ms: float = 0.0
+    success: bool = True
+    error_message: str | None = None
+
+    def to_context_string(self) -> str:
+        """Generate a string representation for context passing.
+
+        Returns:
+            Formatted string with step result summary.
+        """
+        status = "✓" if self.success else "✗"
+        lines = [
+            f"[Step {self.step_index}] {self.agent_type.value} {status}",
+            f"Output: {self.output[:500]}{'...' if len(self.output) > 500 else ''}",
+        ]
+        if self.structured_data:
+            lines.append(f"Data: {list(self.structured_data.keys())}")
+        if not self.success and self.error_message:
+            lines.append(f"Error: {self.error_message}")
+        return "\n".join(lines)
 
 
 class BaseAgent(ABC):

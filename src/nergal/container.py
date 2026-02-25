@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from nergal.stt.base import BaseSTTProvider
     from nergal.web_search.base import BaseWebSearchProvider
     from nergal.dialog.manager import DialogManager
+    from nergal.dialog.cache import AgentResultCache
     from nergal.memory.service import MemoryService
     from nergal.database.connection import DatabaseConnection
     from nergal.database.repositories import (
@@ -129,17 +130,26 @@ class Container(containers.DeclarativeContainer):
         db=database,
     )
     
+    # ============== Agent Result Cache ==============
+    
+    # Agent result cache - Singleton
+    agent_cache = providers.Singleton(
+        lambda settings: _create_agent_cache(settings),
+        settings=settings,
+    )
+    
     # ============== Dialog Manager ==============
     
     # Dialog manager - Singleton (manages conversation state)
     dialog_manager = providers.Singleton(
-        lambda settings, llm, search_provider, memory: _create_dialog_manager(
-            settings, llm, search_provider, memory
+        lambda settings, llm, search_provider, memory, cache: _create_dialog_manager(
+            settings, llm, search_provider, memory, cache
         ),
         settings=settings,
         llm=llm_provider,
         search_provider=web_search_provider,
         memory=memory_service,
+        cache=agent_cache,
     )
     
     # ============== Monitoring ==============
@@ -289,11 +299,30 @@ def _create_memory_service(database: "DatabaseConnection") -> "MemoryService | N
     return MemoryService(db=database)
 
 
+def _create_agent_cache(settings: "Settings") -> "AgentResultCache | None":
+    """Create agent result cache instance."""
+    from nergal.dialog.cache import AgentResultCache
+    
+    logger.info(
+        "Creating agent result cache",
+        enabled=settings.cache.enabled,
+        ttl_seconds=settings.cache.ttl_seconds,
+        max_size=settings.cache.max_size,
+    )
+    
+    return AgentResultCache(
+        enabled=settings.cache.enabled,
+        ttl_seconds=settings.cache.ttl_seconds,
+        max_size=settings.cache.max_size,
+    )
+
+
 def _create_dialog_manager(
     settings: "Settings",
     llm_provider: "BaseLLMProvider",
     search_provider: "BaseWebSearchProvider | None",
     memory_service: "MemoryService | None",
+    cache: "AgentResultCache | None",
 ) -> "DialogManager":
     """Create dialog manager instance."""
     from nergal.dialog.manager import DialogManager
@@ -308,6 +337,7 @@ def _create_dialog_manager(
         llm_provider=llm_provider,
         style_type=settings.style,
         memory_service=memory_service,
+        cache=cache,
     )
     
     # Register agents based on configuration
