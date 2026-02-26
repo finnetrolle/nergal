@@ -730,7 +730,7 @@ class HealthAgent(BaseSpecializedAgent):
         """
         try:
             repo = self._get_profile_repo()
-            profile = await repo.get_by_user_id(user_id)
+            profile = await repo.get_profile(user_id)
             if profile and profile.timezone:
                 return profile.timezone
         except Exception as e:
@@ -753,12 +753,7 @@ class HealthAgent(BaseSpecializedAgent):
             tz = pytz_timezone(timezone_str)
             
             repo = self._get_profile_repo()
-            profile = await repo.get_by_user_id(user_id)
-            
-            if profile:
-                await repo.update(user_id, timezone=timezone_str)
-            else:
-                await repo.create(user_id, timezone=timezone_str)
+            await repo.create_or_update_profile(user_id, timezone=timezone_str)
             
             return True
         except Exception as e:
