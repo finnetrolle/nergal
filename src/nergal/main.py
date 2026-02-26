@@ -320,6 +320,10 @@ def main() -> None:
         # Start admin web interface
         await app.start_admin_server()
 
+        # Setup reminder jobs for health notifications
+        from nergal.services.reminder_service import setup_reminder_jobs
+        setup_reminder_jobs(application, interval_seconds=60)
+
         # Mark components as healthy
         from nergal.monitoring import HealthStatus, get_health_checker
 

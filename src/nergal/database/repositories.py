@@ -1908,3 +1908,86 @@ class HealthMetricsRepository:
             WHERE user_id = $1 AND reminder_type = $2 AND reminder_time = $3::TIME
         """
         await self._db.execute(query, user_id, reminder_type, reminder_time)
+    
+    async def get_pending_reminders(
+        self,
+        current_time_utc: datetime,
+        tolerance_minutes: int = 2,
+    ) -> list[tuple[HealthReminder, int]]:
+        """Get reminders that should be sent at the current time.
+
+        This method finds all active reminders where the reminder time (converted
+        from user's timezone to UTC) matches the current time within tolerance.
+
+        Uses FOR UPDATE SKIP LOCKED to prevent race conditions in multi-instance
+        deployments. Rows are locked atomically and last_sent_at is updated
+        immediately to claim the reminder before returning.
+
+        Args:
+            current_time_utc: Current time in UTC.
+            tolerance_minutes: How many minutes of tolerance for matching time.
+
+        Returns:
+            List of tuples (HealthReminder, chat_id) for sending notifications.
+        """
+        from pytz import timezone as pytz_timezone
+        from pytz import UTC
+
+        pending: list[tuple[HealthReminder, int]] = []
+
+        # Use transaction with FOR UPDATE SKIP LOCKED to prevent race conditions
+        # in multi-instance deployments. This ensures that:
+        # 1. Only one instance can claim a reminder at a time
+        # 2. Locked rows are skipped by other instances
+        # 3. last_sent_at is updated atomically to claim the reminder
+        async with self._db.transaction() as conn:
+            # Select and lock candidate reminders, skipping already-locked rows
+            query = """
+                SELECT hr.id, hr.user_id, hr.reminder_type, hr.reminder_time,
+                       hr.user_timezone, hr.is_active, hr.last_sent_at,
+                       hr.created_at, hr.updated_at, u.id as chat_id
+                FROM health_reminders hr
+                JOIN users u ON hr.user_id = u.id
+                WHERE hr.is_active = TRUE
+                  AND (hr.last_sent_at IS NULL
+                       OR hr.last_sent_at < NOW() - INTERVAL '1 hour')
+                FOR UPDATE SKIP LOCKED
+            """
+            records = await conn.fetch(query)
+
+            for record in records:
+                reminder = self.record_to_health_reminder(record)
+                chat_id = record["chat_id"]
+
+                # Get reminder time in user's timezone
+                user_tz_str = reminder.user_timezone or "UTC"
+                try:
+                    user_tz = pytz_timezone(user_tz_str)
+                except Exception:
+                    user_tz = UTC
+
+                # Convert current UTC time to user's local time
+                current_in_user_tz = current_time_utc.astimezone(user_tz)
+                user_hour = current_in_user_tz.hour
+                user_minute = current_in_user_tz.minute
+
+                # Parse reminder time
+                reminder_hour, reminder_minute = map(int, reminder.reminder_time.split(":"))
+
+                # Check if current time matches reminder time (within tolerance)
+                time_diff = abs(user_hour * 60 + user_minute - reminder_hour * 60 - reminder_minute)
+
+                if time_diff <= tolerance_minutes:
+                    # Claim this reminder by updating last_sent_at immediately
+                    # This prevents other instances from sending duplicates
+                    await conn.execute(
+                        """
+                        UPDATE health_reminders
+                        SET last_sent_at = NOW()
+                        WHERE id = $1
+                        """,
+                        reminder.id,
+                    )
+                    pending.append((reminder, chat_id))
+
+        return pending
