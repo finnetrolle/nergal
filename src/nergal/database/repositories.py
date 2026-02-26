@@ -703,9 +703,9 @@ class ConversationRepository:
         """
         query = """
             DELETE FROM conversation_messages
-            WHERE created_at < NOW() - ($1 || ' days')::INTERVAL
+            WHERE created_at < NOW() - INTERVAL '1 day' * $1
         """
-        result = await self._db.execute(query, str(days_to_keep))
+        result = await self._db.execute(query, days_to_keep)
         count = int(result.split()[-1]) if result.startswith("DELETE") else 0
         return count
 
@@ -1103,7 +1103,7 @@ class WebSearchTelemetryRepository:
                 AVG(results_count) FILTER (WHERE status = 'success') as avg_results_count,
                 MAX(results_count) as max_results_count
             FROM web_search_telemetry
-            WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+            WHERE created_at >= NOW() - INTERVAL '1 day' * $1
         """
         record = await self._db.fetchrow(query, days)
 
@@ -1140,7 +1140,7 @@ class WebSearchTelemetryRepository:
                 AVG(total_duration_ms) as avg_total_duration_ms,
                 AVG(results_count) FILTER (WHERE status = 'success') as avg_results_count
             FROM web_search_telemetry
-            WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+            WHERE created_at >= NOW() - INTERVAL '1 day' * $1
             GROUP BY DATE(created_at)
             ORDER BY search_date DESC
         """
@@ -1179,7 +1179,7 @@ class WebSearchTelemetryRepository:
                 MAX(created_at) as last_occurrence
             FROM web_search_telemetry
             WHERE status IN ('error', 'timeout')
-              AND created_at >= NOW() - ($1 || ' days')::INTERVAL
+              AND created_at >= NOW() - INTERVAL '1 day' * $1
             GROUP BY error_type, error_message
             ORDER BY count DESC
             LIMIT $2
@@ -1218,7 +1218,7 @@ class WebSearchTelemetryRepository:
                 COUNT(*) FILTER (WHERE status = 'success') as success_count,
                 COUNT(*) FILTER (WHERE status = 'error') as error_count
             FROM web_search_telemetry
-            WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+            WHERE created_at >= NOW() - INTERVAL '1 day' * $1
             GROUP BY query
             ORDER BY search_count DESC
             LIMIT $2
@@ -1667,7 +1667,7 @@ class HealthMetricsRepository:
         """
         query = """
             SELECT * FROM blood_pressure_measurements
-            WHERE user_id = $1 AND measured_at >= NOW() - ($2 || ' days')::INTERVAL
+            WHERE user_id = $1 AND measured_at >= NOW() - INTERVAL '1 day' * $2
             ORDER BY measured_at DESC
         """
         records = await self._db.fetch(query, user_id, days)
@@ -1707,7 +1707,7 @@ class HealthMetricsRepository:
                 MIN(diastolic_avg) as min_diastolic,
                 MAX(diastolic_avg) as max_diastolic
             FROM blood_pressure_measurements
-            WHERE user_id = $1 AND measured_at >= NOW() - ($2 || ' days')::INTERVAL
+            WHERE user_id = $1 AND measured_at >= NOW() - INTERVAL '1 day' * $2
         """
         record = await self._db.fetchrow(query, user_id, days)
 
