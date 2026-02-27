@@ -8,7 +8,6 @@ Base classes and types are imported from base.py.
 
 Available agents:
 - WebSearchAgent: Search the web for information
-- TodoistAgent: Manage tasks in Todoist
 """
 
 # Import base classes first (from parent module base.py)
@@ -23,13 +22,9 @@ from nergal.dialog.base import (
 )
 
 # Import base specialized agent class
-from nergal.dialog.agents.base_specialized import (
-    BaseSpecializedAgent,
-    ContextAwareAgent,
-)
+from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
 
 # Import specialized agents
-from nergal.dialog.agents.todoist_agent import TodoistAgent
 from nergal.dialog.agents.web_search_agent import WebSearchAgent
 
 __all__ = [
@@ -40,13 +35,9 @@ __all__ = [
     "AgentType",
     "BaseAgent",
     "BaseSpecializedAgent",
-    "ContextAwareAgent",
     "ExecutionPlan",
     "PlanStep",
 
     # Information gathering agents
     "WebSearchAgent",
-
-    # Specialized agents
-    "TodoistAgent",
 ]

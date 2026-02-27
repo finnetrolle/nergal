@@ -76,25 +76,6 @@ class WebSearchMetadata(BaseAgentMetadata):
 
 
 @dataclass
-class TodoistMetadata(BaseAgentMetadata):
-    """Metadata for Todoist agent results.
-
-    Attributes:
-        action: The action performed (create_task, complete_task, etc.).
-        task_count: Number of tasks affected.
-        project_name: Name of the Todoist project.
-        task_id: ID of the specific task if applicable.
-        due_date: Due date of the task if applicable.
-    """
-
-    action: str = ""
-    task_count: int = 0
-    project_name: str | None = None
-    task_id: str | None = None
-    due_date: str | None = None
-
-
-@dataclass
 class NewsMetadata(BaseAgentMetadata):
     """Metadata for news agent results.
 
@@ -254,7 +235,6 @@ class DefaultMetadata(BaseAgentMetadata):
 # Mapping from AgentType to metadata class
 METADATA_CLASS_MAP: dict[str, type[BaseAgentMetadata]] = {
     "web_search": WebSearchMetadata,
-    "todoist": TodoistMetadata,
     "news": NewsMetadata,
     "analysis": AnalysisMetadata,
     "comparison": ComparisonMetadata,

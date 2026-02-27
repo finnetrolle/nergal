@@ -41,7 +41,6 @@ from nergal.dialog.styles import StyleType, get_style_prompt
 from nergal.dialog.agents import (
     # Base classes
     BaseSpecializedAgent,
-    ContextAwareAgent,
     # Information gathering agents
     WebSearchAgent,
 )
@@ -54,7 +53,6 @@ __all__ = [
     # Core agents
     "BaseAgent",
     "BaseSpecializedAgent",
-    "ContextAwareAgent",
     "DefaultAgent",
     "DispatcherAgent",
     "AgentRegistry",

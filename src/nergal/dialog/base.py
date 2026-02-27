@@ -43,9 +43,6 @@ class AgentType(str, Enum):
     # Information gathering agents
     WEB_SEARCH = "web_search"
 
-    # Specialized agents
-    TODOIST = "todoist"  # Todoist task management agent
-
     @classmethod
     def get_category(cls, agent_type: "AgentType") -> AgentCategory:
         """Get the category for an agent type."""
@@ -53,8 +50,6 @@ class AgentType(str, Enum):
             return AgentCategory.CORE
         elif agent_type in (cls.WEB_SEARCH,):
             return AgentCategory.INFORMATION
-        elif agent_type in (cls.TODOIST,):
-            return AgentCategory.SPECIALIZED
         else:
             return AgentCategory.CORE
 

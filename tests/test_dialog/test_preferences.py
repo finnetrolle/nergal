@@ -74,7 +74,7 @@ class TestAgentPreference:
         """Test serialization to dictionary."""
         pref = AgentPreference(
             user_id=123,
-            agent_type=AgentType.TODOIST,
+            agent_type=AgentType.WEB_SEARCH,
             weight=0.8,
             keywords=["task", "todo"],
         )
@@ -82,7 +82,7 @@ class TestAgentPreference:
         data = pref.to_dict()
 
         assert data["user_id"] == 123
-        assert data["agent_type"] == "todoist"
+        assert data["agent_type"] == "web_search"
         assert data["weight"] == 0.8
         assert data["keywords"] == ["task", "todo"]
 
@@ -90,7 +90,7 @@ class TestAgentPreference:
         """Test deserialization from dictionary."""
         data = {
             "user_id": 456,
-            "agent_type": "todoist",
+            "agent_type": "web_search",
             "weight": -0.3,
             "keywords": ["avoid"],
         }
@@ -98,7 +98,7 @@ class TestAgentPreference:
         pref = AgentPreference.from_dict(data)
 
         assert pref.user_id == 456
-        assert pref.agent_type == AgentType.TODOIST
+        assert pref.agent_type == AgentType.WEB_SEARCH
         assert pref.weight == -0.3
         assert pref.keywords == ["avoid"]
 
@@ -136,15 +136,15 @@ class TestPreferenceManager:
         manager = PreferenceManager()
 
         manager.set_preference(123, AgentType.WEB_SEARCH, 0.5)
-        manager.set_preference(123, AgentType.TODOIST, 0.3)
-        manager.set_preference(456, AgentType.TODOIST, -0.2)
+        manager.set_preference(123, AgentType.DEFAULT, 0.3)
+        manager.set_preference(456, AgentType.WEB_SEARCH, -0.2)
 
         prefs = manager.get_all_preferences(123)
 
         assert len(prefs) == 2
         agent_types = {p.agent_type for p in prefs}
         assert AgentType.WEB_SEARCH in agent_types
-        assert AgentType.TODOIST in agent_types
+        assert AgentType.DEFAULT in agent_types
 
     def test_delete_preference(self) -> None:
         """Test deleting a preference."""
@@ -209,9 +209,9 @@ class TestPreferenceManager:
         """Test negative boost (avoiding agent)."""
         manager = PreferenceManager()
 
-        manager.set_preference(123, AgentType.TODOIST, weight=-0.5)
+        manager.set_preference(123, AgentType.WEB_SEARCH, weight=-0.5)
 
-        boost = manager.get_boost(123, AgentType.TODOIST, "any message")
+        boost = manager.get_boost(123, AgentType.WEB_SEARCH, "any message")
 
         assert boost == -0.5
 
@@ -249,11 +249,11 @@ class TestPreferenceManager:
         """Test that adjusted confidence is clamped to 0.0."""
         manager = PreferenceManager()
 
-        manager.set_preference(123, AgentType.TODOIST, weight=-0.8)
+        manager.set_preference(123, AgentType.WEB_SEARCH, weight=-0.8)
 
         adjusted = manager.apply_preference(
             user_id=123,
-            agent_type=AgentType.TODOIST,
+            agent_type=AgentType.WEB_SEARCH,
             confidence=0.3,
             message="test",
         )
@@ -279,27 +279,27 @@ class TestPreferenceManager:
         manager = PreferenceManager()
 
         manager.set_preference(123, AgentType.WEB_SEARCH, 0.5)
-        manager.set_preference(456, AgentType.TODOIST, 0.3)
+        manager.set_preference(456, AgentType.WEB_SEARCH, 0.3)
 
         manager.clear_cache()
 
         # Preferences should still exist (in storage)
         assert manager.get_preference(123, AgentType.WEB_SEARCH) is not None
-        assert manager.get_preference(456, AgentType.TODOIST) is not None
+        assert manager.get_preference(456, AgentType.WEB_SEARCH) is not None
 
     def test_get_stats(self) -> None:
         """Test getting statistics."""
         manager = PreferenceManager()
 
         manager.set_preference(123, AgentType.WEB_SEARCH, 0.5)
-        manager.set_preference(123, AgentType.TODOIST, 0.3)
+        manager.set_preference(123, AgentType.DEFAULT, 0.3)
 
         stats = manager.get_stats()
 
         assert stats["total_preferences"] == 2
         assert stats["users_with_preferences"] == 1
         assert stats["agent_distribution"]["web_search"] == 1
-        assert stats["agent_distribution"]["todoist"] == 1
+        assert stats["agent_distribution"]["default"] == 1
 
 
 class TestGlobalPreferenceManager:
@@ -339,7 +339,7 @@ class TestPreferenceManagerIntegration:
         manager.set_preference(1, AgentType.WEB_SEARCH, 0.5, ["search", "find"])
 
         # User 2 prefers todoist
-        manager.set_preference(2, AgentType.TODOIST, 0.8, ["task", "todo"])
+        manager.set_preference(2, AgentType.WEB_SEARCH, 0.8, ["task", "todo"])
 
         # User 3 has no preferences
 
@@ -348,12 +348,12 @@ class TestPreferenceManagerIntegration:
         assert manager.get_boost(1, AgentType.WEB_SEARCH, "something else") == 0.5  # base weight without keyword match
 
         # Check user 2
-        assert manager.get_boost(2, AgentType.TODOIST, "new task") == 0.9  # 0.8 + 0.1
-        assert manager.get_boost(2, AgentType.TODOIST, "something else") == 0.8  # base weight without keyword match
+        assert manager.get_boost(2, AgentType.WEB_SEARCH, "new task") == 0.9  # 0.8 + 0.1
+        assert manager.get_boost(2, AgentType.WEB_SEARCH, "something else") == 0.8  # base weight without keyword match
 
         # Check user 3
         assert manager.get_boost(3, AgentType.WEB_SEARCH, "search") == 0.0
-        assert manager.get_boost(3, AgentType.TODOIST, "create task") == 0.0
+        assert manager.get_boost(3, AgentType.WEB_SEARCH, "create task") == 0.0
 
     def test_preference_update(self) -> None:
         """Test updating an existing preference."""

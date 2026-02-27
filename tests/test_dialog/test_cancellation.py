@@ -233,14 +233,12 @@ class TestTimeoutSettings:
 
         assert settings.default_timeout == 30.0
         assert settings.web_search_timeout == 45.0
-        assert settings.todoist_timeout == 20.0
 
     def test_get_timeout_for_agent(self) -> None:
         """Test getting timeout for specific agent types."""
         settings = TimeoutSettings()
 
         assert settings.get_timeout_for_agent(AgentType.WEB_SEARCH) == 45.0
-        assert settings.get_timeout_for_agent(AgentType.TODOIST) == 20.0
         assert settings.get_timeout_for_agent(AgentType.DEFAULT) == 30.0
 
     def test_get_timeout_for_unknown_agent(self) -> None:

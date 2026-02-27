@@ -106,7 +106,7 @@ class TestStepGrouping:
         """Test grouping with multiple dependencies."""
         steps = [
             PlanStep(agent_type=AgentType.WEB_SEARCH, description="Step 0", depends_on=[], parallel_group=1),
-            PlanStep(agent_type=AgentType.TODOIST, description="Step 1", depends_on=[], parallel_group=1),
+            PlanStep(agent_type=AgentType.WEB_SEARCH, description="Step 1", depends_on=[], parallel_group=1),
             PlanStep(agent_type=AgentType.DEFAULT, description="Step 2", depends_on=[0, 1]),
             PlanStep(agent_type=AgentType.DEFAULT, description="Step 3", depends_on=[2]),
         ]
@@ -126,7 +126,7 @@ class TestStepGrouping:
         steps = [
             PlanStep(agent_type=AgentType.DEFAULT, description="Step 0", depends_on=[]),
             PlanStep(agent_type=AgentType.WEB_SEARCH, description="Step 1", depends_on=[0]),
-            PlanStep(agent_type=AgentType.TODOIST, description="Step 2", depends_on=[1]),
+            PlanStep(agent_type=AgentType.WEB_SEARCH, description="Step 2", depends_on=[1]),
             PlanStep(agent_type=AgentType.DEFAULT, description="Step 3", depends_on=[2]),
         ]
         
@@ -151,7 +151,7 @@ class TestStepGrouping:
         steps = [
             PlanStep(agent_type=AgentType.DEFAULT, description="Step 0", depends_on=[]),
             PlanStep(agent_type=AgentType.WEB_SEARCH, description="Step 1", depends_on=[0]),
-            PlanStep(agent_type=AgentType.TODOIST, description="Step 2", depends_on=[0]),
+            PlanStep(agent_type=AgentType.WEB_SEARCH, description="Step 2", depends_on=[0]),
             PlanStep(agent_type=AgentType.DEFAULT, description="Step 3", depends_on=[1, 2]),
         ]
         

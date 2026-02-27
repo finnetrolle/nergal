@@ -1,6 +1,7 @@
 """Tests for ExecutionContext and StepResult classes."""
 
 import pytest
+from unittest.mock import MagicMock
 
 from nergal.dialog.base import AgentType, StepResult
 from nergal.dialog.context import ExecutionContext
@@ -47,7 +48,7 @@ class TestStepResult:
         """Test StepResult for failed step."""
         result = StepResult(
             step_index=1,
-            agent_type=AgentType.TODOIST,
+            agent_type=AgentType.WEB_SEARCH,
             output="",
             success=False,
             error_message="API error",
@@ -91,7 +92,7 @@ class TestStepResult:
         """Test to_context_string for failed step."""
         result = StepResult(
             step_index=0,
-            agent_type=AgentType.TODOIST,
+            agent_type=AgentType.WEB_SEARCH,
             output="",
             success=False,
             error_message="Connection timeout",
@@ -171,8 +172,10 @@ class TestExecutionContext:
         default_result = context.get_result_by_agent(AgentType.DEFAULT)
         assert default_result == result2
 
-        # Non-existent agent
-        assert context.get_result_by_agent(AgentType.TODOIST) is None
+        # Non-existent agent - create a mock agent type for testing
+        mock_agent_type = MagicMock()
+        mock_agent_type.value = "non_existent_agent"
+        assert context.get_result_by_agent(mock_agent_type) is None
 
     def test_get_result_by_agent_returns_most_recent(self) -> None:
         """Test that get_result_by_agent returns most recent result."""
@@ -274,7 +277,7 @@ class TestExecutionContext:
         )
         result2 = StepResult(
             step_index=1,
-            agent_type=AgentType.TODOIST,
+            agent_type=AgentType.WEB_SEARCH,
             output="",
             success=False,
             error_message="Failed",
@@ -314,7 +317,7 @@ class TestExecutionContext:
 
         result2 = StepResult(
             step_index=1,
-            agent_type=AgentType.TODOIST,
+            agent_type=AgentType.WEB_SEARCH,
             output="",
             success=False,
         )
@@ -334,7 +337,7 @@ class TestExecutionContext:
         )
         result2 = StepResult(
             step_index=1,
-            agent_type=AgentType.TODOIST,
+            agent_type=AgentType.WEB_SEARCH,
             output="",
             success=False,
             error_message="Error 1",
@@ -397,7 +400,7 @@ class TestExecutionContext:
         ))
         context.add_result(StepResult(
             step_index=1,
-            agent_type=AgentType.TODOIST,
+            agent_type=AgentType.WEB_SEARCH,
             output="",
             success=False,
         ))
@@ -432,11 +435,11 @@ class TestExecutionContextIntegration:
         )
         context.add_result(search_result)
 
-        # Step 1: Todoist task analysis
-        todoist_result = StepResult(
+        # Step 1: Additional processing
+        analysis_result = StepResult(
             step_index=1,
-            agent_type=AgentType.TODOIST,
-            output="Retrieved todoist tasks",
+            agent_type=AgentType.DEFAULT,
+            output="Processed the search results",
             structured_data={
                 "tasks": ["Buy groceries", "Call mom", "Finish project"],
                 "completed": 1,
@@ -444,7 +447,7 @@ class TestExecutionContextIntegration:
             confidence=0.85,
             execution_time_ms=180.0,
         )
-        context.add_result(todoist_result)
+        context.add_result(analysis_result)
 
         # Step 2: Summary
         summary_result = StepResult(
@@ -463,7 +466,6 @@ class TestExecutionContextIntegration:
         # Get accumulated context
         accumulated = context.get_accumulated_context()
         assert "web_search" in accumulated
-        assert "todoist" in accumulated
         assert "default" in accumulated
 
         # Get specific results
@@ -475,15 +477,15 @@ class TestExecutionContextIntegration:
         """Test workflow where one step fails."""
         context = ExecutionContext(original_message="Create a task and search for info")
 
-        # Step 0: Todoist succeeds
-        todoist_result = StepResult(
+        # Step 0: Default agent succeeds
+        task_result = StepResult(
             step_index=0,
-            agent_type=AgentType.TODOIST,
+            agent_type=AgentType.DEFAULT,
             output="Task created successfully",
             structured_data={"task_id": "12345"},
             success=True,
         )
-        context.add_result(todoist_result)
+        context.add_result(task_result)
 
         # Step 1: Web search fails
         search_result = StepResult(

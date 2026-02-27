@@ -8,10 +8,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from typing import Any
 
-from nergal.dialog.agents.base_specialized import (
-    BaseSpecializedAgent,
-    ContextAwareAgent,
-)
+from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
 from nergal.dialog.base import AgentType, AgentResult
 from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMResponse
@@ -72,22 +69,6 @@ class MockSpecializedAgent(BaseSpecializedAgent):
     @property
     def system_prompt(self) -> str:
         return "You are a test agent."
-
-
-class MockContextAwareAgent(ContextAwareAgent):
-    """Concrete implementation for testing ContextAwareAgent."""
-    
-    _keywords = ["summarize", "summary", "резюме"]
-    _required_context_keys = ["search_results", "previous_step_output"]
-    _base_confidence = 0.4
-    
-    @property
-    def agent_type(self) -> AgentType:
-        return AgentType.CODE_ANALYSIS
-    
-    @property
-    def system_prompt(self) -> str:
-        return "You are a summary agent."
 
 
 # =============================================================================
@@ -214,49 +195,6 @@ class TestBaseSpecializedAgent:
 
 
 # =============================================================================
-# ContextAwareAgent Tests
-# =============================================================================
-
-class TestContextAwareAgentTests:
-    """Tests for ContextAwareAgent functionality."""
-    
-    @pytest.mark.asyncio
-    async def test_can_handle_returns_zero_without_required_context(
-        self, mock_llm_provider: BaseLLMProvider, empty_context: dict[str, Any]
-    ) -> None:
-        """Test that can_handle returns 0.0 when required context is missing."""
-        agent = MockContextAwareAgent(mock_llm_provider)
-        confidence = await agent.can_handle("summarize this", empty_context)
-        
-        assert confidence == 0.0
-    
-    @pytest.mark.asyncio
-    async def test_can_handle_returns_confidence_with_required_context(
-        self, mock_llm_provider: BaseLLMProvider, context_with_search_results: dict[str, Any]
-    ) -> None:
-        """Test that can_handle returns confidence when required context is present."""
-        agent = MockContextAwareAgent(mock_llm_provider)
-        confidence = await agent.can_handle("summarize this", context_with_search_results)
-        
-        # Should have non-zero confidence since required context is present
-        assert confidence > 0.0
-    
-    @pytest.mark.asyncio
-    async def test_can_handle_with_partial_context(
-        self, mock_llm_provider: BaseLLMProvider
-    ) -> None:
-        """Test that can_handle works with partial required context."""
-        agent = MockContextAwareAgent(mock_llm_provider)
-        
-        # Only one of the required keys
-        partial_context = {"search_results": "some results"}
-        confidence = await agent.can_handle("summarize this", partial_context)
-        
-        # Should still work since we check with any()
-        assert confidence > 0.0
-
-
-# =============================================================================
 # Parametrized Tests for Real Agents
 # =============================================================================
 
@@ -279,35 +217,6 @@ class TestRealSpecializedAgents:
         # Import agents dynamically based on agent_class
         # Currently no agents are tested here
         pass
-
-    @pytest.mark.parametrize("message,expected_high_confidence", [
-        ("привет как дела", False),  # General - no specific agent
-    ])
-    @pytest.mark.asyncio
-    async def test_agent_confidence_levels(
-        self,
-        message: str,
-        expected_high_confidence: bool,
-        mock_llm_provider: BaseLLMProvider,
-        empty_context: dict[str, Any],
-    ) -> None:
-        """Test that agents return appropriate confidence levels."""
-        from nergal.dialog.agents.todoist_agent import TodoistAgent
-
-        agents = [
-            TodoistAgent(mock_llm_provider),
-        ]
-
-        max_confidence = 0.0
-        for agent in agents:
-            confidence = await agent.can_handle(message, empty_context)
-            max_confidence = max(max_confidence, confidence)
-
-        if expected_high_confidence:
-            assert max_confidence >= 0.5, f"Expected high confidence for: {message}"
-        else:
-            # For general messages or messages without context, no specialized agent should be very confident
-            pass  # This is expected behavior
 
 
 # =============================================================================

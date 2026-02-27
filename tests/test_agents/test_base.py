@@ -12,10 +12,7 @@ from nergal.dialog.base import (
     PlanStep,
     AgentResult,
 )
-from nergal.dialog.agents.base_specialized import (
-    BaseSpecializedAgent,
-    ContextAwareAgent,
-)
+from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
 
 
 class TestAgentType:
@@ -227,27 +224,3 @@ class TestBaseSpecializedAgent:
         )
 
         assert confidence_with_context > confidence_no_context
-
-
-class TestContextAwareAgent:
-    """Tests for ContextAwareAgent class."""
-
-    @pytest.mark.asyncio
-    async def test_requires_context(self, mock_llm_provider):
-        """Test that context-aware agent requires context."""
-        class TestContextAgent(ContextAwareAgent):
-            _required_context_keys = ["search_results"]
-            agent_type = AgentType.WEB_SEARCH
-            system_prompt = "test"
-
-        agent = TestContextAgent(mock_llm_provider)
-
-        # Without required context
-        confidence = await agent.can_handle("summarize this", {})
-        assert confidence == 0.0
-
-        # With required context
-        confidence = await agent.can_handle(
-            "summarize this", {"search_results": "data"}
-        )
-        assert confidence > 0.0

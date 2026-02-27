@@ -16,7 +16,6 @@ from nergal.dialog.metadata import (
     NewsMetadata,
     SummaryMetadata,
     TechDocsMetadata,
-    TodoistMetadata,
     WebSearchMetadata,
 )
 
@@ -122,35 +121,6 @@ METADATA_TEST_DATA = [
                     "query": "test query",
                     "sources": ["source1", "source2"],
                     "result_count": 5,
-                },
-            },
-        },
-    ),
-    (
-        TodoistMetadata,
-        "todoist",
-        {
-            "default_values": {
-                "action": "",
-                "task_count": 0,
-                "project_name": None,
-                "task_id": None,
-                "due_date": None,
-            },
-            "full_init": {
-                "args": {
-                    "action": "create_task",
-                    "task_count": 3,
-                    "project_name": "Work",
-                    "task_id": "12345",
-                    "due_date": "2024-12-31",
-                },
-                "expected": {
-                    "action": "create_task",
-                    "task_count": 3,
-                    "project_name": "Work",
-                    "task_id": "12345",
-                    "due_date": "2024-12-31",
                 },
             },
         },
@@ -409,7 +379,6 @@ class TestGetMetadataClass:
     def test_known_agent_types(self) -> None:
         """Test getting metadata class for known agent types."""
         assert get_metadata_class("web_search") == WebSearchMetadata
-        assert get_metadata_class("todoist") == TodoistMetadata
         assert get_metadata_class("news") == NewsMetadata
         assert get_metadata_class("analysis") == AnalysisMetadata
         assert get_metadata_class("comparison") == ComparisonMetadata
@@ -433,11 +402,6 @@ class TestCreateMetadataFromDict:
             "query": "test query",
             "sources": ["source1"],
             "result_count": 5,
-        }),
-        ("todoist", TodoistMetadata, {
-            "action": "complete_task",
-            "task_count": 2,
-            "project_name": "Personal",
         }),
     ])
     def test_create_metadata_from_dict(self, agent_type, metadata_class, init_data):
@@ -491,26 +455,6 @@ class TestAgentResultIntegration:
         assert metadata.query == "test"
         assert metadata.sources == ["a", "b"]
         assert metadata.result_count == 2
-
-    def test_get_typed_metadata_todoist(self) -> None:
-        """Test get_typed_metadata for Todoist."""
-        result = AgentResult(
-            response="Task created",
-            agent_type=AgentType.TODOIST,
-            metadata={
-                "action": "create_task",
-                "task_count": 1,
-                "project_name": "Work",
-            },
-        )
-
-        metadata = result.get_typed_metadata()
-
-        assert metadata is not None
-        assert isinstance(metadata, TodoistMetadata)
-        assert metadata.action == "create_task"
-        assert metadata.task_count == 1
-        assert metadata.project_name == "Work"
 
     def test_get_typed_metadata_preserves_tokens(self) -> None:
         """Test that tokens_used is preserved in typed metadata."""

@@ -41,7 +41,6 @@ class TestAgentFactory:
         # The module should have registered some factories at import time
         # Check that common agents are registered
         assert AgentFactory.has_factory(AgentType.WEB_SEARCH)
-        assert AgentFactory.has_factory(AgentType.TODOIST)
 
     def test_get_registered_types(self) -> None:
         """Test get_registered_types method."""
@@ -52,7 +51,6 @@ class TestAgentFactory:
         # Should have multiple registered types from module load
         assert len(types) > 0
         assert AgentType.WEB_SEARCH in types
-        assert AgentType.TODOIST in types
 
     def test_create_agent_not_registered(self) -> None:
         """Test creating an agent that's not registered."""
@@ -117,7 +115,6 @@ class TestAgentConfigMap:
 
         expected_keys = [
             "web_search_enabled",
-            "todoist_enabled",
         ]
 
         for key in expected_keys:

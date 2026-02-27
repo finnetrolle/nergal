@@ -28,9 +28,6 @@ AGENT_DESCRIPTIONS: dict[AgentType, str] = {
 
     # Information gathering agents
     AgentType.WEB_SEARCH: "агент для поиска информации в интернете, актуальных новостей, фактов, погоды, курсов валют",
-
-    # Specialized agents
-    AgentType.TODOIST: "агент для работы с задачами Todoist: получение списка задач, создание задач, управление задачами, просмотр задач на сегодня/завтра/неделю",
 }
 
 # Example execution plans for different scenarios
@@ -398,12 +395,6 @@ class DispatcherAgent(BaseAgent):
             "web_search": AgentType.WEB_SEARCH,
             "websearch": AgentType.WEB_SEARCH,
             "search": AgentType.WEB_SEARCH,
-
-            # Specialized agents
-            "todoist": AgentType.TODOIST,
-            "tasks": AgentType.TODOIST,
-            "task": AgentType.TODOIST,
-            "todo": AgentType.TODOIST,
         }
         return mapping.get(agent_str, AgentType.DEFAULT)
 

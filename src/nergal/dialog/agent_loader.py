@@ -45,14 +45,12 @@ class AgentFactory:
         cls,
         agent_type: AgentType,
         requires_search: bool = False,
-        requires_todoist: bool = False,
     ) -> Callable:
         """Decorator to register an agent factory.
 
         Args:
             agent_type: The type of agent this factory creates.
             requires_search: Whether this agent requires a search provider.
-            requires_todoist: Whether this agent requires Todoist integration.
 
         Returns:
             Decorator function.
@@ -70,8 +68,6 @@ class AgentFactory:
             cls._dependencies[agent_type] = []
             if requires_search:
                 cls._dependencies[agent_type].append("search")
-            if requires_todoist:
-                cls._dependencies[agent_type].append("todoist")
             logger.debug(f"Registered agent factory: {agent_type.value}")
             return factory_func
 
@@ -83,7 +79,6 @@ class AgentFactory:
         agent_type: AgentType,
         llm_provider: "BaseLLMProvider",
         search_provider: "BaseWebSearchProvider | None" = None,
-        todoist_client: "TodoistClient | None" = None,
         **kwargs,
     ) -> BaseAgent | None:
         """Create an agent instance by type.
@@ -92,7 +87,6 @@ class AgentFactory:
             agent_type: Type of agent to create.
             llm_provider: LLM provider instance.
             search_provider: Optional web search provider.
-            todoist_client: Optional Todoist client.
             **kwargs: Additional arguments passed to the factory.
 
         Returns:
@@ -110,17 +104,11 @@ class AgentFactory:
                 f"Agent {agent_type.value} requires search_provider but none provided"
             )
             return None
-        if "todoist" in deps and todoist_client is None:
-            logger.warning(
-                f"Agent {agent_type.value} requires todoist_client but none provided"
-            )
-            return None
 
         # Call factory with appropriate arguments
         return factory(
             llm_provider=llm_provider,
             search_provider=search_provider,
-            todoist_client=todoist_client,
             **kwargs,
         )
 
@@ -177,28 +165,6 @@ def _create_web_search_agent(
     )
 
 
-@AgentFactory.register(AgentType.TODOIST, requires_todoist=True)
-def _create_todoist_agent(
-    llm_provider: "BaseLLMProvider",
-    todoist_client: "TodoistClient | None" = None,
-    **kwargs,
-) -> BaseAgent:
-    """Create a TodoistAgent instance."""
-    from nergal.dialog.agents.todoist_agent import TodoistAgent
-    from nergal.integrations.todoist import TodoistClient
-
-    # Create client if not provided
-    client = todoist_client
-    if client is None:
-        client = TodoistClient()
-
-    return TodoistAgent(
-        llm_provider=llm_provider,
-        todoist_client=client,
-        style_type=kwargs.get("style_type", StyleType.DEFAULT),
-    )
-
-
 
 
 
@@ -210,7 +176,6 @@ def _create_todoist_agent(
 # Mapping from config settings to agent types
 AGENT_CONFIG_MAP: dict[str, AgentType] = {
     "web_search_enabled": AgentType.WEB_SEARCH,
-    "todoist_enabled": AgentType.TODOIST,
 }
 
 
@@ -219,7 +184,6 @@ def register_configured_agents(
     settings: Settings,
     llm_provider: "BaseLLMProvider",
     search_provider: "BaseWebSearchProvider | None" = None,
-    todoist_client: "TodoistClient | None" = None,
 ) -> list[str]:
     """Register agents based on configuration settings.
 
@@ -231,7 +195,6 @@ def register_configured_agents(
         settings: Application settings.
         llm_provider: LLM provider instance.
         search_provider: Optional web search provider instance.
-        todoist_client: Optional Todoist client instance.
 
     Returns:
         List of registered agent names.
@@ -257,9 +220,6 @@ def register_configured_agents(
         if "search" in deps and search_provider is None:
             logger.debug(f"Skipping {agent_type.value} - requires search_provider")
             continue
-        if "todoist" in deps and todoist_client is None:
-            logger.debug(f"Skipping {agent_type.value} - requires todoist_client")
-            continue
 
         # Create and register agent
         try:
@@ -267,7 +227,6 @@ def register_configured_agents(
                 agent_type=agent_type,
                 llm_provider=llm_provider,
                 search_provider=search_provider,
-                todoist_client=todoist_client,
                 style_type=style_type,
                 max_results=settings.web_search.max_results if agent_type == AgentType.WEB_SEARCH else None,
             )
@@ -314,18 +273,4 @@ def create_web_search_agent(
         search_provider=search_provider,
         style_type=style_type,
         max_results=max_results,
-    )
-
-
-def create_todoist_agent(
-    llm_provider: "BaseLLMProvider",
-    todoist_client: "TodoistClient | None" = None,
-    style_type: StyleType = StyleType.DEFAULT,
-) -> BaseAgent:
-    """Create a TodoistAgent instance."""
-    return AgentFactory.create(
-        AgentType.TODOIST,
-        llm_provider=llm_provider,
-        todoist_client=todoist_client,
-        style_type=style_type,
     )

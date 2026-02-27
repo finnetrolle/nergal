@@ -107,25 +107,21 @@ class TestDispatcherAgentBasics:
         self, mock_llm_provider: BaseLLMProvider, agent_registry: AgentRegistry
     ) -> None:
         """Test that system prompt changes based on registered agents."""
-        # Add a todoist agent to make the registry different from defaults
-        todoist_agent = MagicMock(spec=BaseAgent)
-        todoist_agent.agent_type = AgentType.TODOIST
-        todoist_agent.can_handle = AsyncMock(return_value=0.7)
-        agent_registry.register(todoist_agent)
+        # Remove the default WEB_SEARCH agent from the registry
+        # to make the registry different from defaults
+        agent_registry._agents = {}  # Clear the registry
 
         dispatcher = DispatcherAgent(mock_llm_provider)
         dispatcher.set_agent_registry(agent_registry)
 
-        prompt_with_agents = dispatcher.system_prompt
+        prompt_with_empty_registry = dispatcher.system_prompt
 
         # Create dispatcher without registry
         dispatcher_no_registry = DispatcherAgent(mock_llm_provider)
         prompt_without_registry = dispatcher_no_registry.system_prompt
 
-        # Prompts should be different (one has todoist agent, the other doesn't)
-        assert prompt_with_agents != prompt_without_registry
-        # Verify todoist is in the one with registry
-        assert "todoist" in prompt_with_agents.lower()
+        # Prompts should be different (one has empty registry, the other uses default descriptions)
+        assert prompt_with_empty_registry != prompt_without_registry
 
 
 # =============================================================================
@@ -263,7 +259,6 @@ class TestAgentDescriptions:
         expected_types = [
             AgentType.DEFAULT,
             AgentType.WEB_SEARCH,
-            AgentType.TODOIST,
         ]
 
         for agent_type in expected_types:
