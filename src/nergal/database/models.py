@@ -4,7 +4,7 @@ This module defines Pydantic models that represent database tables
 for users, profiles, and conversation history.
 """
 
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -213,7 +213,7 @@ class WebSearchTelemetry(BaseModel):
 
 class UserIntegration(BaseModel):
     """User integration with external services (e.g., Todoist)."""
-    
+
     id: UUID | None = None
     user_id: int
     integration_type: str  # "todoist", "notion", etc.
@@ -224,59 +224,6 @@ class UserIntegration(BaseModel):
     last_used_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-
-
-class GeneralReminder(BaseModel):
-    """General-purpose reminder for scheduled notifications.
-    
-    Stores user-configured reminders for any purpose,
-    supporting both one-time and recurring reminders.
-    """
-    
-    id: UUID | None = None
-    user_id: int
-    
-    # Reminder content
-    title: str
-    description: str | None = None
-    
-    # Reminder time (hour and minute in user's timezone)
-    reminder_time: str  # Format: "HH:MM"
-    
-    # Date for one-time reminders (None for recurring)
-    reminder_date: date | None = None
-    
-    # User's timezone
-    user_timezone: str | None = None
-    
-    # Whether reminder is active
-    is_active: bool = True
-    
-    # Whether this is a recurring reminder
-    is_recurring: bool = False
-    
-    # Days of week for recurring reminders (0=Monday, 6=Sunday)
-    recurring_days: list[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4, 5, 6])
-    
-    # Last reminder sent
-    last_sent_at: datetime | None = None
-    
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-    
-    def format_time(self) -> str:
-        """Format reminder time for display."""
-        return self.reminder_time
-    
-    def format_days(self) -> str:
-        """Format recurring days for display in Russian."""
-        if not self.is_recurring:
-            return ""
-        
-        day_names = {
-            0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"
-        }
-        return ", ".join(day_names.get(d, str(d)) for d in sorted(self.recurring_days))
 
 
 class UserMemoryContext(BaseModel):

@@ -118,7 +118,6 @@ class TestAgentConfigMap:
         expected_keys = [
             "web_search_enabled",
             "todoist_enabled",
-            "reminder_enabled",
         ]
 
         for key in expected_keys:

@@ -123,12 +123,6 @@ class Container(containers.DeclarativeContainer):
         db=database,
     )
 
-    # General reminder repository - Factory
-    general_reminder_repository = providers.Factory(
-        lambda db: _create_general_reminder_repository(db),
-        db=database,
-    )
-    
     # ============== Memory Service ==============
     
     # Memory service - Singleton (depends on database)
@@ -286,12 +280,6 @@ def _create_user_integration_repository(db: "DatabaseConnection") -> "UserIntegr
     """Create user integration repository instance with injected database connection."""
     from nergal.database.repositories import UserIntegrationRepository
     return UserIntegrationRepository(db=db)
-
-
-def _create_general_reminder_repository(db: "DatabaseConnection") -> "GeneralReminderRepository":
-    """Create general reminder repository instance with injected database connection."""
-    from nergal.database.repositories import GeneralReminderRepository
-    return GeneralReminderRepository(db=db)
 
 
 def _create_memory_service(database: "DatabaseConnection") -> "MemoryService | None":

@@ -31,7 +31,6 @@ AGENT_DESCRIPTIONS: dict[AgentType, str] = {
 
     # Specialized agents
     AgentType.TODOIST: "агент для работы с задачами Todoist: получение списка задач, создание задач, управление задачами, просмотр задач на сегодня/завтра/неделю",
-    AgentType.REMINDER: "агент для управления напоминаниями: создание напоминаний на определённое время, повторяющиеся напоминания, удаление и просмотр напоминаний",
 }
 
 # Example execution plans for different scenarios

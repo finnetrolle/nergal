@@ -313,16 +313,12 @@ def main() -> None:
             logger.info("Whisper model pre-loaded successfully")
 
     # Initialize memory service (async, in event loop)
-    async def post_init(application: Application) -> None:
+    async def post_init(_application: Application) -> None:
         """Initialize async resources after application is ready."""
         await app.initialize_memory()
 
         # Start admin web interface
         await app.start_admin_server()
-
-        # Setup reminder jobs for health notifications
-        from nergal.services.reminder_service import setup_reminder_jobs
-        setup_reminder_jobs(application, interval_seconds=60)
 
         # Mark components as healthy
         from nergal.monitoring import HealthStatus, get_health_checker
@@ -331,7 +327,7 @@ def main() -> None:
         checker.mark_healthy("bot", "Bot application initialized")
         checker.mark_healthy("memory", "Memory service initialized")
 
-    async def post_shutdown(application: Application) -> None:
+    async def post_shutdown(_application: Application) -> None:
         """Cleanup async resources on shutdown."""
         await app.stop_admin_server()
         await app.shutdown_memory()

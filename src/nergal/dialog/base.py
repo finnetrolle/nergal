@@ -45,7 +45,6 @@ class AgentType(str, Enum):
 
     # Specialized agents
     TODOIST = "todoist"  # Todoist task management agent
-    REMINDER = "reminder"  # General-purpose reminders agent
 
     @classmethod
     def get_category(cls, agent_type: "AgentType") -> AgentCategory:
@@ -54,7 +53,7 @@ class AgentType(str, Enum):
             return AgentCategory.CORE
         elif agent_type in (cls.WEB_SEARCH,):
             return AgentCategory.INFORMATION
-        elif agent_type in (cls.TODOIST, cls.REMINDER):
+        elif agent_type in (cls.TODOIST,):
             return AgentCategory.SPECIALIZED
         else:
             return AgentCategory.CORE

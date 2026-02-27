@@ -238,9 +238,6 @@ class AgentSettings(BaseSettings):
     todoist_enabled: bool = Field(
         default=True, description="Enable TodoistAgent for task management"
     )
-    reminder_enabled: bool = Field(
-        default=True, description="Enable ReminderAgent for general-purpose reminders"
-    )
 
     # Timeout settings (in seconds)
     default_timeout: float = Field(
