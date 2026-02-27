@@ -51,7 +51,6 @@ class TimeoutSettings:
         timeouts = {
             AgentType.WEB_SEARCH: self.web_search_timeout,
             AgentType.TODOIST: self.todoist_timeout,
-            AgentType.NEWS: self.news_timeout,
             AgentType.DEFAULT: self.default_agent_timeout,
         }
         return timeouts.get(agent_type, self.default_timeout)

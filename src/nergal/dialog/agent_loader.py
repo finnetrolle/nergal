@@ -199,46 +199,6 @@ def _create_todoist_agent(
     )
 
 
-@AgentFactory.register(AgentType.NEWS)
-def _create_news_agent(
-    llm_provider: "BaseLLMProvider",
-    **kwargs,
-) -> BaseAgent:
-    """Create a NewsAgent instance."""
-    from nergal.dialog.agents.news_agent import NewsAgent
-
-    return NewsAgent(
-        llm_provider=llm_provider,
-        style_type=kwargs.get("style_type", StyleType.DEFAULT),
-    )
-
-
-@AgentFactory.register(AgentType.CODE_ANALYSIS)
-def _create_code_analysis_agent(
-    llm_provider: "BaseLLMProvider",
-    **kwargs,
-) -> BaseAgent:
-    """Create a CodeAnalysisAgent instance."""
-    from nergal.dialog.agents.code_analysis_agent import CodeAnalysisAgent
-
-    return CodeAnalysisAgent(
-        llm_provider=llm_provider,
-        style_type=kwargs.get("style_type", StyleType.DEFAULT),
-    )
-
-
-@AgentFactory.register(AgentType.METRICS)
-def _create_metrics_agent(
-    llm_provider: "BaseLLMProvider",
-    **kwargs,
-) -> BaseAgent:
-    """Create a MetricsAgent instance."""
-    from nergal.dialog.agents.metrics_agent import MetricsAgent
-
-    return MetricsAgent(
-        llm_provider=llm_provider,
-        style_type=kwargs.get("style_type", StyleType.DEFAULT),
-    )
 
 
 @AgentFactory.register(AgentType.HEALTH)
@@ -277,9 +237,6 @@ def _create_reminder_agent(
 # Mapping from config settings to agent types
 AGENT_CONFIG_MAP: dict[str, AgentType] = {
     "web_search_enabled": AgentType.WEB_SEARCH,
-    "news_enabled": AgentType.NEWS,
-    "code_analysis_enabled": AgentType.CODE_ANALYSIS,
-    "metrics_enabled": AgentType.METRICS,
     "todoist_enabled": AgentType.TODOIST,
     "health_enabled": AgentType.HEALTH,
     "reminder_enabled": AgentType.REMINDER,
@@ -386,42 +343,6 @@ def create_web_search_agent(
         search_provider=search_provider,
         style_type=style_type,
         max_results=max_results,
-    )
-
-
-def create_news_agent(
-    llm_provider: "BaseLLMProvider",
-    style_type: StyleType,
-) -> BaseAgent:
-    """Create a NewsAgent instance."""
-    return AgentFactory.create(
-        AgentType.NEWS,
-        llm_provider=llm_provider,
-        style_type=style_type,
-    )
-
-
-def create_code_analysis_agent(
-    llm_provider: "BaseLLMProvider",
-    style_type: StyleType,
-) -> BaseAgent:
-    """Create a CodeAnalysisAgent instance."""
-    return AgentFactory.create(
-        AgentType.CODE_ANALYSIS,
-        llm_provider=llm_provider,
-        style_type=style_type,
-    )
-
-
-def create_metrics_agent(
-    llm_provider: "BaseLLMProvider",
-    style_type: StyleType,
-) -> BaseAgent:
-    """Create a MetricsAgent instance."""
-    return AgentFactory.create(
-        AgentType.METRICS,
-        llm_provider=llm_provider,
-        style_type=style_type,
     )
 
 

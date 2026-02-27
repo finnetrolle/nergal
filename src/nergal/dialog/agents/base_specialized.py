@@ -45,24 +45,24 @@ class BaseSpecializedAgent(BaseAgent):
         _pattern_boost: Confidence boost when a pattern matches.
     
     Example:
-        class NewsAgent(BaseSpecializedAgent):
-            _keywords = ["новости", "news", "пресса"]
-            _context_keys = ["search_results"]
-            _patterns = [r"что пишут", r"what.*write"]
-            
+        class TodoistAgent(BaseSpecializedAgent):
+            _keywords = ["задача", "задачи", "task", "todo"]
+            _context_keys = ["tasks"]
+            _patterns = [r"создай.*задач", r"create.*task"]
+
             @property
             def agent_type(self) -> AgentType:
-                return AgentType.NEWS
-            
+                return AgentType.TODOIST
+
             @property
             def system_prompt(self) -> str:
-                return "Ты — агент для агрегации новостей..."
-            
+                return "Ты — агент для управления задачами Todoist..."
+
             async def _calculate_custom_confidence(
                 self, message: str, context: dict[str, Any]
             ) -> float:
-                # Hook: Extra confidence for multiple sources
-                if context.get("sources_count", 0) >= 3:
+                # Hook: Extra confidence for multiple tasks
+                if context.get("task_count", 0) >= 3:
                     return 0.2
                 return 0.0
     """

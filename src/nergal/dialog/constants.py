@@ -97,108 +97,6 @@ TIME_RELATED_WORDS = [
 
 
 # =============================================================================
-# News Agent Keywords
-# =============================================================================
-
-# Keywords that indicate news aggregation request
-NEWS_KEYWORDS = [
-    # Direct news requests
-    "новости",
-    "news",
-    "пресса",
-    "сми",
-    "press",
-    "media",
-    # Source comparison
-    "сравни источники",
-    "compare sources",
-    "что пишут",
-    "what do they write",
-    "сколько источников",
-    "multiple sources",
-    # News analysis
-    "агрегация",
-    "aggregation",
-    "обзор прессы",
-    "press review",
-    "итоги дня",
-    "daily summary",
-    # Source verification
-    "достоверность",
-    "credibility",
-    "проверь источник",
-    "verify source",
-    "предвзятость",
-    "bias",
-    # Additional news keywords from NewsAgent
-    "газета",
-    "журнал",
-    "newspaper",
-    "journal",
-    "сообщается",
-    "источники",
-    "репортаж",
-    "корреспондент",
-    "reported",
-    "sources",
-    "coverage",
-    "breaking",
-    "заявил",
-    "объявил",
-    "опубликовал",
-    "анонс",
-    "announced",
-    "stated",
-    "published",
-    "revealed",
-    "скандал",
-    "событие",
-    "происшествие",
-    "чрезвычайное",
-    "scandal",
-    "event",
-    "incident",
-    "emergency",
-    "политика",
-    "экономика",
-    "финансы",
-    "технологии",
-    "politics",
-    "economy",
-    "finance",
-    "technology",
-]
-
-# Patterns for news aggregation intent
-NEWS_PATTERNS = [
-    r"(?:новости|news)\s+(?:про|о|about|on)\s+(.+)",
-    r"(?:что|what)\s+(?:пишут|do they write|говорят|do they say)\s+(?:про|о|about)?\s*(.+)",
-    r"(?:сравни|compare)\s+(?:источники|sources)\s+(?:про|о|about)?\s*(.+)",
-    r"(?:агрегация|aggregate)\s+(.+)",
-    r"(?:сколько|how many)\s+(?:источников|sources)\s+(.+)",
-]
-
-# High-credibility source patterns
-CREDIBLE_SOURCES = [
-    "reuters", "associated press", "bbc", "the guardian",
-    "the new york times", "washington post", "the economist",
-    "bloomberg", "financial times", "the wall street journal",
-    "nature", "science", "the lancet",
-    "тасс", "риа новости", "интерфакс", "коммерсант",
-    "ведомости", "рбк", "медуза", "дождь",
-]
-
-# Source categories by bias tendency
-SOURCE_BIAS = {
-    "left": ["the guardian", "the new york times", "cnn", "msnbc", "huffpost"],
-    "center": ["reuters", "associated press", "bbc", "the economist", "bloomberg"],
-    "right": ["fox news", "the wall street journal", "breitbart", "daily mail"],
-    "russia_state": ["тасс", "риа новости", "россия сегодня"],
-    "russia_independent": ["медуза", "дождь", "новая газета", "коммерсант"],
-}
-
-
-# =============================================================================
 # Comparison Agent Keywords
 # =============================================================================
 
@@ -238,35 +136,6 @@ EXPERTISE_KEYWORDS = [
 
 
 # =============================================================================
-# Code Analysis Agent Keywords
-# =============================================================================
-
-CODE_ANALYSIS_KEYWORDS = [
-    "код", "code", "функция", "function", "класс", "class",
-    "метод", "method", "модуль", "module", "библиотека", "library",
-    "алгоритм", "algorithm", "реализация", "implementation",
-    "отладка", "debug", "дебаг", "ошибка в коде", "bug",
-    "рефакторинг", "refactor", "оптимизация", "optimization",
-    "архитектура кода", "code architecture",
-    "объясни код", "explain code", "как работает", "how it works",
-]
-
-
-# =============================================================================
-# Metrics Agent Keywords
-# =============================================================================
-
-METRICS_KEYWORDS = [
-    "метрики", "metrics", "статистика", "statistics",
-    "показатели", "indicators", "kpi", "KPI",
-    "производительность", "performance", "скорость", "speed",
-    "количество", "count", "число", "number",
-    "график", "chart", "диаграмма", "diagram",
-    "мониторинг", "monitoring", "аналитика", "analytics",
-]
-
-
-# =============================================================================
 # Agent Descriptions (for dispatcher prompts)
 # =============================================================================
 
@@ -277,9 +146,6 @@ AGENT_DESCRIPTIONS: dict[str, str] = {
 
     # Information gathering agents
     "web_search": "агент для поиска информации в интернете, актуальных новостей, фактов, погоды, курсов валют",
-    "code_analysis": "агент для анализа кодовой базы, поиска использования функций, объяснения работы кода, архитектурного анализа",
-    "metrics": "агент для получения метрик производительности, статистики, KPI, количественных данных из систем мониторинга",
-    "news": "агент для агрегации новостей из нескольких источников, сравнения информации, выявления консенсуса и противоречий, отслеживания ссылок и оценки достоверности источников",
 
     # Processing agents
     "fact_check": "агент для проверки фактов на достоверность, верификации информации из поиска, оценки надёжности источников",
@@ -302,7 +168,7 @@ AGENT_DESCRIPTIONS: dict[str, str] = {
 # Agents organized by category for documentation and routing
 AGENT_CATEGORIES = {
     "core": ["default", "dispatcher"],
-    "information": ["web_search", "code_analysis", "metrics", "news"],
+    "information": ["web_search"],
     "processing": ["fact_check", "comparison"],
     "specialized": ["expertise"],
 }

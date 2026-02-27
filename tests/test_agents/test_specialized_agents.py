@@ -264,7 +264,7 @@ class TestRealSpecializedAgents:
     """Parametrized tests for real specialized agents."""
 
     @pytest.mark.parametrize("agent_class,keywords,expected_type", [
-        ("NewsAgent", ["новости", "news"], AgentType.NEWS),
+        # Currently no specialized agents with parametrized tests
     ])
     @pytest.mark.asyncio
     async def test_agent_keywords_and_type(
@@ -276,20 +276,11 @@ class TestRealSpecializedAgents:
         request: pytest.FixtureRequest,
     ) -> None:
         """Test that agents have correct keywords and types."""
-        # Import agents dynamically
-        if agent_class == "NewsAgent":
-            from nergal.dialog.agents.news_agent import NewsAgent
-            agent = NewsAgent(mock_llm_provider)
-        
-        assert agent.agent_type == expected_type
-        assert len(agent._keywords) > 0
-        
-        # Test that at least some keywords are present
-        for kw in keywords:
-            assert kw in agent._keywords or any(kw in k for k in agent._keywords)
-    
+        # Import agents dynamically based on agent_class
+        # Currently no agents are tested here
+        pass
+
     @pytest.mark.parametrize("message,expected_high_confidence", [
-        ("какие новости сегодня", True),  # News
         ("привет как дела", False),  # General - no specific agent
     ])
     @pytest.mark.asyncio
@@ -301,17 +292,17 @@ class TestRealSpecializedAgents:
         empty_context: dict[str, Any],
     ) -> None:
         """Test that agents return appropriate confidence levels."""
-        from nergal.dialog.agents.news_agent import NewsAgent
+        from nergal.dialog.agents.todoist_agent import TodoistAgent
 
         agents = [
-            NewsAgent(mock_llm_provider),
+            TodoistAgent(mock_llm_provider),
         ]
-        
+
         max_confidence = 0.0
         for agent in agents:
             confidence = await agent.can_handle(message, empty_context)
             max_confidence = max(max_confidence, confidence)
-        
+
         if expected_high_confidence:
             assert max_confidence >= 0.5, f"Expected high confidence for: {message}"
         else:

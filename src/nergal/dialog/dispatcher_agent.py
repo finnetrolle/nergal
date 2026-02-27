@@ -28,9 +28,6 @@ AGENT_DESCRIPTIONS: dict[AgentType, str] = {
 
     # Information gathering agents
     AgentType.WEB_SEARCH: "агент для поиска информации в интернете, актуальных новостей, фактов, погоды, курсов валют",
-    AgentType.CODE_ANALYSIS: "агент для анализа кодовой базы, поиска использования функций, объяснения работы кода, архитектурного анализа",
-    AgentType.METRICS: "агент для получения метрик производительности, статистики, KPI, количественных данных из систем мониторинга",
-    AgentType.NEWS: "агент для агрегации новостей из нескольких источников, сравнения информации, выявления консенсуса и противоречий, отслеживания ссылок и оценки достоверности источников",
 
     # Specialized agents
     AgentType.TODOIST: "агент для работы с задачами Todoist: получение списка задач, создание задач, управление задачами, просмотр задач на сегодня/завтра/неделю",
@@ -403,12 +400,6 @@ class DispatcherAgent(BaseAgent):
             "web_search": AgentType.WEB_SEARCH,
             "websearch": AgentType.WEB_SEARCH,
             "search": AgentType.WEB_SEARCH,
-            "code_analysis": AgentType.CODE_ANALYSIS,
-            "code": AgentType.CODE_ANALYSIS,
-            "codeanalysis": AgentType.CODE_ANALYSIS,
-            "metrics": AgentType.METRICS,
-            "stats": AgentType.METRICS,
-            "statistics": AgentType.METRICS,
 
             # Specialized agents
             "todoist": AgentType.TODOIST,

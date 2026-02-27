@@ -235,15 +235,6 @@ class AgentSettings(BaseSettings):
     web_search_enabled: bool = Field(
         default=True, description="Enable WebSearchAgent"
     )
-    news_enabled: bool = Field(
-        default=False, description="Enable NewsAgent"
-    )
-    code_analysis_enabled: bool = Field(
-        default=False, description="Enable CodeAnalysisAgent"
-    )
-    metrics_enabled: bool = Field(
-        default=False, description="Enable MetricsAgent"
-    )
     todoist_enabled: bool = Field(
         default=True, description="Enable TodoistAgent for task management"
     )
@@ -263,9 +254,6 @@ class AgentSettings(BaseSettings):
     )
     todoist_timeout: float = Field(
         default=20.0, ge=1.0, description="Timeout for Todoist agent"
-    )
-    news_timeout: float = Field(
-        default=40.0, ge=1.0, description="Timeout for news agent"
     )
     default_agent_timeout: float = Field(
         default=30.0, ge=1.0, description="Timeout for default/conversation agent"

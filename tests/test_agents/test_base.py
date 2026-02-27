@@ -25,7 +25,6 @@ class TestAgentType:
         """Test that agent types have expected values."""
         assert AgentType.DEFAULT.value == "default"
         assert AgentType.WEB_SEARCH.value == "web_search"
-        assert AgentType.NEWS.value == "news"
 
     def test_get_category_core(self):
         """Test category assignment for core agents."""
@@ -35,9 +34,6 @@ class TestAgentType:
     def test_get_category_information(self):
         """Test category assignment for information agents."""
         assert AgentType.get_category(AgentType.WEB_SEARCH) == AgentCategory.INFORMATION
-        assert AgentType.get_category(AgentType.NEWS) == AgentCategory.INFORMATION
-        assert AgentType.get_category(AgentType.CODE_ANALYSIS) == AgentCategory.INFORMATION
-        assert AgentType.get_category(AgentType.METRICS) == AgentCategory.INFORMATION
 
 
 class TestExecutionPlan:

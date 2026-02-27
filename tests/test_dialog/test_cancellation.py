@@ -241,18 +241,20 @@ class TestTimeoutSettings:
 
         assert settings.get_timeout_for_agent(AgentType.WEB_SEARCH) == 45.0
         assert settings.get_timeout_for_agent(AgentType.TODOIST) == 20.0
-        assert settings.get_timeout_for_agent(AgentType.NEWS) == 40.0
         assert settings.get_timeout_for_agent(AgentType.DEFAULT) == 30.0
 
     def test_get_timeout_for_unknown_agent(self) -> None:
         """Test getting timeout for unknown agent type."""
         settings = TimeoutSettings()
 
+        # Create a mock agent type that's not in the settings
+        from unittest.mock import MagicMock
+        unknown_agent = MagicMock()
+        unknown_agent.value = "unknown_agent"
+
         # Unknown agents should use default timeout
-        assert (
-            settings.get_timeout_for_agent(AgentType.CODE_ANALYSIS)
-            == settings.default_timeout
-        )
+        result = settings.get_timeout_for_agent(unknown_agent)
+        assert result == settings.default_timeout
 
 
 # ============= AgentExecutor Tests =============

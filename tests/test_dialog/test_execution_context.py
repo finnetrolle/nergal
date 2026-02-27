@@ -432,19 +432,19 @@ class TestExecutionContextIntegration:
         )
         context.add_result(search_result)
 
-        # Step 1: News analysis
-        news_result = StepResult(
+        # Step 1: Todoist task analysis
+        todoist_result = StepResult(
             step_index=1,
-            agent_type=AgentType.NEWS,
-            output="Analyzed AI news trends",
+            agent_type=AgentType.TODOIST,
+            output="Retrieved todoist tasks",
             structured_data={
-                "topics": ["GPT-5", "Robotics", "AI Ethics"],
-                "sentiment": "positive",
+                "tasks": ["Buy groceries", "Call mom", "Finish project"],
+                "completed": 1,
             },
             confidence=0.85,
             execution_time_ms=180.0,
         )
-        context.add_result(news_result)
+        context.add_result(todoist_result)
 
         # Step 2: Summary
         summary_result = StepResult(
@@ -463,7 +463,7 @@ class TestExecutionContextIntegration:
         # Get accumulated context
         accumulated = context.get_accumulated_context()
         assert "web_search" in accumulated
-        assert "news" in accumulated
+        assert "todoist" in accumulated
         assert "default" in accumulated
 
         # Get specific results

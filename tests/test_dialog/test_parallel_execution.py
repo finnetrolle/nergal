@@ -106,8 +106,8 @@ class TestStepGrouping:
         """Test grouping with multiple dependencies."""
         steps = [
             PlanStep(agent_type=AgentType.WEB_SEARCH, description="Step 0", depends_on=[], parallel_group=1),
-            PlanStep(agent_type=AgentType.CODE_ANALYSIS, description="Step 1", depends_on=[], parallel_group=1),
-            PlanStep(agent_type=AgentType.NEWS, description="Step 2", depends_on=[0, 1]),
+            PlanStep(agent_type=AgentType.TODOIST, description="Step 1", depends_on=[], parallel_group=1),
+            PlanStep(agent_type=AgentType.DEFAULT, description="Step 2", depends_on=[0, 1]),
             PlanStep(agent_type=AgentType.DEFAULT, description="Step 3", depends_on=[2]),
         ]
         
@@ -126,7 +126,7 @@ class TestStepGrouping:
         steps = [
             PlanStep(agent_type=AgentType.DEFAULT, description="Step 0", depends_on=[]),
             PlanStep(agent_type=AgentType.WEB_SEARCH, description="Step 1", depends_on=[0]),
-            PlanStep(agent_type=AgentType.CODE_ANALYSIS, description="Step 2", depends_on=[1]),
+            PlanStep(agent_type=AgentType.TODOIST, description="Step 2", depends_on=[1]),
             PlanStep(agent_type=AgentType.DEFAULT, description="Step 3", depends_on=[2]),
         ]
         
@@ -151,8 +151,8 @@ class TestStepGrouping:
         steps = [
             PlanStep(agent_type=AgentType.DEFAULT, description="Step 0", depends_on=[]),
             PlanStep(agent_type=AgentType.WEB_SEARCH, description="Step 1", depends_on=[0]),
-            PlanStep(agent_type=AgentType.CODE_ANALYSIS, description="Step 2", depends_on=[0]),
-            PlanStep(agent_type=AgentType.NEWS, description="Step 3", depends_on=[1, 2]),
+            PlanStep(agent_type=AgentType.TODOIST, description="Step 2", depends_on=[0]),
+            PlanStep(agent_type=AgentType.DEFAULT, description="Step 3", depends_on=[1, 2]),
         ]
         
         groups = manager._group_steps_by_dependency(steps)
@@ -298,7 +298,7 @@ class TestInputCombination:
             received_inputs.append(message)
             return AgentResult(
                 response=f"Combined: {message[:50]}",
-                agent_type=AgentType.CODE_ANALYSIS,
+                agent_type=AgentType.DEFAULT,
             )
 
         search_agent = MagicMock()
@@ -306,18 +306,18 @@ class TestInputCombination:
         search_agent.process = mock_search
 
         combine_agent = MagicMock()
-        combine_agent.agent_type = AgentType.CODE_ANALYSIS
+        combine_agent.agent_type = AgentType.DEFAULT
         combine_agent.process = mock_combine
-        
+
         manager.agent_registry.register(search_agent)
         manager.agent_registry.register(combine_agent)
-        
+
         # Create a plan where analysis depends on two search steps
         plan = ExecutionPlan(
             steps=[
                 PlanStep(agent_type=AgentType.WEB_SEARCH, description="Search 1", depends_on=[]),
                 PlanStep(agent_type=AgentType.WEB_SEARCH, description="Search 2", depends_on=[]),
-                PlanStep(agent_type=AgentType.CODE_ANALYSIS, description="Analyze", depends_on=[0, 1]),
+                PlanStep(agent_type=AgentType.DEFAULT, description="Analyze", depends_on=[0, 1]),
             ],
             reasoning="Parallel search then analyze",
         )

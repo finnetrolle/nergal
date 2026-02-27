@@ -41,7 +41,7 @@ class TestAgentFactory:
         # The module should have registered some factories at import time
         # Check that common agents are registered
         assert AgentFactory.has_factory(AgentType.WEB_SEARCH)
-        assert AgentFactory.has_factory(AgentType.NEWS)
+        assert AgentFactory.has_factory(AgentType.TODOIST)
 
     def test_get_registered_types(self) -> None:
         """Test get_registered_types method."""
@@ -52,21 +52,21 @@ class TestAgentFactory:
         # Should have multiple registered types from module load
         assert len(types) > 0
         assert AgentType.WEB_SEARCH in types
-        assert AgentType.NEWS in types
+        assert AgentType.TODOIST in types
 
     def test_create_agent(self) -> None:
         """Test creating an agent through factory."""
         from nergal.dialog.agent_loader import AgentFactory
 
         # Skip if factory not available
-        if not AgentFactory.has_factory(AgentType.NEWS):
-            pytest.skip("NEWS factory not registered")
+        if not AgentFactory.has_factory(AgentType.HEALTH):
+            pytest.skip("HEALTH factory not registered")
 
         llm = MagicMock()
-        result = AgentFactory.create(AgentType.NEWS, llm_provider=llm, style_type=StyleType.DEFAULT)
+        result = AgentFactory.create(AgentType.HEALTH, llm_provider=llm, style_type=StyleType.DEFAULT)
 
         assert result is not None
-        assert result.agent_type == AgentType.NEWS
+        assert result.agent_type == AgentType.HEALTH
 
     def test_create_agent_not_registered(self) -> None:
         """Test creating an agent that's not registered."""
@@ -131,10 +131,9 @@ class TestAgentConfigMap:
 
         expected_keys = [
             "web_search_enabled",
-            "news_enabled",
-            "code_analysis_enabled",
-            "metrics_enabled",
             "todoist_enabled",
+            "health_enabled",
+            "reminder_enabled",
         ]
 
         for key in expected_keys:
@@ -214,7 +213,7 @@ class TestRegisterConfiguredAgents:
         from nergal.dialog.agent_loader import register_configured_agents
 
         registry = MagicMock()
-        settings = self._create_mock_settings(["news_enabled"])
+        settings = self._create_mock_settings(["health_enabled"])
         llm = MagicMock()
 
         registered = register_configured_agents(
@@ -224,7 +223,7 @@ class TestRegisterConfiguredAgents:
         )
 
         # These agents don't require special dependencies
-        assert "news" in registered
+        assert "health" in registered
 
 
 class TestLegacyCompatibility:
@@ -245,17 +244,3 @@ class TestLegacyCompatibility:
 
         assert agent is not None
         assert agent.agent_type == AgentType.WEB_SEARCH
-
-    def test_create_news_agent_legacy(self) -> None:
-        """Test legacy create_news_agent function."""
-        from nergal.dialog.agent_loader import create_news_agent
-
-        llm = MagicMock()
-
-        agent = create_news_agent(
-            llm_provider=llm,
-            style_type=StyleType.DEFAULT,
-        )
-
-        assert agent is not None
-        assert agent.agent_type == AgentType.NEWS
