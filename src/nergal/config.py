@@ -238,20 +238,11 @@ class AgentSettings(BaseSettings):
     news_enabled: bool = Field(
         default=False, description="Enable NewsAgent"
     )
-    analysis_enabled: bool = Field(
-        default=False, description="Enable AnalysisAgent"
-    )
-    summary_enabled: bool = Field(
-        default=False, description="Enable SummaryAgent"
-    )
     code_analysis_enabled: bool = Field(
         default=False, description="Enable CodeAnalysisAgent"
     )
     metrics_enabled: bool = Field(
         default=False, description="Enable MetricsAgent"
-    )
-    tech_docs_enabled: bool = Field(
-        default=False, description="Enable TechDocsAgent"
     )
     todoist_enabled: bool = Field(
         default=True, description="Enable TodoistAgent for task management"

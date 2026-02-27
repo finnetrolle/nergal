@@ -264,7 +264,6 @@ class TestAgentDescriptions:
             AgentType.DEFAULT,
             AgentType.WEB_SEARCH,
             AgentType.NEWS,
-            AgentType.ANALYSIS,
         ]
 
         for agent_type in expected_types:
@@ -360,8 +359,8 @@ class TestPlanValidation:
                 {"agent": "default", "description": "respond"}
             ],
             "reasoning": "simplified plan",
-            "missing_agents": ["analysis"],
-            "missing_agents_reason": {"analysis": "would analyze data"}
+            "missing_agents": ["code_analysis"],
+            "missing_agents_reason": {"code_analysis": "would analyze code"}
         }
         mock_llm_provider.generate = AsyncMock(return_value=LLMResponse(
             content=json.dumps(plan_with_missing),
@@ -373,4 +372,4 @@ class TestPlanValidation:
         plan = await dispatcher.create_plan("test", {})
 
         assert plan.has_missing_agents()
-        assert AgentType.ANALYSIS in plan.missing_agents
+        assert AgentType.CODE_ANALYSIS in plan.missing_agents

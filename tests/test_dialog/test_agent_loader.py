@@ -42,7 +42,6 @@ class TestAgentFactory:
         # Check that common agents are registered
         assert AgentFactory.has_factory(AgentType.WEB_SEARCH)
         assert AgentFactory.has_factory(AgentType.NEWS)
-        assert AgentFactory.has_factory(AgentType.ANALYSIS)
 
     def test_get_registered_types(self) -> None:
         """Test get_registered_types method."""
@@ -133,11 +132,8 @@ class TestAgentConfigMap:
         expected_keys = [
             "web_search_enabled",
             "news_enabled",
-            "analysis_enabled",
-            "summary_enabled",
             "code_analysis_enabled",
             "metrics_enabled",
-            "tech_docs_enabled",
             "todoist_enabled",
         ]
 
@@ -218,7 +214,7 @@ class TestRegisterConfiguredAgents:
         from nergal.dialog.agent_loader import register_configured_agents
 
         registry = MagicMock()
-        settings = self._create_mock_settings(["news_enabled", "analysis_enabled"])
+        settings = self._create_mock_settings(["news_enabled"])
         llm = MagicMock()
 
         registered = register_configured_agents(
@@ -229,7 +225,6 @@ class TestRegisterConfiguredAgents:
 
         # These agents don't require special dependencies
         assert "news" in registered
-        assert "analysis" in registered
 
 
 class TestLegacyCompatibility:
@@ -264,17 +259,3 @@ class TestLegacyCompatibility:
 
         assert agent is not None
         assert agent.agent_type == AgentType.NEWS
-
-    def test_create_analysis_agent_legacy(self) -> None:
-        """Test legacy create_analysis_agent function."""
-        from nergal.dialog.agent_loader import create_analysis_agent
-
-        llm = MagicMock()
-
-        agent = create_analysis_agent(
-            llm_provider=llm,
-            style_type=StyleType.DEFAULT,
-        )
-
-        assert agent is not None
-        assert agent.agent_type == AgentType.ANALYSIS

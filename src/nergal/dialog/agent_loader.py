@@ -213,34 +213,6 @@ def _create_news_agent(
     )
 
 
-@AgentFactory.register(AgentType.ANALYSIS)
-def _create_analysis_agent(
-    llm_provider: "BaseLLMProvider",
-    **kwargs,
-) -> BaseAgent:
-    """Create an AnalysisAgent instance."""
-    from nergal.dialog.agents.analysis_agent import AnalysisAgent
-
-    return AnalysisAgent(
-        llm_provider=llm_provider,
-        style_type=kwargs.get("style_type", StyleType.DEFAULT),
-    )
-
-
-@AgentFactory.register(AgentType.SUMMARY)
-def _create_summary_agent(
-    llm_provider: "BaseLLMProvider",
-    **kwargs,
-) -> BaseAgent:
-    """Create a SummaryAgent instance."""
-    from nergal.dialog.agents.summary_agent import SummaryAgent
-
-    return SummaryAgent(
-        llm_provider=llm_provider,
-        style_type=kwargs.get("style_type", StyleType.DEFAULT),
-    )
-
-
 @AgentFactory.register(AgentType.CODE_ANALYSIS)
 def _create_code_analysis_agent(
     llm_provider: "BaseLLMProvider",
@@ -264,20 +236,6 @@ def _create_metrics_agent(
     from nergal.dialog.agents.metrics_agent import MetricsAgent
 
     return MetricsAgent(
-        llm_provider=llm_provider,
-        style_type=kwargs.get("style_type", StyleType.DEFAULT),
-    )
-
-
-@AgentFactory.register(AgentType.TECH_DOCS)
-def _create_tech_docs_agent(
-    llm_provider: "BaseLLMProvider",
-    **kwargs,
-) -> BaseAgent:
-    """Create a TechDocsAgent instance."""
-    from nergal.dialog.agents.tech_docs_agent import TechDocsAgent
-
-    return TechDocsAgent(
         llm_provider=llm_provider,
         style_type=kwargs.get("style_type", StyleType.DEFAULT),
     )
@@ -320,11 +278,8 @@ def _create_reminder_agent(
 AGENT_CONFIG_MAP: dict[str, AgentType] = {
     "web_search_enabled": AgentType.WEB_SEARCH,
     "news_enabled": AgentType.NEWS,
-    "analysis_enabled": AgentType.ANALYSIS,
-    "summary_enabled": AgentType.SUMMARY,
     "code_analysis_enabled": AgentType.CODE_ANALYSIS,
     "metrics_enabled": AgentType.METRICS,
-    "tech_docs_enabled": AgentType.TECH_DOCS,
     "todoist_enabled": AgentType.TODOIST,
     "health_enabled": AgentType.HEALTH,
     "reminder_enabled": AgentType.REMINDER,
@@ -446,30 +401,6 @@ def create_news_agent(
     )
 
 
-def create_analysis_agent(
-    llm_provider: "BaseLLMProvider",
-    style_type: StyleType,
-) -> BaseAgent:
-    """Create an AnalysisAgent instance."""
-    return AgentFactory.create(
-        AgentType.ANALYSIS,
-        llm_provider=llm_provider,
-        style_type=style_type,
-    )
-
-
-def create_summary_agent(
-    llm_provider: "BaseLLMProvider",
-    style_type: StyleType,
-) -> BaseAgent:
-    """Create a SummaryAgent instance."""
-    return AgentFactory.create(
-        AgentType.SUMMARY,
-        llm_provider=llm_provider,
-        style_type=style_type,
-    )
-
-
 def create_code_analysis_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
@@ -489,18 +420,6 @@ def create_metrics_agent(
     """Create a MetricsAgent instance."""
     return AgentFactory.create(
         AgentType.METRICS,
-        llm_provider=llm_provider,
-        style_type=style_type,
-    )
-
-
-def create_tech_docs_agent(
-    llm_provider: "BaseLLMProvider",
-    style_type: StyleType,
-) -> BaseAgent:
-    """Create a TechDocsAgent instance."""
-    return AgentFactory.create(
-        AgentType.TECH_DOCS,
         llm_provider=llm_provider,
         style_type=style_type,
     )

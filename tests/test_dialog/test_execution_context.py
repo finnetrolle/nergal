@@ -449,7 +449,7 @@ class TestExecutionContextIntegration:
         # Step 2: Summary
         summary_result = StepResult(
             step_index=2,
-            agent_type=AgentType.SUMMARY,
+            agent_type=AgentType.DEFAULT,
             output="Summary of AI developments...",
             confidence=0.95,
             execution_time_ms=100.0,
@@ -464,7 +464,7 @@ class TestExecutionContextIntegration:
         accumulated = context.get_accumulated_context()
         assert "web_search" in accumulated
         assert "news" in accumulated
-        assert "summary" in accumulated
+        assert "default" in accumulated
 
         # Get specific results
         web_result = context.get_result_by_agent(AgentType.WEB_SEARCH)

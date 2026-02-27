@@ -337,13 +337,13 @@ class BaseSpecializedAgent(BaseAgent):
 
 class ContextAwareAgent(BaseSpecializedAgent):
     """Agent that requires specific context to function.
-    
+
     This class is for agents that only make sense when there's
     accumulated context from previous agent executions.
-    
+
     Example:
-        class SummaryAgent(ContextAwareAgent):
-            # Only activates when there's content to summarize
+        class SomeProcessingAgent(ContextAwareAgent):
+            # Only activates when there's content to process
             _required_context_keys = ["search_results", "previous_step_output"]
     """
     

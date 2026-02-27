@@ -67,7 +67,7 @@ class MockSpecializedAgent(BaseSpecializedAgent):
     
     @property
     def agent_type(self) -> AgentType:
-        return AgentType.ANALYSIS
+        return AgentType.WEB_SEARCH
     
     @property
     def system_prompt(self) -> str:
@@ -83,7 +83,7 @@ class MockContextAwareAgent(ContextAwareAgent):
     
     @property
     def agent_type(self) -> AgentType:
-        return AgentType.SUMMARY
+        return AgentType.CODE_ANALYSIS
     
     @property
     def system_prompt(self) -> str:
@@ -189,7 +189,7 @@ class TestBaseSpecializedAgent:
         
         assert isinstance(result, AgentResult)
         assert result.response == "Test response"
-        assert result.agent_type == AgentType.ANALYSIS
+        assert result.agent_type == AgentType.WEB_SEARCH
     
     @pytest.mark.asyncio
     async def test_custom_confidence_hook(

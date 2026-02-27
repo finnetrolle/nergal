@@ -25,17 +25,12 @@ logger = logging.getLogger(__name__)
 AGENT_DESCRIPTIONS: dict[AgentType, str] = {
     # Core agents
     AgentType.DEFAULT: "общий агент для обычных разговоров, приветствий, простых вопросов, личных бесед, финального формирования ответа пользователю",
-    
+
     # Information gathering agents
     AgentType.WEB_SEARCH: "агент для поиска информации в интернете, актуальных новостей, фактов, погоды, курсов валют",
-    AgentType.TECH_DOCS: "агент для поиска по технической документации библиотек и фреймворков, API справочники, примеры кода",
     AgentType.CODE_ANALYSIS: "агент для анализа кодовой базы, поиска использования функций, объяснения работы кода, архитектурного анализа",
     AgentType.METRICS: "агент для получения метрик производительности, статистики, KPI, количественных данных из систем мониторинга",
     AgentType.NEWS: "агент для агрегации новостей из нескольких источников, сравнения информации, выявления консенсуса и противоречий, отслеживания ссылок и оценки достоверности источников",
-    
-    # Processing agents
-    AgentType.ANALYSIS: "агент для анализа данных, сравнения информации, выявления закономерностей, синтеза выводов",
-    AgentType.SUMMARY: "агент для резюмирования длинных текстов, выделения ключевых пунктов, создания TL;DR",
 
     # Specialized agents
     AgentType.TODOIST: "агент для работы с задачами Todoist: получение списка задач, создание задач, управление задачами, просмотр задач на сегодня/завтра/неделю",
@@ -408,22 +403,12 @@ class DispatcherAgent(BaseAgent):
             "web_search": AgentType.WEB_SEARCH,
             "websearch": AgentType.WEB_SEARCH,
             "search": AgentType.WEB_SEARCH,
-            "tech_docs": AgentType.TECH_DOCS,
-            "techdocs": AgentType.TECH_DOCS,
-            "documentation": AgentType.TECH_DOCS,
             "code_analysis": AgentType.CODE_ANALYSIS,
             "code": AgentType.CODE_ANALYSIS,
             "codeanalysis": AgentType.CODE_ANALYSIS,
             "metrics": AgentType.METRICS,
             "stats": AgentType.METRICS,
             "statistics": AgentType.METRICS,
-            
-            # Processing agents
-            "analysis": AgentType.ANALYSIS,
-            "analyze": AgentType.ANALYSIS,
-            "summary": AgentType.SUMMARY,
-            "summarize": AgentType.SUMMARY,
-            "tldr": AgentType.SUMMARY,
 
             # Specialized agents
             "todoist": AgentType.TODOIST,

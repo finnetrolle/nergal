@@ -16,7 +16,6 @@ from nergal.dialog.agents.base_specialized import (
     BaseSpecializedAgent,
     ContextAwareAgent,
 )
-from nergal.dialog.constants import ANALYSIS_KEYWORDS, SUMMARY_KEYWORDS
 
 
 class TestAgentType:
@@ -27,23 +26,18 @@ class TestAgentType:
         assert AgentType.DEFAULT.value == "default"
         assert AgentType.WEB_SEARCH.value == "web_search"
         assert AgentType.NEWS.value == "news"
-        assert AgentType.ANALYSIS.value == "analysis"
-    
+
     def test_get_category_core(self):
         """Test category assignment for core agents."""
         assert AgentType.get_category(AgentType.DEFAULT) == AgentCategory.CORE
         assert AgentType.get_category(AgentType.DISPATCHER) == AgentCategory.CORE
-    
+
     def test_get_category_information(self):
         """Test category assignment for information agents."""
         assert AgentType.get_category(AgentType.WEB_SEARCH) == AgentCategory.INFORMATION
         assert AgentType.get_category(AgentType.NEWS) == AgentCategory.INFORMATION
-        assert AgentType.get_category(AgentType.TECH_DOCS) == AgentCategory.INFORMATION
-    
-    def test_get_category_processing(self):
-        """Test category assignment for processing agents."""
-        assert AgentType.get_category(AgentType.ANALYSIS) == AgentCategory.PROCESSING
-        assert AgentType.get_category(AgentType.SUMMARY) == AgentCategory.PROCESSING
+        assert AgentType.get_category(AgentType.CODE_ANALYSIS) == AgentCategory.INFORMATION
+        assert AgentType.get_category(AgentType.METRICS) == AgentCategory.INFORMATION
 
 
 class TestExecutionPlan:
@@ -73,12 +67,12 @@ class TestExecutionPlan:
         plan = ExecutionPlan(
             steps=[],
             reasoning="test",
-            missing_agents=[AgentType.ANALYSIS],
-            missing_agents_reason={"analysis": "detailed analysis needed"},
+            missing_agents=[AgentType.WEB_SEARCH],
+            missing_agents_reason={"web_search": "search needed"},
         )
 
         assert plan.has_missing_agents()
-        assert AgentType.ANALYSIS in plan.missing_agents
+        assert AgentType.WEB_SEARCH in plan.missing_agents
 
 
 class TestAgentResult:
@@ -189,33 +183,33 @@ class TestBaseSpecializedAgent:
         """Test that keywords are properly configured."""
         class TestAgent(BaseSpecializedAgent):
             _keywords = ["test", "keywords"]
-            agent_type = AgentType.ANALYSIS
+            agent_type = AgentType.WEB_SEARCH
             system_prompt = "test"
-        
+
         agent = TestAgent(mock_llm_provider)
-        
+
         assert agent._keywords == ["test", "keywords"]
-    
+
     @pytest.mark.asyncio
     async def test_can_handle_keyword_matching(self, mock_llm_provider):
         """Test can_handle with keyword matching."""
         class TestAgent(BaseSpecializedAgent):
-            _keywords = ANALYSIS_KEYWORDS
+            _keywords = ["сравни", "проанализируй", "compare"]
             _base_confidence = 0.2
             _keyword_boost = 0.2
-            agent_type = AgentType.ANALYSIS
+            agent_type = AgentType.WEB_SEARCH
             system_prompt = "test"
-        
+
         agent = TestAgent(mock_llm_provider)
-        
+
         # Message with analysis keywords
         confidence = await agent.can_handle("сравни эти два варианта", {})
         assert confidence > 0.2
-        
+
         # Message without keywords
         confidence = await agent.can_handle("привет как дела", {})
         assert confidence == 0.2  # base confidence only
-    
+
     @pytest.mark.asyncio
     async def test_can_handle_context_boost(self, mock_llm_provider):
         """Test can_handle with context boost."""
@@ -223,39 +217,39 @@ class TestBaseSpecializedAgent:
             _context_keys = ["search_results"]
             _base_confidence = 0.2
             _context_boost = 0.3
-            agent_type = AgentType.ANALYSIS
+            agent_type = AgentType.WEB_SEARCH
             system_prompt = "test"
-        
+
         agent = TestAgent(mock_llm_provider)
-        
+
         # Without context
         confidence_no_context = await agent.can_handle("test", {})
-        
+
         # With relevant context
         confidence_with_context = await agent.can_handle(
             "test", {"search_results": "some data"}
         )
-        
+
         assert confidence_with_context > confidence_no_context
 
 
 class TestContextAwareAgent:
     """Tests for ContextAwareAgent class."""
-    
+
     @pytest.mark.asyncio
     async def test_requires_context(self, mock_llm_provider):
         """Test that context-aware agent requires context."""
         class TestContextAgent(ContextAwareAgent):
             _required_context_keys = ["search_results"]
-            agent_type = AgentType.SUMMARY
+            agent_type = AgentType.WEB_SEARCH
             system_prompt = "test"
-        
+
         agent = TestContextAgent(mock_llm_provider)
-        
+
         # Without required context
         confidence = await agent.can_handle("summarize this", {})
         assert confidence == 0.0
-        
+
         # With required context
         confidence = await agent.can_handle(
             "summarize this", {"search_results": "data"}

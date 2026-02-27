@@ -250,7 +250,7 @@ class TestTimeoutSettings:
 
         # Unknown agents should use default timeout
         assert (
-            settings.get_timeout_for_agent(AgentType.ANALYSIS)
+            settings.get_timeout_for_agent(AgentType.CODE_ANALYSIS)
             == settings.default_timeout
         )
 
