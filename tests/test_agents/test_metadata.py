@@ -84,278 +84,344 @@ class TestBaseAgentMetadata:
         assert not hasattr(metadata, "unknown_field")
 
 
-class TestWebSearchMetadata:
-    """Tests for WebSearchMetadata class."""
+# Parametrized tests for all metadata classes
+METADATA_TEST_DATA = [
+    (
+        WebSearchMetadata,
+        "web_search",
+        {
+            "default_values": {
+                "query": "",
+                "sources": [],
+                "result_count": 0,
+                "search_time_ms": None,
+                "search_provider": None,
+                "cached": False,
+            },
+            "full_init": {
+                "args": {
+                    "query": "Python tutorial",
+                    "sources": ["https://example.com", "https://test.com"],
+                    "result_count": 10,
+                    "search_time_ms": 150.5,
+                    "search_provider": "google",
+                    "cached": True,
+                    "tokens_used": 500,
+                },
+                "expected": {
+                    "query": "Python tutorial",
+                    "sources": ["https://example.com", "https://test.com"],
+                    "result_count": 10,
+                    "search_time_ms": 150.5,
+                    "search_provider": "google",
+                    "cached": True,
+                    "tokens_used": 500,
+                },
+            },
+            "roundtrip": {
+                "args": {
+                    "query": "test query",
+                    "sources": ["source1", "source2"],
+                    "result_count": 5,
+                },
+            },
+        },
+    ),
+    (
+        TodoistMetadata,
+        "todoist",
+        {
+            "default_values": {
+                "action": "",
+                "task_count": 0,
+                "project_name": None,
+                "task_id": None,
+                "due_date": None,
+            },
+            "full_init": {
+                "args": {
+                    "action": "create_task",
+                    "task_count": 3,
+                    "project_name": "Work",
+                    "task_id": "12345",
+                    "due_date": "2024-12-31",
+                },
+                "expected": {
+                    "action": "create_task",
+                    "task_count": 3,
+                    "project_name": "Work",
+                    "task_id": "12345",
+                    "due_date": "2024-12-31",
+                },
+            },
+        },
+    ),
+    (
+        NewsMetadata,
+        "news",
+        {
+            "default_values": {
+                "sources": [],
+                "clusters": 0,
+                "sentiment": None,
+                "topics": [],
+                "time_range": None,
+            },
+            "full_init": {
+                "args": {
+                    "sources": ["BBC", "CNN", "Reuters"],
+                    "clusters": 5,
+                    "sentiment": "neutral",
+                    "topics": ["politics", "economy"],
+                    "time_range": "24h",
+                },
+                "expected": {
+                    "sources": ["BBC", "CNN", "Reuters"],
+                    "clusters": 5,
+                    "sentiment": "neutral",
+                    "topics": ["politics", "economy"],
+                    "time_range": "24h",
+                },
+            },
+        },
+    ),
+    (
+        AnalysisMetadata,
+        "analysis",
+        {
+            "full_init": {
+                "args": {
+                    "data_sources": ["database", "api"],
+                    "insights_count": 7,
+                    "analysis_type": "trend",
+                    "confidence": 0.85,
+                },
+                "expected": {
+                    "data_sources": ["database", "api"],
+                    "insights_count": 7,
+                    "analysis_type": "trend",
+                    "confidence": 0.85,
+                },
+            },
+        },
+    ),
+    (
+        ComparisonMetadata,
+        "comparison",
+        {
+            "full_init": {
+                "args": {
+                    "items_compared": ["React", "Vue", "Angular"],
+                    "criteria": ["performance", "ease of use", "community"],
+                    "winner": "React",
+                    "comparison_count": 3,
+                },
+                "expected": {
+                    "items_compared": ["React", "Vue", "Angular"],
+                    "criteria": ["performance", "ease of use", "community"],
+                    "winner": "React",
+                    "comparison_count": 3,
+                },
+            },
+        },
+    ),
+    (
+        FactCheckMetadata,
+        "fact_check",
+        {
+            "full_init": {
+                "args": {
+                    "claims_checked": 5,
+                    "verified_claims": 3,
+                    "false_claims": 1,
+                    "uncertain_claims": 1,
+                    "sources": ["snopes.com", "factcheck.org"],
+                },
+                "expected": {
+                    "claims_checked": 5,
+                    "verified_claims": 3,
+                    "false_claims": 1,
+                    "uncertain_claims": 1,
+                    "sources": ["snopes.com", "factcheck.org"],
+                },
+            },
+        },
+    ),
+    (
+        SummaryMetadata,
+        "summary",
+        {
+            "full_init": {
+                "args": {
+                    "original_length": 5000,
+                    "summary_length": 500,
+                    "compression_ratio": 0.1,
+                    "key_points": 5,
+                },
+                "expected": {
+                    "original_length": 5000,
+                    "summary_length": 500,
+                    "compression_ratio": 0.1,
+                    "key_points": 5,
+                },
+            },
+        },
+    ),
+    (
+        CodeAnalysisMetadata,
+        "code_analysis",
+        {
+            "full_init": {
+                "args": {
+                    "language": "Python",
+                    "files_analyzed": 10,
+                    "issues_found": 3,
+                    "suggestions_count": 7,
+                },
+                "expected": {
+                    "language": "Python",
+                    "files_analyzed": 10,
+                    "issues_found": 3,
+                    "suggestions_count": 7,
+                },
+            },
+        },
+    ),
+    (
+        MetricsMetadata,
+        "metrics",
+        {
+            "full_init": {
+                "args": {
+                    "metrics_retrieved": 15,
+                    "time_range": "7d",
+                    "data_points": 1000,
+                    "aggregation": "avg",
+                },
+                "expected": {
+                    "metrics_retrieved": 15,
+                    "time_range": "7d",
+                    "data_points": 1000,
+                    "aggregation": "avg",
+                },
+            },
+        },
+    ),
+    (
+        KnowledgeBaseMetadata,
+        "knowledge_base",
+        {
+            "full_init": {
+                "args": {
+                    "queries": ["how to deploy", "configuration"],
+                    "documents_found": 5,
+                    "relevance_score": 0.92,
+                    "categories": ["deployment", "config"],
+                },
+                "expected": {
+                    "queries": ["how to deploy", "configuration"],
+                    "documents_found": 5,
+                    "relevance_score": 0.92,
+                    "categories": ["deployment", "config"],
+                },
+            },
+        },
+    ),
+    (
+        TechDocsMetadata,
+        "tech_docs",
+        {
+            "full_init": {
+                "args": {
+                    "library": "React",
+                    "version": "18.2",
+                    "topics": ["hooks", "components"],
+                    "code_examples": 10,
+                },
+                "expected": {
+                    "library": "React",
+                    "version": "18.2",
+                    "topics": ["hooks", "components"],
+                    "code_examples": 10,
+                },
+            },
+        },
+    ),
+    (
+        DefaultMetadata,
+        "default",
+        {
+            "full_init": {
+                "args": {
+                    "conversation_turn": 5,
+                    "intent": "greeting",
+                    "entities": ["name", "date"],
+                    "sentiment": "positive",
+                },
+                "expected": {
+                    "conversation_turn": 5,
+                    "intent": "greeting",
+                    "entities": ["name", "date"],
+                    "sentiment": "positive",
+                },
+            },
+        },
+    ),
+]
 
-    def test_default_values(self) -> None:
-        """Test default values."""
-        metadata = WebSearchMetadata()
 
-        assert metadata.query == ""
-        assert metadata.sources == []
-        assert metadata.result_count == 0
-        assert metadata.search_time_ms is None
-        assert metadata.search_provider is None
-        assert metadata.cached is False
+class TestMetadataClassesDefaultValues:
+    """Tests for default values of all metadata classes (parametrized)."""
 
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = WebSearchMetadata(
-            query="Python tutorial",
-            sources=["https://example.com", "https://test.com"],
-            result_count=10,
-            search_time_ms=150.5,
-            search_provider="google",
-            cached=True,
-            tokens_used=500,
-        )
+    @pytest.mark.parametrize("metadata_class,agent_type,data", [
+        (meta_class, agent_type, data["default_values"])
+        for meta_class, agent_type, data in METADATA_TEST_DATA
+        if "default_values" in data
+    ])
+    def test_default_values(self, metadata_class, agent_type, data):
+        """Test default values for metadata classes."""
+        metadata = metadata_class()
 
-        assert metadata.query == "Python tutorial"
-        assert len(metadata.sources) == 2
-        assert metadata.result_count == 10
-        assert metadata.search_time_ms == 150.5
-        assert metadata.search_provider == "google"
-        assert metadata.cached is True
-        assert metadata.tokens_used == 500
+        for key, expected_value in data.items():
+            actual_value = getattr(metadata, key)
+            assert actual_value == expected_value, f"{agent_type}.{key}: expected {expected_value}, got {actual_value}"
 
-    def test_serialization_roundtrip(self) -> None:
+
+class TestMetadataClassesFullInitialization:
+    """Tests for full initialization of all metadata classes (parametrized)."""
+
+    @pytest.mark.parametrize("metadata_class,agent_type,data", [
+        (meta_class, agent_type, data["full_init"])
+        for meta_class, agent_type, data in METADATA_TEST_DATA
+        if "full_init" in data
+    ])
+    def test_full_initialization(self, metadata_class, agent_type, data):
+        """Test full initialization of metadata classes."""
+        metadata = metadata_class(**data["args"])
+
+        for key, expected_value in data["expected"].items():
+            actual_value = getattr(metadata, key)
+            assert actual_value == expected_value, f"{agent_type}.{key}: expected {expected_value}, got {actual_value}"
+
+
+class TestMetadataClassesSerializationRoundtrip:
+    """Tests for serialization/deserialization roundtrip (parametrized)."""
+
+    @pytest.mark.parametrize("metadata_class,agent_type,data", [
+        (meta_class, agent_type, data["roundtrip"])
+        for meta_class, agent_type, data in METADATA_TEST_DATA
+        if "roundtrip" in data
+    ])
+    def test_serialization_roundtrip(self, metadata_class, agent_type, data):
         """Test serialization and deserialization."""
-        original = WebSearchMetadata(
-            query="test query",
-            sources=["source1", "source2"],
-            result_count=5,
-        )
+        original = metadata_class(**data["args"])
 
-        data = original.to_dict()
-        restored = WebSearchMetadata.from_dict(data)
+        serialized = original.to_dict()
+        restored = metadata_class.from_dict(serialized)
 
-        assert restored.query == original.query
-        assert restored.sources == original.sources
-        assert restored.result_count == original.result_count
-
-
-class TestTodoistMetadata:
-    """Tests for TodoistMetadata class."""
-
-    def test_default_values(self) -> None:
-        """Test default values."""
-        metadata = TodoistMetadata()
-
-        assert metadata.action == ""
-        assert metadata.task_count == 0
-        assert metadata.project_name is None
-        assert metadata.task_id is None
-        assert metadata.due_date is None
-
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = TodoistMetadata(
-            action="create_task",
-            task_count=3,
-            project_name="Work",
-            task_id="12345",
-            due_date="2024-12-31",
-        )
-
-        assert metadata.action == "create_task"
-        assert metadata.task_count == 3
-        assert metadata.project_name == "Work"
-        assert metadata.task_id == "12345"
-        assert metadata.due_date == "2024-12-31"
-
-
-class TestNewsMetadata:
-    """Tests for NewsMetadata class."""
-
-    def test_default_values(self) -> None:
-        """Test default values."""
-        metadata = NewsMetadata()
-
-        assert metadata.sources == []
-        assert metadata.clusters == 0
-        assert metadata.sentiment is None
-        assert metadata.topics == []
-        assert metadata.time_range is None
-
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = NewsMetadata(
-            sources=["BBC", "CNN", "Reuters"],
-            clusters=5,
-            sentiment="neutral",
-            topics=["politics", "economy"],
-            time_range="24h",
-        )
-
-        assert len(metadata.sources) == 3
-        assert metadata.clusters == 5
-        assert metadata.sentiment == "neutral"
-        assert metadata.topics == ["politics", "economy"]
-        assert metadata.time_range == "24h"
-
-
-class TestAnalysisMetadata:
-    """Tests for AnalysisMetadata class."""
-
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = AnalysisMetadata(
-            data_sources=["database", "api"],
-            insights_count=7,
-            analysis_type="trend",
-            confidence=0.85,
-        )
-
-        assert metadata.data_sources == ["database", "api"]
-        assert metadata.insights_count == 7
-        assert metadata.analysis_type == "trend"
-        assert metadata.confidence == 0.85
-
-
-class TestComparisonMetadata:
-    """Tests for ComparisonMetadata class."""
-
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = ComparisonMetadata(
-            items_compared=["React", "Vue", "Angular"],
-            criteria=["performance", "ease of use", "community"],
-            winner="React",
-            comparison_count=3,
-        )
-
-        assert len(metadata.items_compared) == 3
-        assert len(metadata.criteria) == 3
-        assert metadata.winner == "React"
-        assert metadata.comparison_count == 3
-
-
-class TestFactCheckMetadata:
-    """Tests for FactCheckMetadata class."""
-
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = FactCheckMetadata(
-            claims_checked=5,
-            verified_claims=3,
-            false_claims=1,
-            uncertain_claims=1,
-            sources=["snopes.com", "factcheck.org"],
-        )
-
-        assert metadata.claims_checked == 5
-        assert metadata.verified_claims == 3
-        assert metadata.false_claims == 1
-        assert metadata.uncertain_claims == 1
-        assert len(metadata.sources) == 2
-
-
-class TestSummaryMetadata:
-    """Tests for SummaryMetadata class."""
-
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = SummaryMetadata(
-            original_length=5000,
-            summary_length=500,
-            compression_ratio=0.1,
-            key_points=5,
-        )
-
-        assert metadata.original_length == 5000
-        assert metadata.summary_length == 500
-        assert metadata.compression_ratio == 0.1
-        assert metadata.key_points == 5
-
-
-class TestCodeAnalysisMetadata:
-    """Tests for CodeAnalysisMetadata class."""
-
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = CodeAnalysisMetadata(
-            language="Python",
-            files_analyzed=10,
-            issues_found=3,
-            suggestions_count=7,
-        )
-
-        assert metadata.language == "Python"
-        assert metadata.files_analyzed == 10
-        assert metadata.issues_found == 3
-        assert metadata.suggestions_count == 7
-
-
-class TestMetricsMetadata:
-    """Tests for MetricsMetadata class."""
-
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = MetricsMetadata(
-            metrics_retrieved=15,
-            time_range="7d",
-            data_points=1000,
-            aggregation="avg",
-        )
-
-        assert metadata.metrics_retrieved == 15
-        assert metadata.time_range == "7d"
-        assert metadata.data_points == 1000
-        assert metadata.aggregation == "avg"
-
-
-class TestKnowledgeBaseMetadata:
-    """Tests for KnowledgeBaseMetadata class."""
-
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = KnowledgeBaseMetadata(
-            queries=["how to deploy", "configuration"],
-            documents_found=5,
-            relevance_score=0.92,
-            categories=["deployment", "config"],
-        )
-
-        assert metadata.queries == ["how to deploy", "configuration"]
-        assert metadata.documents_found == 5
-        assert metadata.relevance_score == 0.92
-        assert metadata.categories == ["deployment", "config"]
-
-
-class TestTechDocsMetadata:
-    """Tests for TechDocsMetadata class."""
-
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = TechDocsMetadata(
-            library="React",
-            version="18.2",
-            topics=["hooks", "components"],
-            code_examples=10,
-        )
-
-        assert metadata.library == "React"
-        assert metadata.version == "18.2"
-        assert metadata.topics == ["hooks", "components"]
-        assert metadata.code_examples == 10
-
-
-class TestDefaultMetadata:
-    """Tests for DefaultMetadata class."""
-
-    def test_full_initialization(self) -> None:
-        """Test full initialization."""
-        metadata = DefaultMetadata(
-            conversation_turn=5,
-            intent="greeting",
-            entities=["name", "date"],
-            sentiment="positive",
-        )
-
-        assert metadata.conversation_turn == 5
-        assert metadata.intent == "greeting"
-        assert metadata.entities == ["name", "date"]
-        assert metadata.sentiment == "positive"
+        for key, expected_value in data["args"].items():
+            actual_value = getattr(restored, key)
+            assert actual_value == expected_value, f"{agent_type}.{key}: expected {expected_value}, got {actual_value}"
 
 
 class TestGetMetadataClass:
@@ -384,35 +450,26 @@ class TestGetMetadataClass:
 class TestCreateMetadataFromDict:
     """Tests for create_metadata_from_dict function."""
 
-    def test_create_web_search_metadata(self) -> None:
-        """Test creating WebSearchMetadata from dict."""
-        data = {
+    @pytest.mark.parametrize("agent_type,metadata_class,init_data", [
+        ("web_search", WebSearchMetadata, {
             "query": "test query",
             "sources": ["source1"],
             "result_count": 5,
-        }
-
-        metadata = create_metadata_from_dict("web_search", data)
-
-        assert isinstance(metadata, WebSearchMetadata)
-        assert metadata.query == "test query"
-        assert metadata.sources == ["source1"]
-        assert metadata.result_count == 5
-
-    def test_create_todoist_metadata(self) -> None:
-        """Test creating TodoistMetadata from dict."""
-        data = {
+        }),
+        ("todoist", TodoistMetadata, {
             "action": "complete_task",
             "task_count": 2,
             "project_name": "Personal",
-        }
+        }),
+    ])
+    def test_create_metadata_from_dict(self, agent_type, metadata_class, init_data):
+        """Test creating metadata from dict."""
+        metadata = create_metadata_from_dict(agent_type, init_data)
 
-        metadata = create_metadata_from_dict("todoist", data)
-
-        assert isinstance(metadata, TodoistMetadata)
-        assert metadata.action == "complete_task"
-        assert metadata.task_count == 2
-        assert metadata.project_name == "Personal"
+        assert isinstance(metadata, metadata_class)
+        for key, expected_value in init_data.items():
+            actual_value = getattr(metadata, key)
+            assert actual_value == expected_value
 
     def test_create_default_for_unknown_type(self) -> None:
         """Test that unknown type creates DefaultMetadata."""

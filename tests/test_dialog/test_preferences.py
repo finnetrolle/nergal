@@ -307,6 +307,14 @@ class TestPreferenceManager:
 class TestGlobalPreferenceManager:
     """Tests for global preference manager functions."""
 
+    @pytest.fixture(autouse=True)
+    def reset_global_state(self):
+        """Reset global state before each test in this class."""
+        set_preference_manager(PreferenceManager())
+        yield
+        # Reset again after test
+        set_preference_manager(PreferenceManager())
+
     def test_get_preference_manager(self) -> None:
         """Test getting global manager."""
         manager1 = get_preference_manager()
@@ -320,10 +328,6 @@ class TestGlobalPreferenceManager:
         set_preference_manager(new_manager)
 
         assert get_preference_manager() is new_manager
-
-    def tearDown(self) -> None:
-        """Reset global state after tests."""
-        set_preference_manager(PreferenceManager())
 
 
 class TestPreferenceManagerIntegration:

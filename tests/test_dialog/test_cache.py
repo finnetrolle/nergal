@@ -78,29 +78,17 @@ class TestCacheStats:
         assert stats.size == 0
         assert stats.max_size == 0
 
-    def test_hit_rate_no_requests(self) -> None:
-        """Test hit rate when no requests have been made."""
-        stats = CacheStats()
+    @pytest.mark.parametrize("hits,misses,expected_hit_rate", [
+        (0, 0, 0.0),
+        (10, 0, 1.0),
+        (0, 10, 0.0),
+        (7, 3, 0.7),
+    ])
+    def test_hit_rate(self, hits, misses, expected_hit_rate) -> None:
+        """Test hit rate calculation (parametrized)."""
+        stats = CacheStats(hits=hits, misses=misses)
 
-        assert stats.hit_rate == 0.0
-
-    def test_hit_rate_all_hits(self) -> None:
-        """Test hit rate with all hits."""
-        stats = CacheStats(hits=10, misses=0)
-
-        assert stats.hit_rate == 1.0
-
-    def test_hit_rate_all_misses(self) -> None:
-        """Test hit rate with all misses."""
-        stats = CacheStats(hits=0, misses=10)
-
-        assert stats.hit_rate == 0.0
-
-    def test_hit_rate_mixed(self) -> None:
-        """Test hit rate with mixed hits and misses."""
-        stats = CacheStats(hits=7, misses=3)
-
-        assert stats.hit_rate == 0.7
+        assert stats.hit_rate == expected_hit_rate
 
 
 class TestAgentResultCache:
