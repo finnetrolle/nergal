@@ -274,6 +274,9 @@ class AgentSettings(BaseSettings):
     health_enabled: bool = Field(
         default=True, description="Enable HealthAgent for health metrics tracking"
     )
+    reminder_enabled: bool = Field(
+        default=True, description="Enable ReminderAgent for general-purpose reminders"
+    )
 
     # Timeout settings (in seconds)
     default_timeout: float = Field(

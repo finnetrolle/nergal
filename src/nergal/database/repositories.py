@@ -6,7 +6,7 @@ on users, profiles, and conversation history.
 
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +17,7 @@ from nergal.database.models import (
     BloodPressureMeasurement,
     ConversationMessage,
     ConversationSession,
+    GeneralReminder,
     HealthReminder,
     MemoryExtractionEvent,
     ProfileFact,
@@ -1989,5 +1990,256 @@ class HealthMetricsRepository:
                         reminder.id,
                     )
                     pending.append((reminder, chat_id))
+
+        return pending
+
+
+class GeneralReminderRepository:
+    """Repository for general-purpose reminders.
+    
+    Handles CRUD operations for user-configured reminders.
+    """
+    
+    def __init__(self, db: DatabaseConnection) -> None:
+        """Initialize the repository.
+        
+        Args:
+            db: Database connection.
+        """
+        self._db = db
+    
+    @staticmethod
+    def record_to_general_reminder(record: Record) -> GeneralReminder:
+        """Convert a database record to GeneralReminder model."""
+        # Handle recurring_days as a list
+        recurring_days = record["recurring_days"]
+        if recurring_days is None:
+            recurring_days = [0, 1, 2, 3, 4, 5, 6]
+        elif isinstance(recurring_days, str):
+            # PostgreSQL returns array as string sometimes
+            recurring_days = [int(x) for x in recurring_days.strip('{}').split(',') if x]
+        
+        return GeneralReminder(
+            id=record["id"],
+            user_id=record["user_id"],
+            title=record["title"],
+            description=record["description"],
+            reminder_time=record["reminder_time"].strftime("%H:%M"),
+            reminder_date=record["reminder_date"],
+            user_timezone=record["user_timezone"],
+            is_active=record["is_active"],
+            is_recurring=record["is_recurring"],
+            recurring_days=recurring_days,
+            last_sent_at=record["last_sent_at"],
+            created_at=record["created_at"],
+            updated_at=record["updated_at"],
+        )
+    
+    async def create_reminder(
+        self,
+        user_id: int,
+        title: str,
+        reminder_time: str,
+        description: str | None = None,
+        reminder_date: date | None = None,
+        user_timezone: str | None = None,
+        is_recurring: bool = False,
+        recurring_days: list[int] | None = None,
+    ) -> GeneralReminder:
+        """Create a new general reminder.
+        
+        Args:
+            user_id: Telegram user ID.
+            title: Reminder title.
+            reminder_time: Time for reminder in "HH:MM" format.
+            description: Optional description.
+            reminder_date: Date for one-time reminders.
+            user_timezone: User's timezone.
+            is_recurring: Whether this is a recurring reminder.
+            recurring_days: Days of week for recurring reminders (0=Monday, 6=Sunday).
+        
+        Returns:
+            Created GeneralReminder.
+        """
+        if recurring_days is None:
+            recurring_days = [0, 1, 2, 3, 4, 5, 6]
+        
+        query = """
+            INSERT INTO general_reminders (
+                user_id, title, description, reminder_time, reminder_date,
+                user_timezone, is_recurring, recurring_days
+            )
+            VALUES ($1, $2, $3, $4::TIME, $5, $6, $7, $8)
+            RETURNING id, user_id, title, description, reminder_time, reminder_date,
+                      user_timezone, is_active, is_recurring, recurring_days,
+                      last_sent_at, created_at, updated_at
+        """
+        record = await self._db.fetchrow(
+            query,
+            user_id,
+            title,
+            description,
+            reminder_time,
+            reminder_date,
+            user_timezone,
+            is_recurring,
+            recurring_days,
+        )
+        return self.record_to_general_reminder(record)
+    
+    async def get_reminders_for_user(
+        self,
+        user_id: int,
+        active_only: bool = True,
+    ) -> list[GeneralReminder]:
+        """Get all reminders for a user.
+        
+        Args:
+            user_id: Telegram user ID.
+            active_only: Only return active reminders.
+        
+        Returns:
+            List of GeneralReminder objects.
+        """
+        if active_only:
+            query = """
+                SELECT * FROM general_reminders
+                WHERE user_id = $1 AND is_active = TRUE
+                ORDER BY reminder_time
+            """
+        else:
+            query = """
+                SELECT * FROM general_reminders
+                WHERE user_id = $1
+                ORDER BY reminder_time
+            """
+        records = await self._db.fetch(query, user_id)
+        return [self.record_to_general_reminder(r) for r in records]
+    
+    async def delete_reminder(
+        self,
+        user_id: int,
+        reminder_id: UUID | None = None,
+        reminder_time: str | None = None,
+    ) -> bool:
+        """Delete a general reminder.
+        
+        Args:
+            user_id: Telegram user ID.
+            reminder_id: Specific reminder ID to delete.
+            reminder_time: Time to match (if no ID provided).
+        
+        Returns:
+            True if deleted, False otherwise.
+        """
+        if reminder_id:
+            query = """
+                DELETE FROM general_reminders
+                WHERE id = $1 AND user_id = $2
+            """
+            result = await self._db.execute(query, reminder_id, user_id)
+        elif reminder_time:
+            query = """
+                DELETE FROM general_reminders
+                WHERE user_id = $1 AND reminder_time = $2::TIME
+            """
+            result = await self._db.execute(query, user_id, reminder_time)
+        else:
+            return False
+        
+        return result == "DELETE 1"
+    
+    async def get_pending_reminders(
+        self,
+        current_time_utc: datetime,
+        tolerance_minutes: int = 2,
+    ) -> list[tuple[GeneralReminder, int]]:
+        """Get reminders that should be sent at the current time.
+        
+        This method finds all active reminders where the reminder time matches
+        the current time within tolerance. It handles both recurring and one-time
+        reminders.
+        
+        Args:
+            current_time_utc: Current time in UTC.
+            tolerance_minutes: How many minutes of tolerance for matching time.
+        
+        Returns:
+            List of tuples (GeneralReminder, chat_id) for sending notifications.
+        """
+        from pytz import timezone as pytz_timezone
+        from pytz import UTC
+
+        pending: list[tuple[GeneralReminder, int]] = []
+
+        async with self._db.transaction() as conn:
+            # Select and lock candidate reminders
+            query = """
+                SELECT gr.id, gr.user_id, gr.title, gr.description,
+                       gr.reminder_time, gr.reminder_date, gr.user_timezone,
+                       gr.is_active, gr.is_recurring, gr.recurring_days,
+                       gr.last_sent_at, gr.created_at, gr.updated_at, u.id as chat_id
+                FROM general_reminders gr
+                JOIN users u ON gr.user_id = u.id
+                WHERE gr.is_active = TRUE
+                  AND (gr.last_sent_at IS NULL
+                       OR gr.last_sent_at < NOW() - INTERVAL '1 hour')
+                FOR UPDATE SKIP LOCKED
+            """
+            records = await conn.fetch(query)
+
+            for record in records:
+                reminder = self.record_to_general_reminder(record)
+                chat_id = record["chat_id"]
+
+                # Get reminder time in user's timezone
+                user_tz_str = reminder.user_timezone or "UTC"
+                try:
+                    user_tz = pytz_timezone(user_tz_str)
+                except Exception:
+                    user_tz = UTC
+
+                # Convert current UTC time to user's local time
+                current_in_user_tz = current_time_utc.astimezone(user_tz)
+                user_hour = current_in_user_tz.hour
+                user_minute = current_in_user_tz.minute
+                user_weekday = current_in_user_tz.weekday()  # 0=Monday, 6=Sunday
+
+                # Parse reminder time
+                reminder_hour, reminder_minute = map(int, reminder.reminder_time.split(":"))
+
+                # Check if current time matches reminder time (within tolerance)
+                time_diff = abs(user_hour * 60 + user_minute - reminder_hour * 60 - reminder_minute)
+
+                if time_diff <= tolerance_minutes:
+                    # Check if this reminder should fire today
+                    should_fire = False
+                    
+                    if reminder.is_recurring:
+                        # Check if today is in recurring_days
+                        if user_weekday in reminder.recurring_days:
+                            should_fire = True
+                    else:
+                        # One-time reminder - check date
+                        if reminder.reminder_date is None:
+                            # No date set, fire today
+                            should_fire = True
+                        else:
+                            # Check if today matches the reminder date
+                            user_date = current_in_user_tz.date()
+                            if reminder.reminder_date == user_date:
+                                should_fire = True
+                    
+                    if should_fire:
+                        # Claim this reminder
+                        await conn.execute(
+                            """
+                            UPDATE general_reminders
+                            SET last_sent_at = NOW()
+                            WHERE id = $1
+                            """,
+                            reminder.id,
+                        )
+                        pending.append((reminder, chat_id))
 
         return pending

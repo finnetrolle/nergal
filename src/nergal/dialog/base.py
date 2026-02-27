@@ -60,6 +60,7 @@ class AgentType(str, Enum):
     EXPERTISE = "expertise"
     TODOIST = "todoist"  # Todoist task management agent
     HEALTH = "health"  # Health metrics tracking agent
+    REMINDER = "reminder"  # General-purpose reminders agent
     
     @classmethod
     def get_category(cls, agent_type: "AgentType") -> AgentCategory:
@@ -72,7 +73,7 @@ class AgentType(str, Enum):
         elif agent_type in (cls.ANALYSIS, cls.FACT_CHECK, cls.COMPARISON,
                            cls.SUMMARY, cls.CLARIFICATION):
             return AgentCategory.PROCESSING
-        elif agent_type in (cls.EXPERTISE, cls.TODOIST, cls.HEALTH):
+        elif agent_type in (cls.EXPERTISE, cls.TODOIST, cls.HEALTH, cls.REMINDER):
             return AgentCategory.SPECIALIZED
         else:
             return AgentCategory.CORE

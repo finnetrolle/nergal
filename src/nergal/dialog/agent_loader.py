@@ -367,6 +367,20 @@ def _create_health_agent(
     )
 
 
+@AgentFactory.register(AgentType.REMINDER)
+def _create_reminder_agent(
+    llm_provider: "BaseLLMProvider",
+    **kwargs,
+) -> BaseAgent:
+    """Create a ReminderAgent instance."""
+    from nergal.dialog.agents.reminder_agent import ReminderAgent
+
+    return ReminderAgent(
+        llm_provider=llm_provider,
+        style_type=kwargs.get("style_type", StyleType.DEFAULT),
+    )
+
+
 # =============================================================================
 # Configuration-based Registration
 # =============================================================================
@@ -388,6 +402,7 @@ AGENT_CONFIG_MAP: dict[str, AgentType] = {
     "tech_docs_enabled": AgentType.TECH_DOCS,
     "todoist_enabled": AgentType.TODOIST,
     "health_enabled": AgentType.HEALTH,
+    "reminder_enabled": AgentType.REMINDER,
 }
 
 
