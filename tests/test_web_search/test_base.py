@@ -7,9 +7,9 @@ from nergal.web_search.base import (
     SearchResult,
     SearchResults,
     SearchRequest,
-    SearchProviderError,
     BaseSearchProvider,
 )
+from nergal.exceptions import SearchError
 
 
 class TestSearchRecency:
@@ -221,13 +221,13 @@ class TestSearchProviderError:
 
     def test_create_error(self) -> None:
         """Test creating a SearchProviderError."""
-        error = SearchProviderError("Test error")
+        error = SearchError("Test error")
         assert str(error) == "Test error"
 
     def test_with_provider(self) -> None:
-        """Test creating error with provider name."""
-        error = SearchProviderError("Test error", provider="TestProvider")
-        assert "TestProvider" in str(error)
+        """Test creating error with query."""
+        error = SearchError("Test error", query="test query")
+        assert "test query" in str(error)
 
 
 class MockSearchProvider(BaseSearchProvider):

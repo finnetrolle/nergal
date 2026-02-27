@@ -34,12 +34,24 @@ class TestDialogManager:
         
         assert manager._dispatcher is not None
     
-    def test_register_agent(self, mock_llm_provider, mock_agent):
+    def test_register_agent(self, mock_llm_provider):
         """Test registering a custom agent."""
         manager = DialogManager(llm_provider=mock_llm_provider)
         initial_count = len(manager.agent_registry.get_all())
         
-        manager.register_agent(mock_agent)
+        # Create a mock agent with a different type to avoid overwriting
+        from nergal.dialog.base import BaseAgent, AgentType
+        custom_agent = MagicMock(spec=BaseAgent)
+        custom_agent.agent_type = AgentType.WEB_SEARCH  # Different from DEFAULT
+        custom_agent.system_prompt = "You are a web search agent."
+        custom_agent.can_handle = AsyncMock(return_value=0.8)
+        custom_agent.process = AsyncMock(return_value=MagicMock(
+            response="Test response",
+            agent_type=AgentType.WEB_SEARCH,
+            confidence=0.9,
+        ))
+        
+        manager.register_agent(custom_agent)
         
         assert len(manager.agent_registry.get_all()) == initial_count + 1
     
@@ -97,7 +109,7 @@ class TestDialogManager:
         
         # Second message - context should be preserved
         context = manager.get_or_create_context(user_id=12345)
-        assert len(context.messages) >= 2  # User + assistant messages
+        assert len(context.history) >= 2  # User + assistant messages
     
     def test_clear_user_context(self, mock_llm_provider):
         """Test clearing user context."""

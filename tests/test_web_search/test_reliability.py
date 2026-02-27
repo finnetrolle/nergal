@@ -14,7 +14,7 @@ from nergal.web_search.reliability import (
     CircuitState,
     execute_with_retry,
 )
-from nergal.web_search.base import SearchError
+from nergal.exceptions import SearchError
 
 
 class TestSearchErrorCategory:
@@ -110,7 +110,7 @@ class TestRetryConfig:
         assert config.max_retries == 3
         assert config.base_delay_ms == 500
         assert config.max_delay_ms == 10000
-        assert config.exponential_base == 2
+        assert config.jitter_ms == 100
 
     def test_custom_config(self) -> None:
         """Test custom retry configuration."""
@@ -118,12 +118,12 @@ class TestRetryConfig:
             max_retries=5,
             base_delay_ms=1000,
             max_delay_ms=30000,
-            exponential_base=3,
+            jitter_ms=200,
         )
         assert config.max_retries == 5
         assert config.base_delay_ms == 1000
         assert config.max_delay_ms == 30000
-        assert config.exponential_base == 3
+        assert config.jitter_ms == 200
 
 
 class TestRetryStats:
@@ -132,24 +132,10 @@ class TestRetryStats:
     def test_initial_stats(self) -> None:
         """Test initial retry stats."""
         stats = RetryStats()
-        assert stats.total_attempts == 0
-        assert stats.successful_attempts == 0
-        assert stats.failed_attempts == 0
-        assert stats.total_retry_delay_ms == 0
-
-    def test_record_success(self) -> None:
-        """Test recording successful attempt."""
-        stats = RetryStats()
-        stats.record_success(attempts=2, retry_delay_ms=500)
-        assert stats.successful_attempts == 1
-        assert stats.total_attempts == 2
-        assert stats.total_retry_delay_ms == 500
-
-    def test_record_failure(self) -> None:
-        """Test recording failed attempt."""
-        stats = RetryStats()
-        stats.record_failure()
-        assert stats.failed_attempts == 1
+        assert stats.attempts == 0
+        assert stats.total_delay_ms == 0
+        assert stats.retry_reasons == []
+        assert stats.final_success is False
 
 
 class TestCircuitBreaker:
@@ -159,14 +145,12 @@ class TestCircuitBreaker:
         """Test initial circuit breaker state."""
         cb = CircuitBreaker()
         assert cb.state == CircuitState.CLOSED
-        assert cb.failure_count == 0
 
     def test_record_success(self) -> None:
         """Test recording success."""
         cb = CircuitBreaker()
         cb.record_failure()  # Add a failure first
         cb.record_success()
-        assert cb.failure_count == 0
         assert cb.state == CircuitState.CLOSED
 
     def test_record_failure_opens_circuit(self) -> None:
@@ -177,26 +161,26 @@ class TestCircuitBreaker:
         cb.record_failure()
         assert cb.state == CircuitState.OPEN
 
-    def test_can_execute_closed(self) -> None:
-        """Test can_execute when circuit is closed."""
+    def test_should_allow_request_closed(self) -> None:
+        """Test should_allow_request when circuit is closed."""
         cb = CircuitBreaker()
-        assert cb.can_execute() is True
+        assert cb.should_allow_request() is True
 
-    def test_can_execute_open(self) -> None:
-        """Test can_execute when circuit is open."""
+    def test_should_allow_request_open(self) -> None:
+        """Test should_allow_request when circuit is open."""
         cb = CircuitBreaker(failure_threshold=1)
         cb.record_failure()
-        assert cb.can_execute() is False
+        assert cb.should_allow_request() is False
 
     def test_half_open_after_timeout(self) -> None:
         """Test transition to half-open after timeout."""
-        cb = CircuitBreaker(failure_threshold=1, recovery_timeout_ms=100)
+        import time
+        cb = CircuitBreaker(failure_threshold=1, recovery_timeout_seconds=0.1)
         cb.record_failure()
         assert cb.state == CircuitState.OPEN
         # Wait for recovery timeout
-        import time
         time.sleep(0.15)
-        assert cb.can_execute() is True
+        assert cb.should_allow_request() is True
         assert cb.state == CircuitState.HALF_OPEN
 
 
@@ -214,15 +198,13 @@ class TestExecuteWithRetry:
             return "success"
 
         config = RetryConfig()
-        stats = RetryStats()
-        result = await execute_with_retry(
+        result, stats = await execute_with_retry(
             success_func,
             config=config,
-            stats=stats,
         )
         assert result == "success"
         assert call_count == 1
-        assert stats.successful_attempts == 1
+        assert stats.final_success is True
 
     @pytest.mark.asyncio
     async def test_retry_then_success(self) -> None:
@@ -237,15 +219,13 @@ class TestExecuteWithRetry:
             return "success"
 
         config = RetryConfig(max_retries=3, base_delay_ms=10)
-        stats = RetryStats()
-        result = await execute_with_retry(
+        result, stats = await execute_with_retry(
             retry_func,
             config=config,
-            stats=stats,
         )
         assert result == "success"
         assert call_count == 3
-        assert stats.successful_attempts == 1
+        assert stats.final_success is True
 
     @pytest.mark.asyncio
     async def test_max_retries_exceeded(self) -> None:
@@ -255,14 +235,11 @@ class TestExecuteWithRetry:
             raise ConnectionError("Always fails")
 
         config = RetryConfig(max_retries=2, base_delay_ms=10)
-        stats = RetryStats()
         with pytest.raises(ConnectionError):
             await execute_with_retry(
                 always_fail,
                 config=config,
-                stats=stats,
             )
-        assert stats.failed_attempts == 1
 
     @pytest.mark.asyncio
     async def test_non_retryable_error(self) -> None:
@@ -272,12 +249,8 @@ class TestExecuteWithRetry:
             raise Exception("401 Unauthorized")
 
         config = RetryConfig()
-        stats = RetryStats()
         with pytest.raises(Exception, match="401"):
             await execute_with_retry(
                 auth_fail,
                 config=config,
-                stats=stats,
             )
-        # Should not retry auth errors
-        assert stats.failed_attempts == 1

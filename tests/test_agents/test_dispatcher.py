@@ -107,6 +107,12 @@ class TestDispatcherAgentBasics:
         self, mock_llm_provider: BaseLLMProvider, agent_registry: AgentRegistry
     ) -> None:
         """Test that system prompt changes based on registered agents."""
+        # Add a news agent to make the registry different from defaults
+        news_agent = MagicMock(spec=BaseAgent)
+        news_agent.agent_type = AgentType.NEWS
+        news_agent.can_handle = AsyncMock(return_value=0.7)
+        agent_registry.register(news_agent)
+        
         dispatcher = DispatcherAgent(mock_llm_provider)
         dispatcher.set_agent_registry(agent_registry)
         
@@ -116,9 +122,10 @@ class TestDispatcherAgentBasics:
         dispatcher_no_registry = DispatcherAgent(mock_llm_provider)
         prompt_without_registry = dispatcher_no_registry.system_prompt
         
-        # Prompts should be different
-        # (one has more agents listed than the other)
+        # Prompts should be different (one has news agent, the other doesn't)
         assert prompt_with_agents != prompt_without_registry
+        # Verify news is in the one with registry
+        assert "news" in prompt_with_agents.lower()
 
 
 # =============================================================================
