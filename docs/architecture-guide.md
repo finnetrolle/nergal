@@ -2,6 +2,8 @@
 
 This guide describes ZeroClaw's modular, trait-based agent architecture. The design is intentionally language-agnostic—you can implement these patterns in any programming language to create a capable autonomous agent system.
 
+ZEROCLAW IS NOT NERGAL. THIS IS AN ARCHITECTURE OF ANOTHER APPLICATION
+
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
