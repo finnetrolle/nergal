@@ -8,7 +8,6 @@ Base classes and types are imported from base.py.
 
 Available agents:
 - WebSearchAgent: Search the web for information
-- KnowledgeBaseAgent: Search corporate knowledge base
 - ClarificationAgent: Clarify ambiguous queries
 - AnalysisAgent: Analyze and synthesize information
 - FactCheckAgent: Verify facts and claims
@@ -46,7 +45,6 @@ from nergal.dialog.agents.code_analysis_agent import CodeAnalysisAgent
 from nergal.dialog.agents.comparison_agent import ComparisonAgent
 from nergal.dialog.agents.expertise_agent import ExpertiseAgent, ExpertiseDomain
 from nergal.dialog.agents.fact_check_agent import FactCheckAgent
-from nergal.dialog.agents.knowledge_base_agent import KnowledgeBaseAgent
 from nergal.dialog.agents.metrics_agent import MetricsAgent
 from nergal.dialog.agents.news_agent import NewsAgent, NewsCluster, NewsSource
 from nergal.dialog.agents.summary_agent import SummaryAgent
@@ -68,7 +66,6 @@ __all__ = [
     
     # Information gathering agents
     "WebSearchAgent",
-    "KnowledgeBaseAgent",
     "TechDocsAgent",
     "CodeAnalysisAgent",
     "MetricsAgent",

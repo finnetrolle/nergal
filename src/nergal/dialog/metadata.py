@@ -218,23 +218,6 @@ class MetricsMetadata(BaseAgentMetadata):
 
 
 @dataclass
-class KnowledgeBaseMetadata(BaseAgentMetadata):
-    """Metadata for knowledge base agent results.
-
-    Attributes:
-        queries: Search queries used.
-        documents_found: Number of documents found.
-        relevance_score: Average relevance score.
-        categories: Categories searched.
-    """
-
-    queries: list[str] = field(default_factory=list)
-    documents_found: int = 0
-    relevance_score: float | None = None
-    categories: list[str] = field(default_factory=list)
-
-
-@dataclass
 class TechDocsMetadata(BaseAgentMetadata):
     """Metadata for technical documentation agent results.
 
@@ -279,7 +262,6 @@ METADATA_CLASS_MAP: dict[str, type[BaseAgentMetadata]] = {
     "summary": SummaryMetadata,
     "code_analysis": CodeAnalysisMetadata,
     "metrics": MetricsMetadata,
-    "knowledge_base": KnowledgeBaseMetadata,
     "tech_docs": TechDocsMetadata,
     "default": DefaultMetadata,
 }

@@ -16,7 +16,6 @@
 | `fact_check` | Проверка фактов на достоверность | ✅ Реализован | [`agents/fact_check_agent.py`](src/nergal/dialog/agents/fact_check_agent.py) |
 | `analysis` | Анализ данных и сравнение информации | ✅ Реализован | [`agents/analysis_agent.py`](src/nergal/dialog/agents/analysis_agent.py) |
 | `news` | Агрегация и обработка новостей | ✅ Реализован | [`agents/news_agent.py`](src/nergal/dialog/agents/news_agent.py) |
-| `knowledge_base` | Поиск по корпоративной базе знаний | ✅ Реализован | [`agents/knowledge_base_agent.py`](src/nergal/dialog/agents/knowledge_base_agent.py) |
 | `clarification` | Уточнение неоднозначных запросов | ✅ Реализован | [`agents/clarification_agent.py`](src/nergal/dialog/agents/clarification_agent.py) |
 | `comparison` | Структурированное сравнение альтернатив | ✅ Реализован | [`agents/comparison_agent.py`](src/nergal/dialog/agents/comparison_agent.py) |
 | `summary` | Резюмирование длинных текстов | ✅ Реализован | [`agents/summary_agent.py`](src/nergal/dialog/agents/summary_agent.py) |
@@ -81,34 +80,6 @@
 
 Вопрос: "Какие новости о Kubernetes?"
 План: web_search -> news -> default
-```
-
----
-
-#### KnowledgeBaseAgent (`knowledge_base`)
-
-**Назначение:** Поиск по корпоративной базе знаний и документации
-
-**Роль в плане ответа:** Предоставляет контекст из внутренних источников
-
-**Ключевые функции:**
-- Семантический поиск по документации
-- RAG (Retrieval Augmented Generation) по корпоративным данным
-- Поиск по архитектурным решениям
-- Доступ к внутренним регламентам и процессам
-
-**Интеграции:**
-- Vector DB (Qdrant/Pinecone для семантического поиска)
-- Локальные markdown/pdf файлы
-- Confluence/Notion API (требует настройки)
-
-**Примеры использования в плане:**
-```
-Вопрос: "Как у нас устроен процесс code review?"
-План: knowledge_base -> default
-
-Вопрос: "Какие у нас есть стандарты для API?"
-План: knowledge_base -> default
 ```
 
 ---

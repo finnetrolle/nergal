@@ -35,7 +35,6 @@ Telegram бот с интеграцией LLM, системой агентов, 
 
 ### Агенты сбора информации
 - `web_search` - поиск в интернете
-- `knowledge_base` - поиск по корпоративной базе знаний
 - `tech_docs` - техническая документация
 - `code_analysis` - анализ кода
 - `metrics` - получение метрик и статистики
@@ -228,7 +227,6 @@ uv run bot
 | `AGENTS_METRICS_ENABLED` | `false` |
 | `AGENTS_EXPERTISE_ENABLED` | `false` |
 | `AGENTS_CLARIFICATION_ENABLED` | `false` |
-| `AGENTS_KNOWLEDGE_BASE_ENABLED` | `false` |
 | `AGENTS_TECH_DOCS_ENABLED` | `false` |
 
 Подробнее о настройке LLM провайдеров см. в [docs/LLM_PROVIDERS.md](docs/LLM_PROVIDERS.md).
@@ -314,7 +312,6 @@ nergal/
 │   │   └── agents/              # Специализированные агенты
 │   │       ├── base_specialized.py
 │   │       ├── web_search_agent.py
-│   │       ├── knowledge_base_agent.py
 │   │       ├── tech_docs_agent.py
 │   │       ├── code_analysis_agent.py
 │   │       ├── metrics_agent.py
@@ -423,3 +420,8 @@ uv run mypy src/
 ## Лицензия
 
 MIT License. См. файл [LICENSE](LICENSE) для подробностей.
+
+
+## Запуск тестов
+
+python -m pytest --cov=src/nergal --cov-report=term-missing --cov-report=html tests/

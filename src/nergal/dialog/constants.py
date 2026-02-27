@@ -320,19 +320,6 @@ METRICS_KEYWORDS = [
 
 
 # =============================================================================
-# Knowledge Base Agent Keywords
-# =============================================================================
-
-KNOWLEDGE_BASE_KEYWORDS = [
-    "база знаний", "knowledge base", "kb",
-    "регламент", "regulation", "стандарт", "standard",
-    "политика", "policy", "процедура", "procedure",
-    "инструкция", "instruction", "руководство", "manual",
-    "внутренн", "internal", "корпоративн", "corporate",
-]
-
-
-# =============================================================================
 # Agent Descriptions (for dispatcher prompts)
 # =============================================================================
 
@@ -343,7 +330,6 @@ AGENT_DESCRIPTIONS: dict[str, str] = {
     
     # Information gathering agents
     "web_search": "агент для поиска информации в интернете, актуальных новостей, фактов, погоды, курсов валют",
-    "knowledge_base": "агент для поиска по корпоративной базе знаний, внутренней документации, регламентам, стандартам компании",
     "tech_docs": "агент для поиска по технической документации библиотек и фреймворков, API справочники, примеры кода",
     "code_analysis": "агент для анализа кодовой базы, поиска использования функций, объяснения работы кода, архитектурного анализа",
     "metrics": "агент для получения метрик производительности, статистики, KPI, количественных данных из систем мониторинга",
@@ -373,7 +359,7 @@ AGENT_DESCRIPTIONS: dict[str, str] = {
 # Agents organized by category for documentation and routing
 AGENT_CATEGORIES = {
     "core": ["default", "dispatcher"],
-    "information": ["web_search", "knowledge_base", "tech_docs", "code_analysis", "metrics", "news"],
+    "information": ["web_search", "tech_docs", "code_analysis", "metrics", "news"],
     "processing": ["analysis", "fact_check", "comparison", "summary", "clarification"],
     "specialized": ["expertise"],
 }

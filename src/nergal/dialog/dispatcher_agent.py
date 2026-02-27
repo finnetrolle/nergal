@@ -28,7 +28,6 @@ AGENT_DESCRIPTIONS: dict[AgentType, str] = {
     
     # Information gathering agents
     AgentType.WEB_SEARCH: "агент для поиска информации в интернете, актуальных новостей, фактов, погоды, курсов валют",
-    AgentType.KNOWLEDGE_BASE: "агент для поиска по корпоративной базе знаний, внутренней документации, регламентам, стандартам компании",
     AgentType.TECH_DOCS: "агент для поиска по технической документации библиотек и фреймворков, API справочники, примеры кода",
     AgentType.CODE_ANALYSIS: "агент для анализа кодовой базы, поиска использования функций, объяснения работы кода, архитектурного анализа",
     AgentType.METRICS: "агент для получения метрик производительности, статистики, KPI, количественных данных из систем мониторинга",
@@ -84,10 +83,9 @@ EXAMPLE_PLANS = """
 {
     "steps": [
         {"agent": "web_search", "description": "найти информацию в интернете", "parallel_group": 1},
-        {"agent": "knowledge_base", "description": "найти информацию в базе знаний", "parallel_group": 1},
-        {"agent": "default", "description": "сформировать ответ на основе всех источников", "depends_on": [0, 1]}
+        {"agent": "default", "description": "сформировать ответ на основе всех источников", "depends_on": [0]}
     ],
-    "reasoning": "поиск в двух источниках параллельно, затем формирование ответа"
+    "reasoning": "поиск в интернете, затем формирование ответа"
 }
 
 5. Сравнение с зависимостями:
@@ -427,9 +425,6 @@ class DispatcherAgent(BaseAgent):
             "web_search": AgentType.WEB_SEARCH,
             "websearch": AgentType.WEB_SEARCH,
             "search": AgentType.WEB_SEARCH,
-            "knowledge_base": AgentType.KNOWLEDGE_BASE,
-            "knowledge": AgentType.KNOWLEDGE_BASE,
-            "kb": AgentType.KNOWLEDGE_BASE,
             "tech_docs": AgentType.TECH_DOCS,
             "techdocs": AgentType.TECH_DOCS,
             "documentation": AgentType.TECH_DOCS,

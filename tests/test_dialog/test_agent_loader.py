@@ -141,7 +141,6 @@ class TestAgentConfigMap:
             "metrics_enabled",
             "expertise_enabled",
             "clarification_enabled",
-            "knowledge_base_enabled",
             "tech_docs_enabled",
             "todoist_enabled",
         ]

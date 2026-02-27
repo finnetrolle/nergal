@@ -262,9 +262,6 @@ class AgentSettings(BaseSettings):
     clarification_enabled: bool = Field(
         default=False, description="Enable ClarificationAgent"
     )
-    knowledge_base_enabled: bool = Field(
-        default=False, description="Enable KnowledgeBaseAgent"
-    )
     tech_docs_enabled: bool = Field(
         default=False, description="Enable TechDocsAgent"
     )

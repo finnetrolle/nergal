@@ -12,7 +12,7 @@
 | Категория | Агенты | Количество |
 |-----------|--------|------------|
 | CORE | `default`, `dispatcher` | 2 |
-| INFORMATION | `web_search`, `knowledge_base`, `tech_docs`, `code_analysis`, `metrics`, `news` | 6 |
+| INFORMATION | `web_search`, `tech_docs`, `code_analysis`, `metrics`, `news` | 5 |
 | PROCESSING | `analysis`, `fact_check`, `comparison`, `summary`, `clarification` | 5 |
 | SPECIALIZED | `expertise`, `todoist` | 2 |
 

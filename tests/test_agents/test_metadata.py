@@ -12,7 +12,6 @@ from nergal.dialog.metadata import (
     DefaultMetadata,
     FactCheckMetadata,
     get_metadata_class,
-    KnowledgeBaseMetadata,
     MetricsMetadata,
     NewsMetadata,
     SummaryMetadata,
@@ -308,26 +307,6 @@ METADATA_TEST_DATA = [
         },
     ),
     (
-        KnowledgeBaseMetadata,
-        "knowledge_base",
-        {
-            "full_init": {
-                "args": {
-                    "queries": ["how to deploy", "configuration"],
-                    "documents_found": 5,
-                    "relevance_score": 0.92,
-                    "categories": ["deployment", "config"],
-                },
-                "expected": {
-                    "queries": ["how to deploy", "configuration"],
-                    "documents_found": 5,
-                    "relevance_score": 0.92,
-                    "categories": ["deployment", "config"],
-                },
-            },
-        },
-    ),
-    (
         TechDocsMetadata,
         "tech_docs",
         {
@@ -438,7 +417,6 @@ class TestGetMetadataClass:
         assert get_metadata_class("summary") == SummaryMetadata
         assert get_metadata_class("code_analysis") == CodeAnalysisMetadata
         assert get_metadata_class("metrics") == MetricsMetadata
-        assert get_metadata_class("knowledge_base") == KnowledgeBaseMetadata
         assert get_metadata_class("tech_docs") == TechDocsMetadata
         assert get_metadata_class("default") == DefaultMetadata
 

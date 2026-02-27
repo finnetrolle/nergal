@@ -44,7 +44,6 @@ from nergal.dialog.agents import (
     ContextAwareAgent,
     # Information gathering agents
     WebSearchAgent,
-    KnowledgeBaseAgent,
     TechDocsAgent,
     CodeAnalysisAgent,
     MetricsAgent,
@@ -90,7 +89,6 @@ __all__ = [
     "get_style_prompt",
     # Information gathering agents
     "WebSearchAgent",
-    "KnowledgeBaseAgent",
     "TechDocsAgent",
     "CodeAnalysisAgent",
     "MetricsAgent",
