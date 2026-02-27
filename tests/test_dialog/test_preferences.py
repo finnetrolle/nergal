@@ -293,15 +293,13 @@ class TestPreferenceManager:
 
         manager.set_preference(123, AgentType.WEB_SEARCH, 0.5)
         manager.set_preference(123, AgentType.TODOIST, 0.3)
-        manager.set_preference(456, AgentType.HEALTH, -0.2)
 
         stats = manager.get_stats()
 
-        assert stats["total_preferences"] == 3
-        assert stats["users_with_preferences"] == 2
+        assert stats["total_preferences"] == 2
+        assert stats["users_with_preferences"] == 1
         assert stats["agent_distribution"]["web_search"] == 1
         assert stats["agent_distribution"]["todoist"] == 1
-        assert stats["agent_distribution"]["health"] == 1
 
 
 class TestGlobalPreferenceManager:

@@ -31,7 +31,6 @@ AGENT_DESCRIPTIONS: dict[AgentType, str] = {
 
     # Specialized agents
     AgentType.TODOIST: "агент для работы с задачами Todoist: получение списка задач, создание задач, управление задачами, просмотр задач на сегодня/завтра/неделю",
-    AgentType.HEALTH: "агент для отслеживания здоровья: запись показателей давления, пульса, веса, анализ трендов, напоминания о приёме лекарств",
     AgentType.REMINDER: "агент для управления напоминаниями: создание напоминаний на определённое время, повторяющиеся напоминания, удаление и просмотр напоминаний",
 }
 
@@ -406,10 +405,6 @@ class DispatcherAgent(BaseAgent):
             "tasks": AgentType.TODOIST,
             "task": AgentType.TODOIST,
             "todo": AgentType.TODOIST,
-            "health": AgentType.HEALTH,
-            "здоровье": AgentType.HEALTH,
-            "давление": AgentType.HEALTH,
-            "пульс": AgentType.HEALTH,
         }
         return mapping.get(agent_str, AgentType.DEFAULT)
 

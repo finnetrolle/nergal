@@ -238,9 +238,6 @@ class AgentSettings(BaseSettings):
     todoist_enabled: bool = Field(
         default=True, description="Enable TodoistAgent for task management"
     )
-    health_enabled: bool = Field(
-        default=True, description="Enable HealthAgent for health metrics tracking"
-    )
     reminder_enabled: bool = Field(
         default=True, description="Enable ReminderAgent for general-purpose reminders"
     )

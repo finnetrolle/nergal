@@ -45,7 +45,6 @@ class AgentType(str, Enum):
 
     # Specialized agents
     TODOIST = "todoist"  # Todoist task management agent
-    HEALTH = "health"  # Health metrics tracking agent
     REMINDER = "reminder"  # General-purpose reminders agent
 
     @classmethod
@@ -55,7 +54,7 @@ class AgentType(str, Enum):
             return AgentCategory.CORE
         elif agent_type in (cls.WEB_SEARCH,):
             return AgentCategory.INFORMATION
-        elif agent_type in (cls.TODOIST, cls.HEALTH, cls.REMINDER):
+        elif agent_type in (cls.TODOIST, cls.REMINDER):
             return AgentCategory.SPECIALIZED
         else:
             return AgentCategory.CORE

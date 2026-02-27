@@ -54,20 +54,6 @@ class TestAgentFactory:
         assert AgentType.WEB_SEARCH in types
         assert AgentType.TODOIST in types
 
-    def test_create_agent(self) -> None:
-        """Test creating an agent through factory."""
-        from nergal.dialog.agent_loader import AgentFactory
-
-        # Skip if factory not available
-        if not AgentFactory.has_factory(AgentType.HEALTH):
-            pytest.skip("HEALTH factory not registered")
-
-        llm = MagicMock()
-        result = AgentFactory.create(AgentType.HEALTH, llm_provider=llm, style_type=StyleType.DEFAULT)
-
-        assert result is not None
-        assert result.agent_type == AgentType.HEALTH
-
     def test_create_agent_not_registered(self) -> None:
         """Test creating an agent that's not registered."""
         from nergal.dialog.agent_loader import AgentFactory
@@ -132,7 +118,6 @@ class TestAgentConfigMap:
         expected_keys = [
             "web_search_enabled",
             "todoist_enabled",
-            "health_enabled",
             "reminder_enabled",
         ]
 
@@ -213,17 +198,19 @@ class TestRegisterConfiguredAgents:
         from nergal.dialog.agent_loader import register_configured_agents
 
         registry = MagicMock()
-        settings = self._create_mock_settings(["health_enabled"])
+        settings = self._create_mock_settings(["web_search_enabled"])
         llm = MagicMock()
+        search = MagicMock()
 
         registered = register_configured_agents(
             registry=registry,
             settings=settings,
             llm_provider=llm,
+            search_provider=search,
         )
 
-        # These agents don't require special dependencies
-        assert "health" in registered
+        # This agent requires search provider which is provided
+        assert "web_search" in registered
 
 
 class TestLegacyCompatibility:
