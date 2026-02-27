@@ -195,31 +195,6 @@ class TestBaseSpecializedAgent:
 
 
 # =============================================================================
-# Parametrized Tests for Real Agents
-# =============================================================================
-
-class TestRealSpecializedAgents:
-    """Parametrized tests for real specialized agents."""
-
-    @pytest.mark.parametrize("agent_class,keywords,expected_type", [
-        # Currently no specialized agents with parametrized tests
-    ])
-    @pytest.mark.asyncio
-    async def test_agent_keywords_and_type(
-        self,
-        agent_class: str,
-        keywords: list[str],
-        expected_type: AgentType,
-        mock_llm_provider: BaseLLMProvider,
-        request: pytest.FixtureRequest,
-    ) -> None:
-        """Test that agents have correct keywords and types."""
-        # Import agents dynamically based on agent_class
-        # Currently no agents are tested here
-        pass
-
-
-# =============================================================================
 # Hook Method Tests
 # =============================================================================
 
