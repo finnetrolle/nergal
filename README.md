@@ -45,7 +45,6 @@ Telegram бот с интеграцией LLM, системой агентов, 
 - `fact_check` - проверка фактов
 - `comparison` - сравнение альтернатив
 - `summary` - резюмирование
-- `clarification` - уточнение запросов
 
 ### Специализированные
 - `expertise` - экспертные знания в доменах
@@ -226,7 +225,6 @@ uv run bot
 | `AGENTS_CODE_ANALYSIS_ENABLED` | `false` |
 | `AGENTS_METRICS_ENABLED` | `false` |
 | `AGENTS_EXPERTISE_ENABLED` | `false` |
-| `AGENTS_CLARIFICATION_ENABLED` | `false` |
 | `AGENTS_TECH_DOCS_ENABLED` | `false` |
 
 Подробнее о настройке LLM провайдеров см. в [docs/LLM_PROVIDERS.md](docs/LLM_PROVIDERS.md).
@@ -320,7 +318,6 @@ nergal/
 │   │       ├── fact_check_agent.py
 │   │       ├── comparison_agent.py
 │   │       ├── summary_agent.py
-│   │       ├── clarification_agent.py
 │   │       └── expertise_agent.py
 │   ├── llm/                     # LLM провайдеры
 │   │   ├── base.py              # Базовый класс

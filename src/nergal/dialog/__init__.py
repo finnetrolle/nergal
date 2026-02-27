@@ -55,7 +55,6 @@ from nergal.dialog.agents import (
     FactCheckAgent,
     ComparisonAgent,
     SummaryAgent,
-    ClarificationAgent,
     # Specialized agents
     ExpertiseAgent,
     ExpertiseDomain,
@@ -100,7 +99,6 @@ __all__ = [
     "FactCheckAgent",
     "ComparisonAgent",
     "SummaryAgent",
-    "ClarificationAgent",
     # Specialized agents
     "ExpertiseAgent",
     "ExpertiseDomain",

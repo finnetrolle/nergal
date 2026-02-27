@@ -33,7 +33,7 @@ class AgentType(str, Enum):
     Agents are organized by category:
     - Core: default, dispatcher
     - Information: web_search, tech_docs, code_analysis, metrics, news
-    - Processing: analysis, fact_check, comparison, summary, clarification
+    - Processing: analysis, fact_check, comparison, summary
     - Specialized: expertise, todoist
     """
     
@@ -53,8 +53,7 @@ class AgentType(str, Enum):
     FACT_CHECK = "fact_check"
     COMPARISON = "comparison"
     SUMMARY = "summary"
-    CLARIFICATION = "clarification"
-    
+
     # Specialized agents
     EXPERTISE = "expertise"
     TODOIST = "todoist"  # Todoist task management agent
@@ -70,7 +69,7 @@ class AgentType(str, Enum):
                            cls.CODE_ANALYSIS, cls.METRICS, cls.NEWS):
             return AgentCategory.INFORMATION
         elif agent_type in (cls.ANALYSIS, cls.FACT_CHECK, cls.COMPARISON,
-                           cls.SUMMARY, cls.CLARIFICATION):
+                           cls.SUMMARY):
             return AgentCategory.PROCESSING
         elif agent_type in (cls.EXPERTISE, cls.TODOIST, cls.HEALTH, cls.REMINDER):
             return AgentCategory.SPECIALIZED

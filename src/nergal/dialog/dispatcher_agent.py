@@ -38,8 +38,7 @@ AGENT_DESCRIPTIONS: dict[AgentType, str] = {
     AgentType.FACT_CHECK: "агент для проверки фактов на достоверность, верификации информации из поиска, оценки надёжности источников",
     AgentType.COMPARISON: "агент для структурированного сравнения альтернатив, создания сравнительных таблиц, взвешенной оценки",
     AgentType.SUMMARY: "агент для резюмирования длинных текстов, выделения ключевых пунктов, создания TL;DR",
-    AgentType.CLARIFICATION: "агент для уточнения неоднозначных запросов, генерации уточняющих вопросов, дисамбигуации",
-    
+
     # Specialized agents
     AgentType.EXPERTISE: "агент для экспертных знаний в специфических доменах: безопасность, юридические вопросы, финансы, архитектура",
     AgentType.TODOIST: "агент для работы с задачами Todoist: получение списка задач, создание задач, управление задачами, просмотр задач на сегодня/завтра/неделю",
@@ -446,9 +445,7 @@ class DispatcherAgent(BaseAgent):
             "summary": AgentType.SUMMARY,
             "summarize": AgentType.SUMMARY,
             "tldr": AgentType.SUMMARY,
-            "clarification": AgentType.CLARIFICATION,
-            "clarify": AgentType.CLARIFICATION,
-            
+
             # Specialized agents
             "expertise": AgentType.EXPERTISE,
             "expert": AgentType.EXPERTISE,

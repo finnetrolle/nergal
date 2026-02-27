@@ -8,7 +8,6 @@ Base classes and types are imported from base.py.
 
 Available agents:
 - WebSearchAgent: Search the web for information
-- ClarificationAgent: Clarify ambiguous queries
 - AnalysisAgent: Analyze and synthesize information
 - FactCheckAgent: Verify facts and claims
 - TechDocsAgent: Search technical documentation
@@ -40,7 +39,6 @@ from nergal.dialog.agents.base_specialized import (
 
 # Import specialized agents
 from nergal.dialog.agents.analysis_agent import AnalysisAgent
-from nergal.dialog.agents.clarification_agent import ClarificationAgent
 from nergal.dialog.agents.code_analysis_agent import CodeAnalysisAgent
 from nergal.dialog.agents.comparison_agent import ComparisonAgent
 from nergal.dialog.agents.expertise_agent import ExpertiseAgent, ExpertiseDomain
@@ -78,7 +76,6 @@ __all__ = [
     "FactCheckAgent",
     "ComparisonAgent",
     "SummaryAgent",
-    "ClarificationAgent",
     
     # Specialized agents
     "ExpertiseAgent",

@@ -311,20 +311,6 @@ def _create_expertise_agent(
     )
 
 
-@AgentFactory.register(AgentType.CLARIFICATION)
-def _create_clarification_agent(
-    llm_provider: "BaseLLMProvider",
-    **kwargs,
-) -> BaseAgent:
-    """Create a ClarificationAgent instance."""
-    from nergal.dialog.agents.clarification_agent import ClarificationAgent
-
-    return ClarificationAgent(
-        llm_provider=llm_provider,
-        style_type=kwargs.get("style_type", StyleType.DEFAULT),
-    )
-
-
 @AgentFactory.register(AgentType.TECH_DOCS)
 def _create_tech_docs_agent(
     llm_provider: "BaseLLMProvider",
@@ -383,7 +369,6 @@ AGENT_CONFIG_MAP: dict[str, AgentType] = {
     "code_analysis_enabled": AgentType.CODE_ANALYSIS,
     "metrics_enabled": AgentType.METRICS,
     "expertise_enabled": AgentType.EXPERTISE,
-    "clarification_enabled": AgentType.CLARIFICATION,
     "tech_docs_enabled": AgentType.TECH_DOCS,
     "todoist_enabled": AgentType.TODOIST,
     "health_enabled": AgentType.HEALTH,
@@ -585,18 +570,6 @@ def create_expertise_agent(
     """Create an ExpertiseAgent instance."""
     return AgentFactory.create(
         AgentType.EXPERTISE,
-        llm_provider=llm_provider,
-        style_type=style_type,
-    )
-
-
-def create_clarification_agent(
-    llm_provider: "BaseLLMProvider",
-    style_type: StyleType,
-) -> BaseAgent:
-    """Create a ClarificationAgent instance."""
-    return AgentFactory.create(
-        AgentType.CLARIFICATION,
         llm_provider=llm_provider,
         style_type=style_type,
     )
