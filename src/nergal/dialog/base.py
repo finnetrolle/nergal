@@ -29,33 +29,30 @@ class AgentCategory(str, Enum):
 
 class AgentType(str, Enum):
     """Types of agents available in the system.
-    
+
     Agents are organized by category:
     - Core: default, dispatcher
     - Information: web_search, tech_docs, code_analysis, metrics, news
-    - Processing: analysis, fact_check, comparison, summary
-    - Specialized: expertise, todoist
+    - Processing: analysis, summary
+    - Specialized: todoist
     """
-    
+
     # Core agents
     DEFAULT = "default"
     DISPATCHER = "dispatcher"
-    
+
     # Information gathering agents
     WEB_SEARCH = "web_search"
     TECH_DOCS = "tech_docs"
     CODE_ANALYSIS = "code_analysis"
     METRICS = "metrics"
     NEWS = "news"  # News aggregation and processing agent
-    
+
     # Processing/analysis agents
     ANALYSIS = "analysis"
-    FACT_CHECK = "fact_check"
-    COMPARISON = "comparison"
     SUMMARY = "summary"
 
     # Specialized agents
-    EXPERTISE = "expertise"
     TODOIST = "todoist"  # Todoist task management agent
     HEALTH = "health"  # Health metrics tracking agent
     REMINDER = "reminder"  # General-purpose reminders agent
@@ -68,10 +65,9 @@ class AgentType(str, Enum):
         elif agent_type in (cls.WEB_SEARCH, cls.TECH_DOCS,
                            cls.CODE_ANALYSIS, cls.METRICS, cls.NEWS):
             return AgentCategory.INFORMATION
-        elif agent_type in (cls.ANALYSIS, cls.FACT_CHECK, cls.COMPARISON,
-                           cls.SUMMARY):
+        elif agent_type in (cls.ANALYSIS, cls.SUMMARY):
             return AgentCategory.PROCESSING
-        elif agent_type in (cls.EXPERTISE, cls.TODOIST, cls.HEALTH, cls.REMINDER):
+        elif agent_type in (cls.TODOIST, cls.HEALTH, cls.REMINDER):
             return AgentCategory.SPECIALIZED
         else:
             return AgentCategory.CORE

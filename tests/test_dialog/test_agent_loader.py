@@ -134,12 +134,9 @@ class TestAgentConfigMap:
             "web_search_enabled",
             "news_enabled",
             "analysis_enabled",
-            "fact_check_enabled",
-            "comparison_enabled",
             "summary_enabled",
             "code_analysis_enabled",
             "metrics_enabled",
-            "expertise_enabled",
             "tech_docs_enabled",
             "todoist_enabled",
         ]

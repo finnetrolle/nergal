@@ -43,7 +43,6 @@ class TestAgentType:
     def test_get_category_processing(self):
         """Test category assignment for processing agents."""
         assert AgentType.get_category(AgentType.ANALYSIS) == AgentCategory.PROCESSING
-        assert AgentType.get_category(AgentType.COMPARISON) == AgentCategory.PROCESSING
         assert AgentType.get_category(AgentType.SUMMARY) == AgentCategory.PROCESSING
 
 
@@ -74,12 +73,12 @@ class TestExecutionPlan:
         plan = ExecutionPlan(
             steps=[],
             reasoning="test",
-            missing_agents=[AgentType.FACT_CHECK],
-            missing_agents_reason={"fact_check": "verification needed"},
+            missing_agents=[AgentType.ANALYSIS],
+            missing_agents_reason={"analysis": "detailed analysis needed"},
         )
-        
+
         assert plan.has_missing_agents()
-        assert AgentType.FACT_CHECK in plan.missing_agents
+        assert AgentType.ANALYSIS in plan.missing_agents
 
 
 class TestAgentResult:

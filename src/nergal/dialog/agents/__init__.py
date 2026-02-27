@@ -9,13 +9,10 @@ Base classes and types are imported from base.py.
 Available agents:
 - WebSearchAgent: Search the web for information
 - AnalysisAgent: Analyze and synthesize information
-- FactCheckAgent: Verify facts and claims
 - TechDocsAgent: Search technical documentation
-- ComparisonAgent: Compare alternatives
 - SummaryAgent: Summarize and condense information
 - CodeAnalysisAgent: Analyze code and repositories
 - MetricsAgent: Retrieve metrics and statistics
-- ExpertiseAgent: Domain-specific expertise
 - NewsAgent: Aggregate and process news from multiple sources
 - TodoistAgent: Manage tasks in Todoist
 """
@@ -40,9 +37,6 @@ from nergal.dialog.agents.base_specialized import (
 # Import specialized agents
 from nergal.dialog.agents.analysis_agent import AnalysisAgent
 from nergal.dialog.agents.code_analysis_agent import CodeAnalysisAgent
-from nergal.dialog.agents.comparison_agent import ComparisonAgent
-from nergal.dialog.agents.expertise_agent import ExpertiseAgent, ExpertiseDomain
-from nergal.dialog.agents.fact_check_agent import FactCheckAgent
 from nergal.dialog.agents.metrics_agent import MetricsAgent
 from nergal.dialog.agents.news_agent import NewsAgent, NewsCluster, NewsSource
 from nergal.dialog.agents.summary_agent import SummaryAgent
@@ -73,12 +67,8 @@ __all__ = [
     
     # Processing agents
     "AnalysisAgent",
-    "FactCheckAgent",
-    "ComparisonAgent",
     "SummaryAgent",
-    
+
     # Specialized agents
-    "ExpertiseAgent",
-    "ExpertiseDomain",
     "TodoistAgent",
 ]

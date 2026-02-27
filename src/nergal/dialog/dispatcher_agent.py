@@ -35,12 +35,9 @@ AGENT_DESCRIPTIONS: dict[AgentType, str] = {
     
     # Processing agents
     AgentType.ANALYSIS: "агент для анализа данных, сравнения информации, выявления закономерностей, синтеза выводов",
-    AgentType.FACT_CHECK: "агент для проверки фактов на достоверность, верификации информации из поиска, оценки надёжности источников",
-    AgentType.COMPARISON: "агент для структурированного сравнения альтернатив, создания сравнительных таблиц, взвешенной оценки",
     AgentType.SUMMARY: "агент для резюмирования длинных текстов, выделения ключевых пунктов, создания TL;DR",
 
     # Specialized agents
-    AgentType.EXPERTISE: "агент для экспертных знаний в специфических доменах: безопасность, юридические вопросы, финансы, архитектура",
     AgentType.TODOIST: "агент для работы с задачами Todoist: получение списка задач, создание задач, управление задачами, просмотр задач на сегодня/завтра/неделю",
     AgentType.HEALTH: "агент для отслеживания здоровья: запись показателей давления, пульса, веса, анализ трендов, напоминания о приёме лекарств",
     AgentType.REMINDER: "агент для управления напоминаниями: создание напоминаний на определённое время, повторяющиеся напоминания, удаление и просмотр напоминаний",
@@ -62,12 +59,9 @@ EXAMPLE_PLANS = """
 {
     "steps": [
         {"agent": "web_search", "description": "найти актуальную информацию по запросу"},
-        {"agent": "fact_check", "description": "проверить достоверность найденной информации", "is_optional": true},
         {"agent": "default", "description": "сформировать ответ пользователю на основе найденного"}
     ],
-    "reasoning": "для ответа нужен поиск, затем проверка фактов и формирование ответа",
-    "missing_agents": ["fact_check"],
-    "missing_agents_reason": {"fact_check": "проверка достоверности информации из интернета"}
+    "reasoning": "для ответа нужен поиск, затем формирование ответа"
 }
 
 3. Обычный вопрос без поиска:
@@ -87,16 +81,6 @@ EXAMPLE_PLANS = """
     "reasoning": "поиск в интернете, затем формирование ответа"
 }
 
-5. Сравнение с зависимостями:
-{
-    "steps": [
-        {"agent": "web_search", "description": "найти информацию о первом объекте", "parallel_group": 1},
-        {"agent": "web_search", "description": "найти информацию о втором объекте", "parallel_group": 1},
-        {"agent": "comparison", "description": "сравнить найденную информацию", "depends_on": [0, 1]},
-        {"agent": "default", "description": "сформировать финальный ответ"}
-    ],
-    "reasoning": "параллельный поиск, затем сравнение и формирование ответа"
-}
 """
 
 
@@ -435,22 +419,13 @@ class DispatcherAgent(BaseAgent):
             "statistics": AgentType.METRICS,
             
             # Processing agents
-            "fact_check": AgentType.FACT_CHECK,
-            "factcheck": AgentType.FACT_CHECK,
-            "fact-check": AgentType.FACT_CHECK,
             "analysis": AgentType.ANALYSIS,
             "analyze": AgentType.ANALYSIS,
-            "comparison": AgentType.COMPARISON,
-            "compare": AgentType.COMPARISON,
             "summary": AgentType.SUMMARY,
             "summarize": AgentType.SUMMARY,
             "tldr": AgentType.SUMMARY,
 
             # Specialized agents
-            "expertise": AgentType.EXPERTISE,
-            "expert": AgentType.EXPERTISE,
-            "security": AgentType.EXPERTISE,
-            "legal": AgentType.EXPERTISE,
             "todoist": AgentType.TODOIST,
             "tasks": AgentType.TODOIST,
             "task": AgentType.TODOIST,

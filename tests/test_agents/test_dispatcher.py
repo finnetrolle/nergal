@@ -194,37 +194,7 @@ class TestPlanCreation:
         assert len(plan.steps) == 2
         assert plan.steps[0].agent_type == AgentType.WEB_SEARCH
         assert plan.steps[1].agent_type == AgentType.DEFAULT
-    
-    @pytest.mark.asyncio
-    async def test_create_plan_with_optional_step(
-        self, mock_llm_provider: BaseLLMProvider, dispatcher: DispatcherAgent
-    ) -> None:
-        """Test plan creation with optional steps."""
-        plan_with_optional = {
-            "steps": [
-                {"agent": "web_search", "description": "find information"},
-                {"agent": "fact_check", "description": "verify facts", "is_optional": True},
-                {"agent": "default", "description": "respond"}
-            ],
-            "reasoning": "search with optional fact check",
-        }
-        mock_llm_provider.generate = AsyncMock(return_value=LLMResponse(
-            content=json.dumps(plan_with_optional),
-            model="test-model",
-            usage={"total_tokens": 100},
-            finish_reason="stop",
-        ))
-        
-        plan = await dispatcher.create_plan("Найди информацию", {})
-        
-        assert len(plan.steps) == 3
-        # Fact check step should be optional
-        fact_check_step = next(
-            (s for s in plan.steps if s.agent_type == AgentType.FACT_CHECK), None
-        )
-        if fact_check_step:
-            assert fact_check_step.is_optional
-    
+
     @pytest.mark.asyncio
     async def test_create_plan_handles_malformed_json(
         self, mock_llm_provider: BaseLLMProvider, dispatcher: DispatcherAgent
@@ -294,11 +264,9 @@ class TestAgentDescriptions:
             AgentType.DEFAULT,
             AgentType.WEB_SEARCH,
             AgentType.NEWS,
-            AgentType.COMPARISON,
-            AgentType.FACT_CHECK,
             AgentType.ANALYSIS,
         ]
-        
+
         for agent_type in expected_types:
             assert agent_type in AGENT_DESCRIPTIONS, f"Missing description for {agent_type}"
             assert len(AGENT_DESCRIPTIONS[agent_type]) > 0
@@ -392,8 +360,8 @@ class TestPlanValidation:
                 {"agent": "default", "description": "respond"}
             ],
             "reasoning": "simplified plan",
-            "missing_agents": ["fact_check"],
-            "missing_agents_reason": {"fact_check": "would verify facts"}
+            "missing_agents": ["analysis"],
+            "missing_agents_reason": {"analysis": "would analyze data"}
         }
         mock_llm_provider.generate = AsyncMock(return_value=LLMResponse(
             content=json.dumps(plan_with_missing),
@@ -401,8 +369,8 @@ class TestPlanValidation:
             usage={"total_tokens": 50},
             finish_reason="stop",
         ))
-        
+
         plan = await dispatcher.create_plan("test", {})
-        
+
         assert plan.has_missing_agents()
-        assert AgentType.FACT_CHECK in plan.missing_agents
+        assert AgentType.ANALYSIS in plan.missing_agents

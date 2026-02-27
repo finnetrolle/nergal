@@ -227,34 +227,6 @@ def _create_analysis_agent(
     )
 
 
-@AgentFactory.register(AgentType.FACT_CHECK)
-def _create_fact_check_agent(
-    llm_provider: "BaseLLMProvider",
-    **kwargs,
-) -> BaseAgent:
-    """Create a FactCheckAgent instance."""
-    from nergal.dialog.agents.fact_check_agent import FactCheckAgent
-
-    return FactCheckAgent(
-        llm_provider=llm_provider,
-        style_type=kwargs.get("style_type", StyleType.DEFAULT),
-    )
-
-
-@AgentFactory.register(AgentType.COMPARISON)
-def _create_comparison_agent(
-    llm_provider: "BaseLLMProvider",
-    **kwargs,
-) -> BaseAgent:
-    """Create a ComparisonAgent instance."""
-    from nergal.dialog.agents.comparison_agent import ComparisonAgent
-
-    return ComparisonAgent(
-        llm_provider=llm_provider,
-        style_type=kwargs.get("style_type", StyleType.DEFAULT),
-    )
-
-
 @AgentFactory.register(AgentType.SUMMARY)
 def _create_summary_agent(
     llm_provider: "BaseLLMProvider",
@@ -292,20 +264,6 @@ def _create_metrics_agent(
     from nergal.dialog.agents.metrics_agent import MetricsAgent
 
     return MetricsAgent(
-        llm_provider=llm_provider,
-        style_type=kwargs.get("style_type", StyleType.DEFAULT),
-    )
-
-
-@AgentFactory.register(AgentType.EXPERTISE)
-def _create_expertise_agent(
-    llm_provider: "BaseLLMProvider",
-    **kwargs,
-) -> BaseAgent:
-    """Create an ExpertiseAgent instance."""
-    from nergal.dialog.agents.expertise_agent import ExpertiseAgent
-
-    return ExpertiseAgent(
         llm_provider=llm_provider,
         style_type=kwargs.get("style_type", StyleType.DEFAULT),
     )
@@ -363,12 +321,9 @@ AGENT_CONFIG_MAP: dict[str, AgentType] = {
     "web_search_enabled": AgentType.WEB_SEARCH,
     "news_enabled": AgentType.NEWS,
     "analysis_enabled": AgentType.ANALYSIS,
-    "fact_check_enabled": AgentType.FACT_CHECK,
-    "comparison_enabled": AgentType.COMPARISON,
     "summary_enabled": AgentType.SUMMARY,
     "code_analysis_enabled": AgentType.CODE_ANALYSIS,
     "metrics_enabled": AgentType.METRICS,
-    "expertise_enabled": AgentType.EXPERTISE,
     "tech_docs_enabled": AgentType.TECH_DOCS,
     "todoist_enabled": AgentType.TODOIST,
     "health_enabled": AgentType.HEALTH,
@@ -503,30 +458,6 @@ def create_analysis_agent(
     )
 
 
-def create_fact_check_agent(
-    llm_provider: "BaseLLMProvider",
-    style_type: StyleType,
-) -> BaseAgent:
-    """Create a FactCheckAgent instance."""
-    return AgentFactory.create(
-        AgentType.FACT_CHECK,
-        llm_provider=llm_provider,
-        style_type=style_type,
-    )
-
-
-def create_comparison_agent(
-    llm_provider: "BaseLLMProvider",
-    style_type: StyleType,
-) -> BaseAgent:
-    """Create a ComparisonAgent instance."""
-    return AgentFactory.create(
-        AgentType.COMPARISON,
-        llm_provider=llm_provider,
-        style_type=style_type,
-    )
-
-
 def create_summary_agent(
     llm_provider: "BaseLLMProvider",
     style_type: StyleType,
@@ -558,18 +489,6 @@ def create_metrics_agent(
     """Create a MetricsAgent instance."""
     return AgentFactory.create(
         AgentType.METRICS,
-        llm_provider=llm_provider,
-        style_type=style_type,
-    )
-
-
-def create_expertise_agent(
-    llm_provider: "BaseLLMProvider",
-    style_type: StyleType,
-) -> BaseAgent:
-    """Create an ExpertiseAgent instance."""
-    return AgentFactory.create(
-        AgentType.EXPERTISE,
         llm_provider=llm_provider,
         style_type=style_type,
     )

@@ -52,12 +52,7 @@ from nergal.dialog.agents import (
     NewsSource,
     # Processing agents
     AnalysisAgent,
-    FactCheckAgent,
-    ComparisonAgent,
     SummaryAgent,
-    # Specialized agents
-    ExpertiseAgent,
-    ExpertiseDomain,
 )
 
 __all__ = [
@@ -96,10 +91,5 @@ __all__ = [
     "NewsSource",
     # Processing agents
     "AnalysisAgent",
-    "FactCheckAgent",
-    "ComparisonAgent",
     "SummaryAgent",
-    # Specialized agents
-    "ExpertiseAgent",
-    "ExpertiseDomain",
 ]

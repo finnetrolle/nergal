@@ -241,12 +241,6 @@ class AgentSettings(BaseSettings):
     analysis_enabled: bool = Field(
         default=False, description="Enable AnalysisAgent"
     )
-    fact_check_enabled: bool = Field(
-        default=False, description="Enable FactCheckAgent"
-    )
-    comparison_enabled: bool = Field(
-        default=False, description="Enable ComparisonAgent"
-    )
     summary_enabled: bool = Field(
         default=False, description="Enable SummaryAgent"
     )
@@ -255,9 +249,6 @@ class AgentSettings(BaseSettings):
     )
     metrics_enabled: bool = Field(
         default=False, description="Enable MetricsAgent"
-    )
-    expertise_enabled: bool = Field(
-        default=False, description="Enable ExpertiseAgent"
     )
     tech_docs_enabled: bool = Field(
         default=False, description="Enable TechDocsAgent"

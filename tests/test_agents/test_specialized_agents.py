@@ -262,11 +262,9 @@ class TestContextAwareAgentTests:
 
 class TestRealSpecializedAgents:
     """Parametrized tests for real specialized agents."""
-    
+
     @pytest.mark.parametrize("agent_class,keywords,expected_type", [
         ("NewsAgent", ["новости", "news"], AgentType.NEWS),
-        ("ComparisonAgent", ["сравни", "vs"], AgentType.COMPARISON),
-        ("FactCheckAgent", ["правда", "проверь"], AgentType.FACT_CHECK),
     ])
     @pytest.mark.asyncio
     async def test_agent_keywords_and_type(
@@ -282,12 +280,6 @@ class TestRealSpecializedAgents:
         if agent_class == "NewsAgent":
             from nergal.dialog.agents.news_agent import NewsAgent
             agent = NewsAgent(mock_llm_provider)
-        elif agent_class == "ComparisonAgent":
-            from nergal.dialog.agents.comparison_agent import ComparisonAgent
-            agent = ComparisonAgent(mock_llm_provider)
-        elif agent_class == "FactCheckAgent":
-            from nergal.dialog.agents.fact_check_agent import FactCheckAgent
-            agent = FactCheckAgent(mock_llm_provider)
         
         assert agent.agent_type == expected_type
         assert len(agent._keywords) > 0
@@ -297,9 +289,7 @@ class TestRealSpecializedAgents:
             assert kw in agent._keywords or any(kw in k for k in agent._keywords)
     
     @pytest.mark.parametrize("message,expected_high_confidence", [
-        ("сравни React и Vue", True),  # Comparison
         ("какие новости сегодня", True),  # News
-        ("правда ли что", False),  # Fact check - low confidence without context
         ("привет как дела", False),  # General - no specific agent
     ])
     @pytest.mark.asyncio
@@ -312,13 +302,9 @@ class TestRealSpecializedAgents:
     ) -> None:
         """Test that agents return appropriate confidence levels."""
         from nergal.dialog.agents.news_agent import NewsAgent
-        from nergal.dialog.agents.comparison_agent import ComparisonAgent
-        from nergal.dialog.agents.fact_check_agent import FactCheckAgent
-        
+
         agents = [
             NewsAgent(mock_llm_provider),
-            ComparisonAgent(mock_llm_provider),
-            FactCheckAgent(mock_llm_provider),
         ]
         
         max_confidence = 0.0
