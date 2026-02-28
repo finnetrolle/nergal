@@ -738,6 +738,7 @@ dependencies = [
     { name = "pydub" },
     { name = "python-telegram-bot", extra = ["job-queue"] },
     { name = "pytz" },
+    { name = "pyyaml" },
     { name = "tenacity" },
 ]
 
@@ -767,6 +768,7 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.10.0" },
     { name = "python-telegram-bot", extras = ["job-queue"], specifier = ">=22.0.0" },
     { name = "pytz", specifier = ">=2024.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "tenacity", specifier = ">=8.0.0" },
 ]

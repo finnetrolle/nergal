@@ -28,6 +28,8 @@ if TYPE_CHECKING:
     from nergal.dialog.manager import DialogManager
     from nergal.memory.base import Memory
     from nergal.security.policy import SecurityPolicy
+    from nergal.skills.base import Skill
+    from nergal.skills.loader import SkillLoader
     from stt_lib import BaseSTTProvider
     from telegram_handlers_lib.base import TelegramHandlerService
     from web_search_lib.base import BaseSearchProvider as BaseWebSearchProvider
@@ -82,6 +84,14 @@ class Container(containers.DeclarativeContainer):
     # Security policy - Singleton (enforces rules)
     security_policy = providers.Singleton(
         lambda settings: _create_security_policy(settings),
+        settings=settings,
+    )
+
+    # ============== Skills System ==============
+
+    # Skills loader - Singleton (loads skill definitions)
+    skills_loader = providers.Singleton(
+        lambda settings: _create_skills_loader(settings),
         settings=settings,
     )
 
@@ -290,6 +300,28 @@ def _create_handler_service(
         settings=settings,
         stt_provider=stt_provider,
     )
+
+
+def _create_skills_loader(settings: Settings) -> SkillLoader:
+    """Create skills loader instance."""
+    from nergal.skills.loader import SkillLoader
+
+    if not settings.skills.enabled:
+        logger.info("Skills system disabled")
+        # Return a no-op loader
+
+        class NoOpSkillLoader:
+            def load_all(self) -> dict[str, Skill]:
+                return {}
+
+        return NoOpSkillLoader()
+
+    logger.info(
+        "Creating skills loader (dir: %s)",
+        settings.skills.skills_dir,
+    )
+
+    return SkillLoader(skills_dir=settings.skills.skills_dir)
 
 
 # ============== Container Instance ==============

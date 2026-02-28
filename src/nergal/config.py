@@ -172,6 +172,27 @@ class SecuritySettings(BaseSettings):
     )
 
 
+class SkillsSettings(BaseSettings):
+    """Skills system settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="SKILLS_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    enabled: bool = Field(default=True, description="Enable skills system")
+    skills_dir: str = Field(
+        default="~/.nergal/skills",
+        description="Directory containing skill definitions",
+    )
+    active_skills: list[str] = Field(
+        default=[],
+        description="List of active skill names (empty = all)",
+    )
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -207,6 +228,9 @@ class Settings(BaseSettings):
 
     # Security settings (nested)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
+
+    # Skills settings (nested)
+    skills: SkillsSettings = Field(default_factory=SkillsSettings)
 
 
 @lru_cache
