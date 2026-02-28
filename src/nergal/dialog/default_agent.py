@@ -89,7 +89,7 @@ class DefaultAgent(BaseAgent):
                 context=context,
             )
         elif previous_step_output and previous_agent:
-            # Handle output from other agents (like TodoistAgent)
+            # Handle output from other agents
             logger.info(f"DefaultAgent received output from {previous_agent}: {previous_step_output[:100]}..." if len(previous_step_output) > 100 else f"DefaultAgent received output from {previous_agent}: {previous_step_output}")
             response = await self._generate_response_with_previous_output(
                 original_message=original_message,

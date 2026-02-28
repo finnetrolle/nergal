@@ -8,8 +8,6 @@ from nergal.handlers.commands import (
     help_command,
     start_command,
     status_command,
-    todoist_disconnect_command,
-    todoist_token_command,
 )
 from nergal.handlers.messages import (
     handle_message,
@@ -20,8 +18,6 @@ __all__ = [
     "start_command",
     "help_command",
     "status_command",
-    "todoist_token_command",
-    "todoist_disconnect_command",
     "handle_message",
     "handle_voice",
 ]

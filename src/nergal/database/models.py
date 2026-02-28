@@ -212,11 +212,11 @@ class WebSearchTelemetry(BaseModel):
 
 
 class UserIntegration(BaseModel):
-    """User integration with external services (e.g., Todoist)."""
+    """User integration with external services."""
 
     id: UUID | None = None
     user_id: int
-    integration_type: str  # "todoist", "notion", etc.
+    integration_type: str  # "notion", etc.
     encrypted_token: str | None = None
     token_hash: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)

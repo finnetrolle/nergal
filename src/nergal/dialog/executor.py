@@ -28,14 +28,12 @@ class TimeoutSettings:
     Attributes:
         default_timeout: Default timeout in seconds for all agents.
         web_search_timeout: Timeout for web search agent.
-        todoist_timeout: Timeout for Todoist agent.
         news_timeout: Timeout for news agent.
         default_agent_timeout: Timeout for default/conversation agent.
     """
 
     default_timeout: float = 30.0
     web_search_timeout: float = 45.0
-    todoist_timeout: float = 20.0
     news_timeout: float = 40.0
     default_agent_timeout: float = 30.0
 

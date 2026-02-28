@@ -1284,7 +1284,7 @@ class UserIntegrationRepository:
 
         Args:
             user_id: Telegram user ID.
-            integration_type: Type of integration (e.g., "todoist").
+            integration_type: Type of integration (e.g., "notion").
 
         Returns:
             UserIntegration instance or None if not found.

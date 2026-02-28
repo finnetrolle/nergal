@@ -33,7 +33,6 @@ class AgentType(str, Enum):
     Agents are organized by category:
     - Core: default, dispatcher
     - Information: web_search
-    - Specialized: todoist
     """
 
     # Core agents

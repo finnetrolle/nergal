@@ -20,8 +20,6 @@ from nergal.handlers import (
     help_command,
     start_command,
     status_command,
-    todoist_disconnect_command,
-    todoist_token_command,
 )
 from nergal.llm import create_llm_provider
 from nergal.monitoring import (
@@ -351,8 +349,6 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("status", status_command))
-    application.add_handler(CommandHandler("todoist_token", todoist_token_command))
-    application.add_handler(CommandHandler("todoist_disconnect", todoist_disconnect_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Add voice message handler if STT is enabled

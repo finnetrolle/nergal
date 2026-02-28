@@ -235,9 +235,6 @@ class AgentSettings(BaseSettings):
     web_search_enabled: bool = Field(
         default=True, description="Enable WebSearchAgent"
     )
-    todoist_enabled: bool = Field(
-        default=True, description="Enable TodoistAgent for task management"
-    )
 
     # Timeout settings (in seconds)
     default_timeout: float = Field(
@@ -245,9 +242,6 @@ class AgentSettings(BaseSettings):
     )
     web_search_timeout: float = Field(
         default=45.0, ge=1.0, description="Timeout for web search agent"
-    )
-    todoist_timeout: float = Field(
-        default=20.0, ge=1.0, description="Timeout for Todoist agent"
     )
     default_agent_timeout: float = Field(
         default=30.0, ge=1.0, description="Timeout for default/conversation agent"
