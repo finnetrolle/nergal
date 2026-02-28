@@ -12,7 +12,7 @@ Example:
     >>> await memory.initialize()
     >>>
     >>> builder = RAGContextBuilder(memory)
-    >>> context = builder.build("How do I deploy the app?")
+    >>> context = await builder.build("How do I deploy the app?")
     >>> print(context)
 """
 
@@ -105,7 +105,7 @@ class RAGContextBuilder:
         >>> await memory.initialize()
         >>>
         >>> builder = RAGContextBuilder(memory)
-        >>> context = builder.build("How do I deploy?")
+        >>> context = await builder.build("How do I deploy?")
         >>> prompt = f"Context:\\n{context.text}\\n\\nQuestion: {query}"
     """
 
@@ -123,7 +123,7 @@ class RAGContextBuilder:
         self.memory = memory
         self.config = config or RAGConfig()
 
-    def build(
+    async def build(
         self,
         query: str,
         categories: list[MemoryCategory] | None = None,
@@ -143,11 +143,11 @@ class RAGContextBuilder:
             RAGContext with formatted text and metadata.
 
         Examples:
-            >>> context = builder.build("How do I deploy?")
+            >>> context = await builder.build("How do I deploy?")
             >>> print(context.text)
 
             Search specific categories only:
-            >>> context = builder.build(
+            >>> context = await builder.build(
             ...     "What are user preferences?",
             ...     categories=[MemoryCategory.USER],
             ... )
@@ -284,7 +284,7 @@ class RAGContextBuilder:
         self.config = config
 
 
-def build_context(
+async def build_context(
     memory: Memory,
     query: str,
     max_entries: int = 5,
@@ -317,5 +317,5 @@ def build_context(
         categories=categories,
     )
     builder = RAGContextBuilder(memory, config)
-    context = builder.build(query)
+    context = await builder.build(query)
     return context.text
