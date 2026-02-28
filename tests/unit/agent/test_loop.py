@@ -439,3 +439,144 @@ class TestToolCallLoopConfiguration:
         # With sequential execution, would take ~0.3s (sum of delays)
         # We can't easily test timing, but at least verify it runs
         assert result == "Done"
+
+    @pytest.mark.asyncio
+    async def test_system_prompt_parameter(self) -> None:
+        """Test loop adds system prompt to history."""
+        from nergal.agent.loop import run_tool_call_loop
+        from nergal.llm.base import LLMMessage
+
+        mock_provider = AsyncMock()
+        mock_provider.generate.return_value = LLMResponse(
+            content="Response",
+            model="test-model",
+        )
+
+        mock_dispatcher = MockDispatcher(tool_calls=[])
+
+        result = await run_tool_call_loop(
+            provider=mock_provider,
+            tools=[],
+            dispatcher=mock_dispatcher,
+            max_iterations=10,
+            system_prompt="You are a helpful assistant.",
+        )
+
+        assert result == "Response"
+
+        # Check that system prompt was added
+        call_args = mock_provider.generate.call_args
+        assert call_args is not None
+        messages_arg = call_args.kwargs.get("messages", [])
+        assert len(messages_arg) >= 1
+
+        # First message should be system prompt
+        if messages_arg:
+            assert messages_arg[0].role == MessageRole.SYSTEM
+            assert messages_arg[0].content == "You are a helpful assistant."
+
+    @pytest.mark.asyncio
+    async def test_tool_not_found_sequential(self) -> None:
+        """Test loop handles tool not found in sequential mode."""
+        from nergal.agent.loop import run_tool_call_loop
+
+        mock_provider = AsyncMock()
+        mock_provider.generate.side_effect = [
+            LLMResponse(content="", model="test"),
+            LLMResponse(content="Final", model="test"),
+        ]
+
+        mock_tool = MockTool("existing_tool")
+        mock_dispatcher = MockDispatcher(
+            tool_calls=[ParsedToolCall(name="missing_tool", arguments={}, tool_call_id="c1")],
+            responses=["", "Final"],
+        )
+
+        result = await run_tool_call_loop(
+            provider=mock_provider,
+            tools=[mock_tool],
+            dispatcher=mock_dispatcher,
+            max_iterations=10,
+        )
+
+        # Should continue despite missing tool
+        assert result == "Final"
+
+    @pytest.mark.asyncio
+    async def test_tool_not_found_parallel(self) -> None:
+        """Test loop handles tool not found in parallel mode."""
+        from nergal.agent.loop import run_tool_call_loop
+
+        mock_provider = AsyncMock()
+        mock_provider.generate.side_effect = [
+            LLMResponse(content="", model="test"),
+            LLMResponse(content="Final", model="test"),
+        ]
+
+        mock_tool = MockTool("existing_tool")
+        mock_dispatcher = MockDispatcher(
+            tool_calls=[
+                ParsedToolCall(name="existing_tool", arguments={}, tool_call_id="c1"),
+                ParsedToolCall(name="missing_tool", arguments={}, tool_call_id="c2"),
+            ],
+            responses=["", "Final"],
+        )
+
+        result = await run_tool_call_loop(
+            provider=mock_provider,
+            tools=[mock_tool],
+            dispatcher=mock_dispatcher,
+            max_iterations=10,
+            parallel_tools=True,
+        )
+
+        # Should continue despite missing tool
+        assert result == "Final"
+
+    @pytest.mark.asyncio
+    async def test_tool_exception_in_parallel(self) -> None:
+        """Test loop handles tool exception in parallel mode."""
+        from nergal.agent.loop import run_tool_call_loop
+
+        mock_provider = AsyncMock()
+        mock_provider.generate.side_effect = [
+            LLMResponse(content="", model="test"),
+            LLMResponse(content="Final", model="test"),
+        ]
+
+        class ExceptionTool(Tool):
+            @property
+            def name(self) -> str:
+                return "exception_tool"
+
+            @property
+            def description(self) -> str:
+                return "Exception tool"
+
+            @property
+            def parameters_schema(self) -> dict:
+                return {"type": "object"}
+
+            async def execute(self, args: dict) -> ToolResult:
+                raise ValueError("Tool failed!")
+
+        mock_tool2 = MockTool("normal_tool")
+
+        mock_dispatcher = MockDispatcher(
+            tool_calls=[
+                ParsedToolCall(name="exception_tool", arguments={}, tool_call_id="c1"),
+                ParsedToolCall(name="normal_tool", arguments={}, tool_call_id="c2"),
+            ],
+            responses=["", "Final"],
+        )
+
+        result = await run_tool_call_loop(
+            provider=mock_provider,
+            tools=[ExceptionTool(), mock_tool2],
+            dispatcher=mock_dispatcher,
+            max_iterations=10,
+            parallel_tools=True,
+        )
+
+        # Should continue despite exception
+        assert result == "Final"

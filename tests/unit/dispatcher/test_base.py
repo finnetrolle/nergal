@@ -5,6 +5,7 @@ Tests follow TDD Red-Green-Refactor pattern.
 
 import pytest
 from dataclasses import dataclass
+from unittest.mock import Mock
 
 
 # Mock data structures needed for tests
@@ -224,3 +225,85 @@ class TestParsedToolCallEdgeCases:
         )
 
         assert call.arguments["message"] == "Привет мир!"
+
+
+class TestGetDispatcher:
+    """Tests for get_dispatcher factory function."""
+
+    def test_get_dispatcher_default(self) -> None:
+        """Test get_dispatcher with no provider returns XmlToolDispatcher."""
+        from nergal.dispatcher.base import get_dispatcher
+        from nergal.dispatcher.xml import XmlToolDispatcher
+
+        dispatcher = get_dispatcher()
+
+        assert isinstance(dispatcher, XmlToolDispatcher)
+
+    def test_get_dispatcher_force_xml(self) -> None:
+        """Test get_dispatcher with force_xml=True returns XmlToolDispatcher."""
+        from nergal.dispatcher.base import get_dispatcher
+        from nergal.dispatcher.xml import XmlToolDispatcher
+
+        dispatcher = get_dispatcher(force_xml=True)
+
+        assert isinstance(dispatcher, XmlToolDispatcher)
+
+    def test_get_dispatcher_openai_provider(self) -> None:
+        """Test get_detector with OpenAI provider."""
+        from nergal.dispatcher.base import get_dispatcher
+        from nergal.dispatcher.native import NativeToolDispatcher
+
+        provider = Mock()
+        provider.provider_name = "OpenAI"
+
+        dispatcher = get_dispatcher(provider)
+
+        assert isinstance(dispatcher, NativeToolDispatcher)
+
+    def test_get_dispatcher_anthropic_provider(self) -> None:
+        """Test get_detector with Anthropic provider."""
+        from nergal.dispatcher.base import get_dispatcher
+        from nergal.dispatcher.native import NativeToolDispatcher
+
+        provider = Mock()
+        provider.provider_name = "Anthropic"
+
+        dispatcher = get_dispatcher(provider)
+
+        assert isinstance(dispatcher, NativeToolDispatcher)
+
+    def test_get_dispatcher_claude_provider(self) -> None:
+        """Test get_detector with Claude provider."""
+        from nergal.dispatcher.base import get_dispatcher
+        from nergal.dispatcher.native import NativeToolDispatcher
+
+        provider = Mock()
+        provider.provider_name = "Claude"
+
+        dispatcher = get_dispatcher(provider)
+
+        assert isinstance(dispatcher, NativeToolDispatcher)
+
+    def test_get_dispatcher_unknown_provider(self) -> None:
+        """Test get_detector with unknown provider returns XmlToolDispatcher."""
+        from nergal.dispatcher.base import get_dispatcher
+        from nergal.dispatcher.xml import XmlToolDispatcher
+
+        provider = Mock()
+        provider.provider_name = "UnknownProvider"
+
+        dispatcher = get_dispatcher(provider)
+
+        assert isinstance(dispatcher, XmlToolDispatcher)
+
+    def test_get_dispatcher_case_insensitive(self) -> None:
+        """Test get_dispatcher is case insensitive for provider names."""
+        from nergal.dispatcher.base import get_dispatcher
+        from nergal.dispatcher.native import NativeToolDispatcher
+
+        provider = Mock()
+        provider.provider_name = "OPENAI"
+
+        dispatcher = get_dispatcher(provider)
+
+        assert isinstance(dispatcher, NativeToolDispatcher)

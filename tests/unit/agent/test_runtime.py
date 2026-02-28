@@ -120,35 +120,35 @@ class TestAgentRuntimeProcessMessage:
             category=MemoryCategory.USER,
         )
         mock_memory.recall.return_value = [entry]
-        agent_runtime.llm_provider.generate.return_value = "I'll use dark mode."
 
-        response = await agent_runtime.process_message(123, "Configure my UI.")
+        with patch("nergal.agent.runtime.run_tool_call_loop", return_value="I'll use dark mode.") as mock_loop:
+            response = await agent_runtime.process_message(123, "Configure my UI.")
 
-        assert response == "I'll use dark mode."
+            assert response == "I'll use dark mode."
 
     @pytest.mark.asyncio
     async def test_process_message_with_conversation_history(self, agent_runtime, mock_memory):
         """Test processing with conversation history."""
         mock_memory.recall.return_value = []
-        agent_runtime.llm_provider.generate.return_value = "Response"
         history = [
             LLMMessage(role=MessageRole.USER, content="Previous message"),
         ]
 
-        response = await agent_runtime.process_message(123, "New message", conversation_history=history)
+        with patch("nergal.agent.runtime.run_tool_call_loop", return_value="Response") as mock_loop:
+            response = await agent_runtime.process_message(123, "New message", conversation_history=history)
 
-        assert response == "Response"
+            assert response == "Response"
 
     @pytest.mark.asyncio
     async def test_process_message_memory_error(self, agent_runtime, mock_memory):
         """Test handling memory recall errors."""
         mock_memory.recall.side_effect = Exception("Memory error")
-        agent_runtime.llm_provider.generate.return_value = "Response"
 
-        response = await agent_runtime.process_message(123, "Test")
+        with patch("nergal.agent.runtime.run_tool_call_loop", return_value="Response") as mock_loop:
+            response = await agent_runtime.process_message(123, "Test")
 
-        # Should not raise, should log warning and continue
-        assert response == "Response"
+            # Should not raise, should log warning and continue
+            assert response == "Response"
 
     @pytest.mark.asyncio
     async def test_process_message_tool_loop_error(self, agent_runtime, mock_memory, mock_llm_provider):
@@ -185,15 +185,15 @@ class TestAgentRuntimeBuildSystemPrompt:
             ),
             MemoryEntry(
                 key="pref2",
-                content="Project uses Python",
-                category=MemoryCategory.PROJECT,
+                content="System uses Python",
+                category=MemoryCategory.SYSTEM,
             ),
         ]
         prompt = await agent_runtime._build_system_prompt(entries)
 
         assert "## Context from Memory" in prompt
         assert "[user] User likes red" in prompt
-        assert "[project] Project uses Python" in prompt
+        assert "[system] System uses Python" in prompt
         assert "## Instructions" in prompt
 
     @pytest.mark.asyncio
@@ -274,14 +274,13 @@ class TestAgentRuntimeIntegration:
         )
         mock_memory.recall.return_value = [entry]
 
-        # Setup LLM
-        agent_runtime.llm_provider.generate.return_value = "Final response"
+        # Mock the tool call loop
+        with patch("nergal.agent.runtime.run_tool_call_loop", return_value="Final response") as mock_loop:
+            response = await agent_runtime.process_message(456, "What can you do?")
 
-        response = await agent_runtime.process_message(456, "What can you do?")
-
-        assert response == "Final response"
-        mock_memory.recall.assert_called_once()
-        agent_runtime.llm_provider.generate.assert_called()
+            assert response == "Final response"
+            mock_memory.recall.assert_called_once()
+            mock_loop.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_tool_allowed_check(self, agent_runtime, mock_security_policy):
