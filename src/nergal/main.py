@@ -14,12 +14,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from nergal.config import get_settings
 from nergal.container import Container, get_container, init_container
 from nergal.dialog import DialogManager
-from nergal.handlers import (
-    handle_message,
-    handle_voice,
-    help_command,
-    start_command,
-)
 from stt_lib import BaseSTTProvider
 from web_search_lib.providers import ZaiMcpHttpSearchProvider
 
@@ -167,13 +161,19 @@ def main() -> None:
         .build()
     )
 
-    application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    # Get handler service from DI container
+    handler_service = container.handler_service()
+
+    # Register handlers
+    application.add_handler(CommandHandler("start", handler_service.start_command))
+    application.add_handler(CommandHandler("help", handler_service.help_command))
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handler_service.handle_message)
+    )
 
     # Add voice message handler if STT is enabled
     if settings.stt.enabled:
-        application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+        application.add_handler(MessageHandler(filters.VOICE, handler_service.handle_voice))
         logger.info("Voice message handler registered")
 
     logger.info("Starting bot")

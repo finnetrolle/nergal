@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from nergal.config import Settings
     from nergal.dialog.manager import DialogManager
     from stt_lib import BaseSTTProvider
+    from telegram_handlers_lib.base import TelegramHandlerService
     from web_search_lib.base import BaseSearchProvider as BaseWebSearchProvider
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,18 @@ class Container(containers.DeclarativeContainer):
         settings=settings,
         llm=llm_provider,
         search_provider=web_search_provider,
+    )
+
+    # ============== Telegram Handlers ==============
+
+    # Handler service - Singleton (stateless, but keeps reference consistency)
+    handler_service = providers.Singleton(
+        lambda settings, dialog_manager, stt_provider: _create_handler_service(
+            settings, dialog_manager, stt_provider
+        ),
+        settings=settings,
+        dialog_manager=dialog_manager,
+        stt_provider=stt_provider,
     )
 
 
@@ -174,6 +187,23 @@ def _create_dialog_manager(
     )
 
     return manager
+
+
+def _create_handler_service(
+    settings: Settings,
+    dialog_manager: DialogManager,
+    stt_provider: BaseSTTProvider | None,
+) -> TelegramHandlerService:
+    """Create Telegram handler service instance."""
+    from telegram_handlers_lib import create_handler_service
+
+    logger.info("Creating Telegram handler service")
+
+    return create_handler_service(
+        dialog_manager=dialog_manager,
+        settings=settings,
+        stt_provider=stt_provider,
+    )
 
 
 # ============== Container Instance ==============
