@@ -11,9 +11,9 @@ import re
 from abc import abstractmethod
 from typing import Any
 
+from llm_lib import BaseLLMProvider, LLMMessage
 from nergal.dialog.base import AgentResult, AgentType, BaseAgent
 from nergal.dialog.styles import StyleType
-from nergal.llm import BaseLLMProvider, LLMMessage
 
 
 class BaseSpecializedAgent(BaseAgent):

@@ -7,9 +7,9 @@ conversations and serves as a fallback for unhandled messages.
 import logging
 from typing import Any
 
+from llm_lib import LLMMessage, MessageRole
 from nergal.dialog.base import AgentResult, AgentType, BaseAgent
 from nergal.dialog.styles import get_style_prompt
-from nergal.llm import LLMMessage, MessageRole
 
 logger = logging.getLogger(__name__)
 

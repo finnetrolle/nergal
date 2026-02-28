@@ -10,12 +10,12 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from llm_lib import LLMMessage
 from nergal.dialog.base import AgentResult, AgentType, BaseAgent
 from nergal.dialog.cancellation import (
     AgentCancelledError,
     CancellationToken,
 )
-from nergal.llm import LLMMessage
 
 logger = logging.getLogger(__name__)
 

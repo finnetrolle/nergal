@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from nergal.llm import LLMMessage, MessageRole
+from llm_lib import LLMMessage, MessageRole
 
 if TYPE_CHECKING:
     from nergal.dialog.base import AgentType, StepResult

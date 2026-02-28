@@ -11,6 +11,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from llm_lib import BaseLLMProvider, LLMMessage, MessageRole
 from nergal.dialog.base import AgentResult, AgentType, BaseAgent
 from nergal.dialog.constants import (
     FILLER_WORDS,
@@ -19,7 +20,6 @@ from nergal.dialog.constants import (
     TIME_RELATED_WORDS,
 )
 from nergal.dialog.styles import StyleType
-from nergal.llm import BaseLLMProvider, LLMMessage, MessageRole
 from web_search_lib.base import BaseSearchProvider, SearchRequest
 from web_search_lib.exceptions import SearchError
 

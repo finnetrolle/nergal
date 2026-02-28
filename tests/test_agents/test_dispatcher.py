@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from llm_lib import BaseLLMProvider, LLMResponse
 from nergal.dialog.base import (
     AgentRegistry,
     AgentType,
@@ -17,7 +18,6 @@ from nergal.dialog.base import (
     PlanStep,
 )
 from nergal.dialog.dispatcher_agent import AGENT_DESCRIPTIONS, DispatcherAgent
-from nergal.llm import BaseLLMProvider, LLMResponse
 
 # =============================================================================
 # Fixtures

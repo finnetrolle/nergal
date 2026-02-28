@@ -23,10 +23,10 @@ from typing import TYPE_CHECKING
 from dependency_injector import containers, providers
 
 if TYPE_CHECKING:
+    from llm_lib import BaseLLMProvider
     from nergal.config import Settings
     from nergal.dialog.cache import AgentResultCache
     from nergal.dialog.manager import DialogManager
-    from nergal.llm.base import BaseLLMProvider
     from stt_lib import BaseSTTProvider
     from web_search_lib.base import BaseSearchProvider as BaseWebSearchProvider
 
@@ -99,7 +99,7 @@ def _load_settings() -> Settings:
 
 def _create_llm_provider(settings: Settings) -> BaseLLMProvider:
     """Create LLM provider instance."""
-    from nergal.llm import create_llm_provider
+    from llm_lib import create_llm_provider
 
     logger.info(
         "Creating LLM provider: %s (model: %s)",

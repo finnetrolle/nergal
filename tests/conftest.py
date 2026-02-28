@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from llm_lib import BaseLLMProvider, LLMMessage, LLMResponse, MessageRole
 from nergal.dialog.base import AgentRegistry, AgentType, BaseAgent
-from nergal.llm import BaseLLMProvider, LLMMessage, LLMResponse, MessageRole
 
 # =============================================================================
 # LLM Provider Fixtures

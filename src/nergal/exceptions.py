@@ -19,6 +19,8 @@ Exception Hierarchy:
 
 Note: Search exceptions (SearchError, SearchConnectionError, SearchTimeoutError, SearchRateLimitError)
 are now provided by web_search_lib.exceptions.
+Note: LLM exceptions (LLMError, LLMRateLimitError, LLMAuthenticationError, LLMModelNotFoundError)
+are now provided by llm_lib.exceptions.
 """
 
 
@@ -156,32 +158,15 @@ class AgentExecutionError(AgentError):
         super().__init__(message, agent_type, cause)
 
 
-class LLMError(NergalError):
-    """Base error for LLM provider issues.
+# Re-export LLM exceptions from llm_lib for backward compatibility
+from llm_lib.exceptions import (
+    LLMError,
+    LLMAuthenticationError,
+    LLMModelNotFoundError,
+    LLMRateLimitError,
+)
 
-    Attributes:
-        provider_name: Name of the LLM provider that encountered the error.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        provider_name: str | None = None,
-        cause: Exception | None = None,
-    ) -> None:
-        """Initialize LLM error.
-
-        Args:
-            message: Human-readable error description.
-            provider_name: Name of the LLM provider.
-            cause: Optional underlying exception.
-        """
-        self.provider_name = provider_name
-        if provider_name:
-            message = f"[{provider_name}] {message}"
-        super().__init__(message, cause)
-
-
+# Keep Nergal-specific LLM error subclasses
 class LLMConnectionError(LLMError):
     """Error connecting to the LLM provider.
 
@@ -202,7 +187,7 @@ class LLMTimeoutError(LLMError):
     def __init__(
         self,
         message: str = "LLM request timed out",
-        provider_name: str | None = None,
+        provider: str | None = None,
         timeout_seconds: float | None = None,
         cause: Exception | None = None,
     ) -> None:
@@ -210,14 +195,15 @@ class LLMTimeoutError(LLMError):
 
         Args:
             message: Human-readable error description.
-            provider_name: Name of the LLM provider.
+            provider: Name of the LLM provider.
             timeout_seconds: The timeout duration that was exceeded.
             cause: Optional underlying exception.
         """
         self.timeout_seconds = timeout_seconds
         if timeout_seconds:
             message = f"{message} (timeout: {timeout_seconds}s)"
-        super().__init__(message, provider_name, cause)
+        super().__init__(message, provider=provider)
+        self.cause = cause
 
 
 class LLMResponseError(LLMError):

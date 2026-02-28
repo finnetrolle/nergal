@@ -7,14 +7,18 @@ This document describes how to work with LLM providers in Nergal and how to add 
 The LLM service follows a provider pattern that allows easy extension for different LLM backends:
 
 ```
-src/nergal/llm/
+src/llm_lib/
 ├── __init__.py          # Public API
 ├── base.py              # Abstract base class (BaseLLMProvider)
 ├── factory.py           # Provider factory
+├── config.py            # Configuration class
+├── exceptions.py        # LLM-specific exceptions
 └── providers/
     ├── __init__.py
     └── zai.py           # Z.ai implementation
 ```
+
+Note: The old `nergal.llm` module now re-exports from `llm_lib` for backward compatibility. New code should import directly from `llm_lib`.
 
 ## Current Implementation Status
 
@@ -242,7 +246,7 @@ providers = get_supported_providers()
 ### Basic Generation
 
 ```python
-from nergal.llm import create_llm_provider, LLMMessage, MessageRole
+from llm_lib import create_llm_provider, LLMMessage, MessageRole
 from nergal.config import get_settings
 
 settings = get_settings()
@@ -485,8 +489,8 @@ Create tests in `tests/llm/providers/`:
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from nergal.llm import LLMMessage, MessageRole
-from nergal.llm.providers.anthropic import AnthropicProvider
+from llm_lib import LLMMessage, MessageRole
+from llm_lib.providers.anthropic import AnthropicProvider
 
 
 @pytest.fixture

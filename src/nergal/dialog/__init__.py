@@ -5,7 +5,7 @@ including agent-based message routing, context management, and logging.
 
 Example usage:
     from nergal.dialog import DialogManager
-    from nergal.llm import create_llm_provider
+    from llm_lib import create_llm_provider
 
     # Create LLM provider
     llm = create_llm_provider("zai", api_key="...", model="...")

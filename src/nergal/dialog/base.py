@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from llm_lib import BaseLLMProvider, LLMMessage, LLMResponse
 from nergal.dialog.styles import StyleType
-from nergal.llm import BaseLLMProvider, LLMMessage, LLMResponse
 
 
 class AgentCategory(str, Enum):

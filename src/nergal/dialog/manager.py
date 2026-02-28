@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from llm_lib import BaseLLMProvider, LLMMessage
 from nergal.dialog.base import (
     AgentRegistry,
     AgentResult,
@@ -25,7 +26,6 @@ from nergal.dialog.context import ContextManager, DialogContext, ExecutionContex
 from nergal.dialog.default_agent import DefaultAgent
 from nergal.dialog.dispatcher_agent import DispatcherAgent
 from nergal.dialog.styles import StyleType
-from nergal.llm import BaseLLMProvider, LLMMessage
 
 logger = logging.getLogger(__name__)
 

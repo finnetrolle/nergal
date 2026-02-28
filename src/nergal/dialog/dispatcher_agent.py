@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Any
 
+from llm_lib import BaseLLMProvider, LLMMessage, MessageRole
 from nergal.dialog.base import (
     AgentRegistry,
     AgentResult,
@@ -17,7 +18,6 @@ from nergal.dialog.base import (
     PlanStep,
 )
 from nergal.dialog.styles import StyleType
-from nergal.llm import BaseLLMProvider, LLMMessage, MessageRole
 
 logger = logging.getLogger(__name__)
 

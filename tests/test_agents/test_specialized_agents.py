@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from llm_lib import BaseLLMProvider, LLMResponse
 from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
 from nergal.dialog.base import AgentResult, AgentType
-from nergal.llm import BaseLLMProvider, LLMResponse
 
 # =============================================================================
 # Test Fixtures
