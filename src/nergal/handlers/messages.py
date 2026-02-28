@@ -1,9 +1,10 @@
 """Telegram bot message handlers.
 
-This module contains all message handlers for the bot (text and voice messages).
+This module contains all message handlers for bot (text and voice messages).
 """
 
 import asyncio
+import logging
 import re
 import time
 
@@ -11,27 +12,23 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from nergal.auth import check_user_authorized
-from nergal.monitoring import get_logger, track_error, track_user_activity
-from nergal.monitoring.metrics import (
-    bot_message_duration_seconds,
-    bot_messages_total,
-)
 from stt_lib import AudioTooLongError, convert_ogg_to_wav
 from nergal.utils import markdown_to_telegram_html
 
 
+logger = logging.getLogger(__name__)
+
+
 def should_respond_in_group(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Check if the bot should respond to a message in a group chat.
+    """Check if bot should respond to a message in a group chat.
 
     Args:
         update: Telegram update object.
         context: Callback context.
 
     Returns:
-        True if the bot should respond, False otherwise.
+        True if bot should respond, False otherwise.
     """
-    logger = get_logger(__name__)
-
     # Import here to avoid circular imports
     from nergal.main import BotApplication
 
@@ -71,7 +68,7 @@ def should_respond_in_group(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         # Check if message is a reply to bot's message
         if settings.respond_to_replies and message.reply_to_message:
             replied_message = message.reply_to_message
-            # Check if the replied message is from the bot
+            # Check if the replied message is from bot
             if replied_message.from_user:
                 # Check by username
                 if bot_username and replied_message.from_user.username:
@@ -140,9 +137,7 @@ def clean_message_text(text: str, bot_username: str) -> str:
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle all incoming text messages using the dialog manager."""
-    logger = get_logger(__name__)
-
+    """Handle all incoming text messages using dialog manager."""
     if not (update.message and update.message.text):
         return
 
@@ -209,9 +204,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             )
             return
 
-    # Track user activity for metrics
-    track_user_activity(user_id)
-
     # Log incoming message
     logger.debug(
         "Processing message",
@@ -220,15 +212,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     )
 
     start_time = time.time()
-    status = "success"
-    agent_type = "default"
     try:
         result = await app.dialog_manager.process_message(
             user_id=user_id,
             message=user_text,
             user_info=user_info,
         )
-        agent_type = result.agent_type.value
 
         # Convert Markdown to Telegram HTML format
         html_response = markdown_to_telegram_html(result.response)
@@ -246,8 +235,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
     except Exception as e:
-        status = "error"
-        track_error(type(e).__name__, "message_handler")
         logger.error(
             "Error processing message",
             user_id=user_id,
@@ -257,17 +244,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(
             "Произошла ошибка при обработке сообщения. Пожалуйста, попробуйте позже."
         )
-    finally:
-        # Track message metrics
-        duration = time.time() - start_time
-        bot_messages_total.labels(status=status, agent_type=agent_type).inc()
-        bot_message_duration_seconds.labels(agent_type=agent_type).observe(duration)
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming voice messages using STT and dialog manager."""
-    logger = get_logger(__name__)
-
     if not (update.message and update.message.voice):
         return
 
@@ -326,8 +306,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    track_user_activity(user_id)
-
     # Send typing action to show the bot is processing
     if update.effective_chat:
         await context.bot.send_chat_action(
@@ -336,7 +314,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
 
     try:
-        # Download the voice message
+        # Download voice message
         voice = update.message.voice
         new_file = await voice.get_file()
         audio_bytes = await new_file.download_as_bytearray()
@@ -355,14 +333,12 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
             return
 
-        # Transcribe the audio with timeout handling
+        # Transcribe audio with timeout handling
         try:
-            from nergal.monitoring import track_stt_request
-            async with track_stt_request(provider="local_whisper", audio_duration=duration):
-                transcription = await stt.transcribe(
-                    wav_audio,
-                    language=settings.stt.language,
-                )
+            transcription = await stt.transcribe(
+                wav_audio,
+                language=settings.stt.language,
+            )
         except asyncio.TimeoutError:
             logger.error(
                 "Voice transcription timed out",
@@ -412,7 +388,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
 
         except Exception as e:
-            track_error(type(e).__name__, "voice_handler")
             logger.error(
                 "Error processing voice transcription",
                 user_id=user_id,
@@ -423,7 +398,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
 
     except Exception as e:
-        track_error(type(e).__name__, "voice_processing")
         logger.error(
             "Error processing voice message",
             error=str(e),

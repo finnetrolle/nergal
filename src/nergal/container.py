@@ -17,9 +17,8 @@ Repository Pattern:
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
-
-from nergal.monitoring.logging_config import get_logger
 
 from dependency_injector import containers, providers
 
@@ -30,9 +29,8 @@ if TYPE_CHECKING:
     from nergal.web_search.base import BaseWebSearchProvider
     from nergal.dialog.manager import DialogManager
     from nergal.dialog.cache import AgentResultCache
-    from nergal.monitoring.metrics import MetricsServer
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Container(containers.DeclarativeContainer):
@@ -88,14 +86,6 @@ class Container(containers.DeclarativeContainer):
         llm=llm_provider,
         search_provider=web_search_provider,
         cache=agent_cache,
-    )
-
-    # ============== Monitoring ==============
-
-    # Metrics server - Singleton
-    metrics_server = providers.Singleton(
-        lambda settings: _create_metrics_server(settings),
-        settings=settings,
     )
 
 
@@ -225,22 +215,6 @@ def _create_dialog_manager(
         logger.info("Registered agents", agents=registered)
 
     return manager
-
-
-def _create_metrics_server(settings: "Settings") -> "MetricsServer | None":
-    """Create metrics server instance."""
-    from nergal.monitoring import MetricsServer
-
-    if not settings.monitoring.enabled:
-        logger.info("Metrics server disabled")
-        return None
-
-    logger.info(
-        "Creating metrics server",
-        port=settings.monitoring.metrics_port,
-    )
-
-    return MetricsServer(port=settings.monitoring.metrics_port)
 
 
 # ============== Container Instance ==============

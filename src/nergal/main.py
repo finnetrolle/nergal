@@ -7,9 +7,8 @@ warnings.filterwarnings("ignore", message=".*invalid escape sequence.*", categor
 
 import logging
 import re
-import time
 
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from nergal.config import get_settings
 from nergal.container import Container, get_container, init_container
@@ -19,13 +18,6 @@ from nergal.handlers import (
     handle_voice,
     help_command,
     start_command,
-    status_command,
-)
-from nergal.monitoring import (
-    MetricsServer,
-    configure_structlog,
-    get_health_checker,
-    get_logger,
 )
 from stt_lib import BaseSTTProvider
 from nergal.web_search.zai_mcp_http import ZaiMcpHttpSearchProvider
@@ -58,6 +50,24 @@ class HttpxLogFilter(logging.Filter):
         return True
 
 
+def configure_logging(log_level: str) -> None:
+    """Configure logging for the application.
+
+    Args:
+        log_level: The logging level to use.
+    """
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=getattr(logging, log_level.upper(), logging.INFO),
+    )
+
+    # Suppress verbose HTTP logs from httpx
+    httpx_logger = logging.getLogger("httpx")
+    httpx_logger.setLevel(logging.INFO)
+    httpx_logger.addFilter(HttpxLogFilter())
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+
 class BotApplication:
     """Telegram bot application with singleton pattern.
 
@@ -70,8 +80,7 @@ class BotApplication:
     def __init__(self) -> None:
         """Initialize the bot application."""
         self._container: Container | None = None
-        self._startup_time: float | None = None
-        self._logger = get_logger(__name__)
+        self._logger = logging.getLogger(__name__)
 
     @classmethod
     def get_instance(cls) -> "BotApplication":
@@ -108,7 +117,7 @@ class BotApplication:
         return self.container.settings()
 
     async def initialize_memory(self) -> None:
-        """Initialize the in-memory service."""
+        """Initialize the memory service."""
         try:
             settings = self._settings
 
@@ -135,68 +144,25 @@ class BotApplication:
             # Continue without memory - it's not critical for bot operation
             self._logger.warning("Bot will continue without persistent memory")
 
-    def start_metrics_server(self) -> None:
-        """Start the Prometheus metrics server."""
-        settings = self._settings
-        if settings.monitoring.enabled:
-            metrics_server = self.container.metrics_server()
-            if metrics_server:
-                metrics_server.start()
-                self._logger.info(
-                    "Metrics server started",
-                    port=settings.monitoring.metrics_port,
-                )
-
-    def set_startup_time(self) -> None:
-        """Record the application startup time."""
-        self._startup_time = time.time()
-        get_health_checker().set_startup_time(self._startup_time)
-
-
-def configure_logging(log_level: str, json_output: bool = True) -> None:
-    """Configure logging for the application.
-
-    Args:
-        log_level: The logging level to use.
-        json_output: Whether to use JSON format for logs.
-    """
-    configure_structlog(log_level=log_level, json_output=json_output)
-
-    # Suppress verbose HTTP logs from httpx
-    httpx_logger = logging.getLogger("httpx")
-    httpx_logger.setLevel(logging.INFO)
-    httpx_logger.addFilter(HttpxLogFilter())
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
-
 
 def main() -> None:
     """Start the bot."""
-    # Initialize DI container first
+    # Configure logging first
+    configure_logging(get_settings().log_level)
+    logger = logging.getLogger(__name__)
+
+    # Initialize DI container
     container = init_container()
-
     settings = container.settings()
-
-    # Configure logging with monitoring settings
-    configure_logging(
-        log_level=settings.monitoring.log_level or settings.log_level,
-        json_output=settings.monitoring.json_logs,
-    )
-
-    logger = get_logger(__name__)
 
     if not settings.llm.api_key:
         logger.warning("LLM_API_KEY is not set. Bot will not be able to generate AI responses.")
 
     # Initialize bot application
     app = BotApplication.get_instance()
-    app.set_startup_time()
 
-    # Start metrics server if monitoring is enabled
-    if settings.monitoring.enabled:
-        app.start_metrics_server()
-
-    # Pre-initialize components for health checks
-    _ = app.dialog_manager  # Initialize dialog manager
+    # Pre-initialize dialog manager
+    _ = app.dialog_manager
 
     # Pre-load Whisper model if STT is enabled to avoid timeout on first transcription
     if settings.stt.enabled:
@@ -211,24 +177,9 @@ def main() -> None:
         """Initialize async resources after application is ready."""
         await app.initialize_memory()
 
-        # Mark components as healthy
-        from nergal.monitoring import HealthStatus, get_health_checker
-
-        checker = get_health_checker()
-        checker.mark_healthy("bot", "Bot application initialized")
-        checker.mark_healthy("memory", "Memory service initialized")
-
     async def post_shutdown(_application: Application) -> None:
         """Cleanup async resources on shutdown."""
         pass
-
-    # Mark components as healthy (initial)
-    from nergal.monitoring import HealthStatus, get_health_checker
-
-    checker = get_health_checker()
-    checker.mark_healthy("bot", "Bot application initialized")
-
-    from telegram import Update
 
     application = (
         Application.builder()
@@ -240,7 +191,6 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("status", status_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Add voice message handler if STT is enabled
@@ -248,12 +198,8 @@ def main() -> None:
         application.add_handler(MessageHandler(filters.VOICE, handle_voice))
         logger.info("Voice message handler registered")
 
-    logger.info(
-        "Starting bot",
-        monitoring_enabled=settings.monitoring.enabled,
-        metrics_port=settings.monitoring.metrics_port,
-    )
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("Starting bot")
+    application.run_polling(allowed_updates=None)
 
 
 if __name__ == "__main__":

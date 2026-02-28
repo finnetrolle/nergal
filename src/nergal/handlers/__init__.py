@@ -7,7 +7,6 @@ separated from the main application logic for better maintainability.
 from nergal.handlers.commands import (
     help_command,
     start_command,
-    status_command,
 )
 from nergal.handlers.messages import (
     handle_message,
@@ -17,7 +16,6 @@ from nergal.handlers.messages import (
 __all__ = [
     "start_command",
     "help_command",
-    "status_command",
     "handle_message",
     "handle_voice",
 ]

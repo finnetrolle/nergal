@@ -68,22 +68,6 @@ class WebSearchSettings(BaseSettings):
     timeout: float = Field(default=30.0, description="Request timeout in seconds")
 
 
-class MonitoringSettings(BaseSettings):
-    """Monitoring and observability settings."""
-
-    model_config = SettingsConfigDict(
-        env_prefix="MONITORING_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    enabled: bool = Field(default=True, description="Enable monitoring and metrics collection")
-    metrics_port: int = Field(default=8000, description="Port for Prometheus metrics endpoint")
-    json_logs: bool = Field(default=True, description="Use JSON format for logs (recommended for production)")
-    log_level: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
-
-
 class AuthSettings(BaseSettings):
     """Authorization settings."""
 
@@ -99,12 +83,6 @@ class AuthSettings(BaseSettings):
     )
     admin_user_ids: list[int] = Field(
         default_factory=list, description="List of admin Telegram user IDs"
-    )
-    admin_port: int = Field(
-        default=8001, description="Port for admin web interface"
-    )
-    admin_enabled: bool = Field(
-        default=True, description="Enable admin web interface"
     )
 
 
@@ -171,17 +149,6 @@ class AgentSettings(BaseSettings):
         default=True, description="Enable WebSearchAgent"
     )
 
-    # Timeout settings (in seconds)
-    default_timeout: float = Field(
-        default=30.0, ge=1.0, description="Default timeout for agent execution"
-    )
-    web_search_timeout: float = Field(
-        default=45.0, ge=1.0, description="Timeout for web search agent"
-    )
-    default_agent_timeout: float = Field(
-        default=30.0, ge=1.0, description="Timeout for default/conversation agent"
-    )
-
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -209,9 +176,6 @@ class Settings(BaseSettings):
 
     # STT settings (nested)
     stt: STTSettings = Field(default_factory=STTSettings)
-
-    # Monitoring settings (nested)
-    monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
 
     # Agent settings (nested)
     agents: AgentSettings = Field(default_factory=AgentSettings)

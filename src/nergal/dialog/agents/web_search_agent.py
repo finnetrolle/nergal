@@ -20,12 +20,6 @@ from nergal.dialog.constants import (
 )
 from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage, MessageRole
-from nergal.monitoring import (
-    bot_web_search_query_generation_duration_seconds,
-    bot_web_search_synthesis_duration_seconds,
-    bot_web_search_queries_per_request,
-    bot_web_search_results_per_query,
-)
 from nergal.web_search import BaseSearchProvider, SearchError, SearchRequest
 
 logger = logging.getLogger(__name__)
@@ -425,18 +419,11 @@ class WebSearchAgent(BaseAgent):
                 (time.time() - telemetry.query_generation_start_ms) * 1000
             )
 
-            # Track query generation metrics
-            bot_web_search_query_generation_duration_seconds.labels(
-                method=telemetry.query_generation_method
-            ).observe(telemetry.query_generation_duration_ms / 1000)
-
             if not search_queries:
                 search_queries = [self._fallback_extract_query(message)]
 
             logger.info(f"Performing web searches for: {search_queries}")
 
-            # Track queries per request
-            bot_web_search_queries_per_request.observe(len(search_queries))
             telemetry.queries_executed = len(search_queries)
 
             # Step 2: Execute all searches and collect results
@@ -449,8 +436,6 @@ class WebSearchAgent(BaseAgent):
             # Track results per query
             total_results = sum(len(r.results) for _, r in all_results)
             telemetry.total_results = total_results
-            for query, results in all_results:
-                bot_web_search_results_per_query.observe(len(results.results))
 
             if not all_results:
                 telemetry.synthesis_start_ms = time.time()
@@ -492,11 +477,6 @@ class WebSearchAgent(BaseAgent):
             )
             telemetry.synthesis_duration_ms = int(
                 (time.time() - telemetry.synthesis_start_ms) * 1000
-            )
-
-            # Track synthesis duration
-            bot_web_search_synthesis_duration_seconds.observe(
-                telemetry.synthesis_duration_ms / 1000
             )
 
             telemetry.total_duration_ms = int((time.time() - start_time) * 1000)

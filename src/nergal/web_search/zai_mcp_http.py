@@ -9,7 +9,6 @@ from typing import Any
 
 import httpx
 
-from nergal.monitoring import track_web_search
 from nergal.web_search.base import (
     BaseSearchProvider,
     SearchError,
@@ -599,47 +598,46 @@ class ZaiMcpHttpSearchProvider(BaseSearchProvider):
         telemetry = TelemetryContext()
         retry_stats = RetryStats()
 
-        async with track_web_search():
-            try:
-                # Execute search with retry logic
-                async def _search_operation() -> SearchResults:
-                    return await self._do_search(request, telemetry)
+        try:
+            # Execute search with retry logic
+            async def _search_operation() -> SearchResults:
+                return await self._do_search(request, telemetry)
 
-                results, retry_stats = await execute_with_retry(
-                    operation=_search_operation,
-                    config=self._retry_config,
-                    circuit_breaker=self._circuit_breaker,
-                    operation_name="web_search",
-                )
+            results, retry_stats = await execute_with_retry(
+                operation=_search_operation,
+                config=self._retry_config,
+                circuit_breaker=self._circuit_breaker,
+                operation_name="web_search",
+            )
 
-                # Update telemetry with retry info
-                telemetry.update_from_retry_stats(retry_stats)
+            # Update telemetry with retry info
+            telemetry.update_from_retry_stats(retry_stats)
 
-                # Determine status
-                status = "success" if results.has_results() else "empty"
+            # Determine status
+            status = "success" if results.has_results() else "empty"
 
-                # Convert results to dict for telemetry
-                results_dict = [r.to_dict() for r in results.results[:10]]
+            # Convert results to dict for telemetry
+            results_dict = [r.to_dict() for r in results.results[:10]]
 
-                logger.info(
-                    f"Search completed: {len(results.results)} results for '{request.query}' "
-                    f"(attempts: {retry_stats.attempts})"
-                )
+            logger.info(
+                f"Search completed: {len(results.results)} results for '{request.query}' "
+                f"(attempts: {retry_stats.attempts})"
+            )
 
-                # Save telemetry
-                await self._save_telemetry(
-                    request,
-                    telemetry,
-                    status,
-                    results_count=len(results.results),
-                    results=results_dict,
-                    user_id=user_id,
-                    session_id=session_id,
-                )
+            # Save telemetry
+            await self._save_telemetry(
+                request,
+                telemetry,
+                status,
+                results_count=len(results.results),
+                results=results_dict,
+                user_id=user_id,
+                session_id=session_id,
+            )
 
-                return results
+            return results
 
-            except SearchError:
+        except SearchError:
                 # Re-raise SearchError as-is (already classified)
                 telemetry.set_error(ClassifiedError(
                     category=classify_search_error(Exception()).category,
@@ -654,35 +652,35 @@ class ZaiMcpHttpSearchProvider(BaseSearchProvider):
                 )
                 raise
 
-            except httpx.TimeoutException as e:
-                logger.error(f"Timeout for query '{request.query}' after {retry_stats.attempts} attempts")
-                classified = classify_search_error(e)
-                telemetry.set_error(e, classified)
-                telemetry.update_from_retry_stats(retry_stats)
-                await self._save_telemetry(
-                    request, telemetry, "timeout", user_id=user_id, session_id=session_id
-                )
-                raise SearchError("Request timeout", provider=self.provider_name) from e
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout for query '{request.query}' after {retry_stats.attempts} attempts")
+            classified = classify_search_error(e)
+            telemetry.set_error(e, classified)
+            telemetry.update_from_retry_stats(retry_stats)
+            await self._save_telemetry(
+                request, telemetry, "timeout", user_id=user_id, session_id=session_id
+            )
+            raise SearchError("Request timeout", provider=self.provider_name) from e
 
-            except httpx.RequestError as e:
-                logger.error(f"Request error: {e} after {retry_stats.attempts} attempts")
-                classified = classify_search_error(e)
-                telemetry.set_error(e, classified)
-                telemetry.update_from_retry_stats(retry_stats)
-                await self._save_telemetry(
-                    request, telemetry, "error", user_id=user_id, session_id=session_id
-                )
-                raise SearchError(f"Request failed: {e}", provider=self.provider_name) from e
+        except httpx.RequestError as e:
+            logger.error(f"Request error: {e} after {retry_stats.attempts} attempts")
+            classified = classify_search_error(e)
+            telemetry.set_error(e, classified)
+            telemetry.update_from_retry_stats(retry_stats)
+            await self._save_telemetry(
+                request, telemetry, "error", user_id=user_id, session_id=session_id
+            )
+            raise SearchError(f"Request failed: {e}", provider=self.provider_name) from e
 
-            except Exception as e:
-                logger.error(f"Search failed: {type(e).__name__}: {e}", exc_info=True)
-                classified = classify_search_error(e)
-                telemetry.set_error(e, classified)
-                telemetry.update_from_retry_stats(retry_stats)
-                await self._save_telemetry(
-                    request, telemetry, "error", user_id=user_id, session_id=session_id
-                )
-                raise SearchError(f"Search failed: {e}", provider=self.provider_name) from e
+        except Exception as e:
+            logger.error(f"Search failed: {type(e).__name__}: {e}", exc_info=True)
+            classified = classify_search_error(e)
+            telemetry.set_error(e, classified)
+            telemetry.update_from_retry_stats(retry_stats)
+            await self._save_telemetry(
+                request, telemetry, "error", user_id=user_id, session_id=session_id
+            )
+            raise SearchError(f"Search failed: {e}", provider=self.provider_name) from e
 
     def _parse_result_item(self, item: dict[str, Any]) -> SearchResult:
         """Parse a single search result item.
