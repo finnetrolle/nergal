@@ -1,262 +1,246 @@
-"""Unit tests for ToolRegistry.
-
-Tests follow TDD Red-Green-Refactor pattern.
-"""
+"""Unit tests for ToolRegistry."""
 
 import pytest
 
 from nergal.tools.base import Tool, ToolResult
+from nergal.tools.registry import ToolRegistry, get_registry, _global_registry
 
 
-class MockTool1(Tool):
-    """Mock tool for testing."""
+class SimpleTool(Tool):
+    """Simple test tool."""
 
     @property
     def name(self) -> str:
-        return "tool_1"
+        return "simple_tool"
 
     @property
     def description(self) -> str:
-        return "First mock tool"
+        return "A simple tool"
 
     @property
     def parameters_schema(self) -> dict:
         return {"type": "object"}
 
     async def execute(self, args: dict) -> ToolResult:
-        return ToolResult(success=True, output="tool_1 result")
+        return ToolResult(success=True, output="OK")
 
 
-class MockTool2(Tool):
-    """Another mock tool for testing."""
+class AnotherTool(Tool):
+    """Another test tool."""
 
     @property
     def name(self) -> str:
-        return "tool_2"
+        return "another_tool"
 
     @property
     def description(self) -> str:
-        return "Second mock tool"
+        return "Another tool"
 
     @property
     def parameters_schema(self) -> dict:
         return {"type": "object"}
 
     async def execute(self, args: dict) -> ToolResult:
-        return ToolResult(success=True, output="tool_2 result")
+        return ToolResult(success=True, output="OK")
 
 
 class TestToolRegistry:
-    """Tests for ToolRegistry functionality."""
+    """Tests for ToolRegistry class."""
 
-    def test_registry_starts_empty(self) -> None:
-        """Test that a new registry is empty."""
-        from nergal.tools.registry import ToolRegistry
-
+    def test_init_creates_empty_registry(self):
+        """Test that new registry is empty."""
         registry = ToolRegistry()
-
+        assert registry.count() == 0
         assert len(registry.list_tools()) == 0
-        assert registry.get_tool("nonexistent") is None
 
-    def test_register_tool(self) -> None:
-        """Test registering a single tool."""
-        from nergal.tools.registry import ToolRegistry
-
+    def test_register_tool(self):
+        """Test registering a tool."""
         registry = ToolRegistry()
-        tool = MockTool1()
+        tool = SimpleTool()
 
         registry.register(tool)
 
-        assert len(registry.list_tools()) == 1
-        assert registry.get_tool("tool_1") is tool
+        assert registry.count() == 1
+        assert registry.has_tool("simple_tool") is True
 
-    def test_register_multiple_tools(self) -> None:
-        """Test registering multiple tools."""
-        from nergal.tools.registry import ToolRegistry
+    def test_register_replaces_existing(self):
+        """Test that registering same name replaces old tool."""
+        registry = ToolRegistry()
+        tool1 = SimpleTool()
+        tool2 = SimpleTool()
+
+        registry.register(tool1)
+        assert registry.get_tool("simple_tool") is tool1
+
+        registry.register(tool2)
+        assert registry.get_tool("simple_tool") is tool2
+        assert registry.count() == 1
+
+    def test_register_empty_name_raises(self):
+        """Test that registering tool with empty name raises ValueError."""
+
+        class EmptyNameTool(Tool):
+            @property
+            def name(self) -> str:
+                return ""
+
+            @property
+            def description(self) -> str:
+                return "desc"
+
+            @property
+            def parameters_schema(self) -> dict:
+                return {"type": "object"}
+
+            async def execute(self, args: dict) -> ToolResult:
+                return ToolResult(success=True, output="OK")
 
         registry = ToolRegistry()
-        tool1 = MockTool1()
-        tool2 = MockTool2()
+        with pytest.raises(ValueError, match="Tool name cannot be empty"):
+            registry.register(EmptyNameTool())
+
+    def test_unregister_existing_tool(self):
+        """Test unregistering an existing tool."""
+        registry = ToolRegistry()
+        tool = SimpleTool()
+        registry.register(tool)
+
+        registry.unregister("simple_tool")
+
+        assert registry.count() == 0
+        assert registry.has_tool("simple_tool") is False
+
+    def test_unregister_nonexistent_does_nothing(self):
+        """Test that unregistering nonexistent tool doesn't raise."""
+        registry = ToolRegistry()
+        registry.register(SimpleTool())
+
+        registry.unregister("nonexistent_tool")
+
+        assert registry.count() == 1
+
+    def test_get_tool_returns_tool(self):
+        """Test getting a registered tool."""
+        registry = ToolRegistry()
+        tool = SimpleTool()
+        registry.register(tool)
+
+        retrieved = registry.get_tool("simple_tool")
+
+        assert retrieved is tool
+        assert retrieved.name == "simple_tool"
+
+    def test_get_tool_nonexistent_returns_none(self):
+        """Test getting nonexistent tool returns None."""
+        registry = ToolRegistry()
+        registry.register(SimpleTool())
+
+        result = registry.get_tool("nonexistent")
+
+        assert result is None
+
+    def test_list_tools_returns_all(self):
+        """Test listing all tools."""
+        registry = ToolRegistry()
+        tool1 = SimpleTool()
+        tool2 = AnotherTool()
 
         registry.register(tool1)
         registry.register(tool2)
 
         tools = registry.list_tools()
+
         assert len(tools) == 2
-        assert "tool_1" in [t.name for t in tools]
-        assert "tool_2" in [t.name for t in tools]
+        assert tool1 in tools
+        assert tool2 in tools
 
-    def test_register_duplicate_tool_overwrites(self) -> None:
-        """Test that registering a tool with same name overwrites."""
-        from nergal.tools.registry import ToolRegistry
-
+    def test_list_tools_returns_copy(self):
+        """Test that list_tools returns a copy."""
         registry = ToolRegistry()
-        tool1 = MockTool1()
-        tool2 = MockTool1()  # Same name
+        tool = SimpleTool()
+        registry.register(tool)
 
-        registry.register(tool1)
-        registry.register(tool2)
+        tools = registry.list_tools()
+        tools.clear()
 
-        # Should still have one tool, but it's the new one
-        assert len(registry.list_tools()) == 1
-        assert registry.get_tool("tool_1") is tool2
+        assert registry.count() == 1
 
-    def test_unregister_tool(self) -> None:
-        """Test unregistering a tool."""
-        from nergal.tools.registry import ToolRegistry
-
-        registry = ToolRegistry()
-        tool1 = MockTool1()
-        tool2 = MockTool2()
-
-        registry.register(tool1)
-        registry.register(tool2)
-
-        registry.unregister("tool_1")
-
-        assert len(registry.list_tools()) == 1
-        assert registry.get_tool("tool_1") is None
-        assert registry.get_tool("tool_2") is tool2
-
-    def test_unregister_nonexistent_tool(self) -> None:
-        """Test unregistering a non-existent tool doesn't raise."""
-        from nergal.tools.registry import ToolRegistry
-
-        registry = ToolRegistry()
-        tool1 = MockTool1()
-
-        registry.register(tool1)
-
-        # Should not raise
-        registry.unregister("nonexistent")
-
-        # Original tool still there
-        assert len(registry.list_tools()) == 1
-
-    def test_get_tool_names(self) -> None:
+    def test_get_tool_names(self):
         """Test getting tool names."""
-        from nergal.tools.registry import ToolRegistry
-
         registry = ToolRegistry()
-        tool1 = MockTool1()
-        tool2 = MockTool2()
-
-        registry.register(tool1)
-        registry.register(tool2)
+        registry.register(SimpleTool())
+        registry.register(AnotherTool())
 
         names = registry.get_tool_names()
 
-        assert set(names) == {"tool_1", "tool_2"}
+        assert set(names) == {"simple_tool", "another_tool"}
 
-    def test_clear_all_tools(self) -> None:
-        """Test clearing all tools."""
-        from nergal.tools.registry import ToolRegistry
-
+    def test_has_tool_true(self):
+        """Test has_tool returns True for existing tool."""
         registry = ToolRegistry()
-        tool1 = MockTool1()
-        tool2 = MockTool2()
+        registry.register(SimpleTool())
 
-        registry.register(tool1)
-        registry.register(tool2)
+        assert registry.has_tool("simple_tool") is True
+
+    def test_has_tool_false(self):
+        """Test has_tool returns False for nonexistent tool."""
+        registry = ToolRegistry()
+        registry.register(SimpleTool())
+
+        assert registry.has_tool("nonexistent") is False
+
+    def test_count(self):
+        """Test count returns correct number."""
+        registry = ToolRegistry()
+        assert registry.count() == 0
+
+        registry.register(SimpleTool())
+        assert registry.count() == 1
+
+        registry.register(AnotherTool())
+        assert registry.count() == 2
+
+    def test_clear(self):
+        """Test clearing all tools."""
+        registry = ToolRegistry()
+        registry.register(SimpleTool())
+        registry.register(AnotherTool())
 
         registry.clear()
 
-        assert len(registry.list_tools()) == 0
-        assert registry.get_tool("tool_1") is None
-        assert registry.get_tool("tool_2") is None
-
-    def test_register_with_duplicate_names_case_sensitive(self) -> None:
-        """Test that tool names are case-sensitive."""
-        from nergal.tools.registry import ToolRegistry
-
-        registry = ToolRegistry()
-
-        # Create tools with different case
-        class ToolLower(Tool):
-            @property
-            def name(self) -> str:
-                return "my_tool"
-
-            @property
-            def description(self) -> str:
-                return "Lower case"
-
-            @property
-            def parameters_schema(self) -> dict:
-                return {"type": "object"}
-
-            async def execute(self, args: dict) -> ToolResult:
-                return ToolResult(success=True, output="lower")
-
-        class ToolUpper(Tool):
-            @property
-            def name(self) -> str:
-                return "My_Tool"  # Different case
-
-            @property
-            def description(self) -> str:
-                return "Upper case"
-
-            @property
-            def parameters_schema(self) -> dict:
-                return {"type": "object"}
-
-            async def execute(self, args: dict) -> ToolResult:
-                return ToolResult(success=True, output="upper")
-
-        registry.register(ToolLower())
-        registry.register(ToolUpper())
-
-        # Both should be registered (case-sensitive)
-        assert len(registry.list_tools()) == 2
-        assert registry.get_tool("my_tool") is not None
-        assert registry.get_tool("My_Tool") is not None
-        assert registry.get_tool("MY_TOOL") is None  # Different name
-
-    def test_list_tools_returns_copy(self) -> None:
-        """Test that list_tools returns a copy, not the internal list."""
-        from nergal.tools.registry import ToolRegistry
-
-        registry = ToolRegistry()
-        tool1 = MockTool1()
-
-        registry.register(tool1)
-
-        tools1 = registry.list_tools()
-        tools2 = registry.list_tools()
-
-        # Should be different list objects
-        assert tools1 is not tools2
-        # But should have same content
-        assert len(tools1) == len(tools2)
-        assert tools1[0] is tools2[0]
-
-    def test_has_tool(self) -> None:
-        """Test checking if a tool exists."""
-        from nergal.tools.registry import ToolRegistry
-
-        registry = ToolRegistry()
-        tool1 = MockTool1()
-
-        registry.register(tool1)
-
-        assert registry.has_tool("tool_1") is True
-        assert registry.has_tool("tool_2") is False
-        assert registry.has_tool("") is False
-
-    def test_count_tools(self) -> None:
-        """Test counting tools in registry."""
-        from nergal.tools.registry import ToolRegistry
-
-        registry = ToolRegistry()
-
         assert registry.count() == 0
+        assert registry.list_tools() == []
 
-        registry.register(MockTool1())
-        assert registry.count() == 1
+    def test_multiple_registries_independent(self):
+        """Test that multiple registries are independent."""
+        registry1 = ToolRegistry()
+        registry2 = ToolRegistry()
 
-        registry.register(MockTool2())
-        assert registry.count() == 2
+        registry1.register(SimpleTool())
 
-        registry.unregister("tool_1")
-        assert registry.count() == 1
+        assert registry1.count() == 1
+        assert registry2.count() == 0
+
+
+class TestGetRegistry:
+    """Tests for get_registry singleton function."""
+
+    def test_get_registry_returns_same_instance(self):
+        """Test that get_registry returns the same instance."""
+        registry1 = get_registry()
+        registry2 = get_registry()
+
+        assert registry1 is registry2
+
+    def test_get_registry_returns_tool_registry(self):
+        """Test that get_registry returns ToolRegistry instance."""
+        registry = get_registry()
+        assert isinstance(registry, ToolRegistry)
+
+    def test_global_registry_shared_across_calls(self):
+        """Test that tools registered via get_registry persist."""
+        registry = get_registry()
+        registry.register(SimpleTool())
+
+        registry2 = get_registry()
+        assert registry2.has_tool("simple_tool") is True

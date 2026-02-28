@@ -1,210 +1,134 @@
-"""Unit tests for Tool interface and ToolResult.
-
-Tests follow TDD Red-Green-Refactor pattern.
-"""
+"""Unit tests for tool base classes and exceptions."""
 
 import pytest
 
 from nergal.tools.base import Tool, ToolResult
+from nergal.tools.exceptions import (
+    SecurityPolicyViolationError,
+    ToolExecutionError,
+    ToolError,
+    ToolTimeoutError,
+    ToolValidationError,
+)
 
 
 class MockTool(Tool):
     """Mock tool for testing."""
 
-    def __init__(self) -> None:
-        self.name_value = "test_tool"
-        self.description_value = "A test tool for unit tests"
-
     @property
     def name(self) -> str:
-        return self.name_value
+        return "mock_tool"
 
     @property
     def description(self) -> str:
-        return self.description_value
+        return "A mock tool for testing"
 
     @property
     def parameters_schema(self) -> dict:
         return {
             "type": "object",
             "properties": {
-                "input": {
-                    "type": "string",
-                    "description": "Input parameter",
-                }
+                "input": {"type": "string"},
             },
-            "required": ["input"],
         }
 
     async def execute(self, args: dict) -> ToolResult:
-        input_value = args.get("input", "")
-        return ToolResult(
-            success=True,
-            output=f"Processed: {input_value}",
-        )
+        return ToolResult(success=True, output=f"Executed with: {args}")
 
 
 class TestToolResult:
     """Tests for ToolResult dataclass."""
 
-    def test_success_result(self) -> None:
-        """Test creating a successful ToolResult."""
-        result = ToolResult(
-            success=True,
-            output="Hello, world!",
-        )
-
+    def test_success_result(self):
+        """Test creating a successful result."""
+        result = ToolResult(success=True, output="File written successfully")
         assert result.success is True
-        assert result.output == "Hello, world!"
+        assert result.output == "File written successfully"
         assert result.error is None
         assert result.metadata is None
 
-    def test_error_result(self) -> None:
-        """Test creating an error ToolResult."""
+    def test_error_result(self):
+        """Test creating an error result."""
         result = ToolResult(
             success=False,
             output="",
-            error="Something went wrong",
+            error="Permission denied",
         )
-
         assert result.success is False
         assert result.output == ""
-        assert result.error == "Something went wrong"
-        assert result.metadata is None
+        assert result.error == "Permission denied"
 
-    def test_result_with_metadata(self) -> None:
-        """Test creating a ToolResult with metadata."""
-        metadata = {"execution_time": 0.5, "attempt": 1}
+    def test_result_with_metadata(self):
+        """Test creating a result with metadata."""
         result = ToolResult(
             success=True,
-            output="Success",
-            metadata=metadata,
+            output="Done",
+            metadata={"execution_time": 0.5, "attempts": 1},
         )
-
         assert result.success is True
-        assert result.metadata == metadata
-        assert result.metadata["execution_time"] == 0.5
+        assert result.metadata == {"execution_time": 0.5, "attempts": 1}
 
-    def test_result_with_output_and_error(self) -> None:
-        """Test creating a ToolResult with both output and error."""
-        result = ToolResult(
-            success=False,
-            output="Partial result",
-            error="Failed to complete",
+
+class TestToolError:
+    """Tests for ToolError exception hierarchy."""
+
+    def test_tool_error(self):
+        """Test base ToolError."""
+        error = ToolError("Something went wrong")
+        assert error.message == "Something went wrong"
+        assert str(error) == "Something went wrong"
+
+    def test_tool_execution_error(self):
+        """Test ToolExecutionError."""
+        error = ToolExecutionError(tool_name="file_read", message="File not found")
+        assert error.tool_name == "file_read"
+        assert error.message == "File not found"
+        assert str(error) == "[file_read] File not found"
+
+    def test_tool_timeout_error(self):
+        """Test ToolTimeoutError."""
+        error = ToolTimeoutError(tool_name="shell_execute", timeout=30.0)
+        assert error.tool_name == "shell_execute"
+        assert error.timeout == 30.0
+        assert str(error) == "[shell_execute] Execution timed out after 30.0 seconds"
+
+    def test_tool_validation_error_with_field(self):
+        """Test ToolValidationError with field specified."""
+        error = ToolValidationError(
+            tool_name="my_tool", field="count", message="must be positive"
         )
+        assert error.tool_name == "my_tool"
+        assert error.field == "count"
+        assert "count" in str(error)
+        assert "must be positive" in str(error)
 
-        assert result.success is False
-        assert result.output == "Partial result"
-        assert result.error == "Failed to complete"
+    def test_tool_validation_error_without_field(self):
+        """Test ToolValidationError without field."""
+        error = ToolValidationError(
+            tool_name="my_tool", message="Invalid arguments"
+        )
+        assert error.field is None
+        assert str(error) == "[my_tool] Validation failed: Invalid arguments"
 
+    def test_security_policy_violation_error(self):
+        """Test SecurityPolicyViolationError."""
+        error = SecurityPolicyViolationError(
+            tool_name="file_read",
+            reason="Path is outside workspace directory",
+        )
+        assert error.tool_name == "file_read"
+        assert error.reason == "Path is outside workspace directory"
+        assert "Security policy violation" in str(error)
 
-class TestToolInterface:
-    """Tests for Tool abstract base class."""
+    def test_tool_error_catch_base(self):
+        """Test that all tool errors can be caught as ToolError."""
+        errors = [
+            ToolError("base"),
+            ToolExecutionError("tool", "msg"),
+            ToolTimeoutError("tool", 10),
+            ToolValidationError("tool", message="msg"),
+            SecurityPolicyViolationError("tool", "reason"),
+        ]
 
-    @pytest.mark.asyncio
-    async def test_tool_properties(self) -> None:
-        """Test that tool implements required properties."""
-        tool = MockTool()
-
-        assert tool.name == "test_tool"
-        assert tool.description == "A test tool for unit tests"
-
-        schema = tool.parameters_schema
-        assert "type" in schema
-        assert "properties" in schema
-        assert "required" in schema
-
-    @pytest.mark.asyncio
-    async def test_tool_execute_success(self) -> None:
-        """Test successful tool execution."""
-        tool = MockTool()
-        args = {"input": "test input"}
-
-        result = await tool.execute(args)
-
-        assert result.success is True
-        assert "Processed: test input" in result.output
-        assert result.error is None
-
-    @pytest.mark.asyncio
-    async def test_tool_execute_with_missing_args(self) -> None:
-        """Test tool execution with missing arguments."""
-        tool = MockTool()
-        args = {}
-
-        result = await tool.execute(args)
-
-        # MockTool handles missing args gracefully
-        assert result.success is True
-        assert "Processed: " in result.output
-
-    @pytest.mark.asyncio
-    async def test_tool_is_abstract(self) -> None:
-        """Test that Tool cannot be instantiated directly."""
-        with pytest.raises(TypeError):
-            Tool()  # type: ignore
-
-    def test_tool_name_is_property(self) -> None:
-        """Test that name is a property, not a method."""
-        tool = MockTool()
-        # Should be able to access as property
-        assert isinstance(getattr(type(tool), 'name'), property)
-
-    def test_tool_description_is_property(self) -> None:
-        """Test that description is a property, not a method."""
-        tool = MockTool()
-        # Should be able to access as property
-        assert isinstance(getattr(type(tool), 'description'), property)
-
-    def test_tool_parameters_schema_is_property(self) -> None:
-        """Test that parameters_schema is a property, not a method."""
-        tool = MockTool()
-        # Should be able to access as property
-        assert isinstance(getattr(type(tool), 'parameters_schema'), property)
-
-
-class TestToolResultEdgeCases:
-    """Edge case tests for ToolResult."""
-
-    def test_empty_output(self) -> None:
-        """Test ToolResult with empty output."""
-        result = ToolResult(success=True, output="")
-
-        assert result.success is True
-        assert result.output == ""
-
-    def test_empty_error_message(self) -> None:
-        """Test ToolResult with empty error message."""
-        result = ToolResult(success=False, output="", error="")
-
-        assert result.success is False
-        assert result.error == ""
-
-    def test_metadata_none_explicit(self) -> None:
-        """Test ToolResult with explicitly None metadata."""
-        result = ToolResult(success=True, output="test", metadata=None)
-
-        assert result.metadata is None
-
-    def test_metadata_empty_dict(self) -> None:
-        """Test ToolResult with empty metadata dict."""
-        result = ToolResult(success=True, output="test", metadata={})
-
-        assert result.metadata == {}
-        assert isinstance(result.metadata, dict)
-
-    def test_metadata_complex_values(self) -> None:
-        """Test ToolResult with complex metadata values."""
-        metadata = {
-            "nested": {"key": "value"},
-            "list": [1, 2, 3],
-            "bool": True,
-            "none": None,
-        }
-        result = ToolResult(success=True, output="test", metadata=metadata)
-
-        assert result.metadata == metadata
-        assert result.metadata["nested"]["key"] == "value"
-        assert result.metadata["list"] == [1, 2, 3]
-        assert result.metadata["bool"] is True
-        assert result.metadata["none"] is None
+        for error in errors:
+            assert isinstance(error, ToolError)

@@ -46,18 +46,43 @@ class MockDispatcher(ToolDispatcher):
         self,
         tool_calls: list[ParsedToolCall] | None = None,
         responses: list[str] | None = None,
+        always_return_calls: bool = False,
+        tool_calls_per_iteration: list[list[ParsedToolCall]] | None = None,
     ) -> None:
         self.tool_calls_to_return = tool_calls or []
         self.responses_to_return = responses or []
+        self.always_return_calls = always_return_calls
+        self.tool_calls_per_iteration = tool_calls_per_iteration
         self.call_count = 0
         self.format_count = 0
 
     def parse_response(
         self, response: LLMResponse
     ) -> tuple[str, list[ParsedToolCall]]:
+        # Determine what to return
         if self.call_count < len(self.responses_to_return):
-            return self.responses_to_return[self.call_count], self.tool_calls_to_return
-        return "", []
+            text = self.responses_to_return[self.call_count]
+        else:
+            # Out of responses, return empty string or last response
+            text = ""
+
+        # Return tool calls based on mode
+        if self.tool_calls_per_iteration is not None:
+            # Use explicit per-iteration tool calls
+            if self.call_count < len(self.tool_calls_per_iteration):
+                calls = self.tool_calls_per_iteration[self.call_count]
+            else:
+                calls = []
+        elif self.always_return_calls:
+            calls = self.tool_calls_to_return
+        elif self.call_count == 0:
+            # Only return tool calls on first iteration by default
+            calls = self.tool_calls_to_return
+        else:
+            calls = []
+
+        self.call_count += 1
+        return text, calls
 
     def format_results(self, results: list[Any]) -> str:
         self.format_count += 1
@@ -156,6 +181,7 @@ class TestToolCallLoop:
                 tool_call_id="call_1",
             )],
             responses=["", ""],
+            always_return_calls=True,
         )
 
         with pytest.raises(MaxIterationsExceeded):
@@ -201,6 +227,7 @@ class TestToolCallLoop:
             async def execute(self, args: dict) -> ToolResult:
                 return ToolResult(
                     success=False,
+                    output="",
                     error="Something went wrong",
                 )
 
@@ -235,10 +262,6 @@ class TestToolCallLoop:
                 model="test-model",
             ),
             LLMResponse(
-                content="",
-                model="test-model",
-            ),
-            LLMResponse(
                 content="All done!",
                 model="test-model",
             ),
@@ -247,11 +270,15 @@ class TestToolCallLoop:
         mock_tool1 = MockTool("tool1")
         mock_tool2 = MockTool("tool2")
         mock_dispatcher = MockDispatcher(
-            tool_calls=[
-                ParsedToolCall(name="tool1", arguments={}, tool_call_id="call_1"),
-                ParsedToolCall(name="tool2", arguments={}, tool_call_id="call_2"),
+            tool_calls_per_iteration=[
+                [  # Iteration 0: both tools in sequence
+                    ParsedToolCall(name="tool1", arguments={}, tool_call_id="call_1"),
+                    ParsedToolCall(name="tool2", arguments={}, tool_call_id="call_2"),
+                ],
+                [  # Iteration 1: no tools - return final result
+                ],
             ],
-            responses=["", "", "All done!"],
+            responses=["", "All done!"],
         )
 
         result = await run_tool_call_loop(
@@ -262,8 +289,8 @@ class TestToolCallLoop:
         )
 
         assert result == "All done!"
-        assert mock_provider.generate.call_count == 3
-        assert mock_dispatcher.format_count == 2
+        assert mock_provider.generate.call_count == 2
+        assert mock_dispatcher.format_count == 1
 
     @pytest.mark.asyncio
     async def test_empty_tools_list(self) -> None:
@@ -337,6 +364,7 @@ class TestToolCallLoopConfiguration:
         mock_tool = MockTool("test_tool")
         mock_dispatcher = MockDispatcher(
             tool_calls=[ParsedToolCall(name="test_tool", arguments={}, tool_call_id="c1")],
+            always_return_calls=True,
         )
 
         with pytest.raises(MaxIterationsExceeded):  # Should raise at max iterations

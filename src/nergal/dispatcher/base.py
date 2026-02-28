@@ -26,9 +26,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from nergal.llm.base import LLMResponse
+
+if TYPE_CHECKING:
+    from nergal.llm.base import BaseLLMProvider
 
 
 @dataclass
@@ -179,3 +182,60 @@ class ToolDispatcher(ABC):
             ...     prompt += dispatcher.prompt_instructions(tools)
         """
         pass
+
+
+def get_dispatcher(
+    provider: BaseLLMProvider | None = None,
+    force_xml: bool = False,
+) -> ToolDispatcher:
+    """Get the appropriate dispatcher for the given provider.
+
+    This factory function automatically detects which dispatcher to use
+    based on the LLM provider's capabilities. If force_xml is True,
+    the XML dispatcher will be used regardless of provider capabilities.
+
+    Providers with native tool support (OpenAI, Anthropic) will use
+    NativeToolDispatcher. Text-only providers (Ollama, local models)
+    will use XmlToolDispatcher.
+
+    Args:
+        provider: The LLM provider instance. If None, defaults to
+                  NativeToolDispatcher (best practice is to provide
+                  the provider for accurate detection).
+        force_xml: If True, force use of XmlToolDispatcher.
+
+    Returns:
+        The appropriate ToolDispatcher instance.
+
+    Examples:
+        >>> from nergal.dispatcher.base import get_dispatcher
+        >>> from nergal.llm.providers import ZaiProvider
+        >>>
+        >>> provider = ZaiProvider(api_key="key", model="model")
+        >>> dispatcher = get_dispatcher(provider)
+
+        Force XML dispatcher:
+        >>> dispatcher = get_dispatcher(force_xml=True)
+    """
+    if force_xml:
+        from nergal.dispatcher.xml import XmlToolDispatcher
+        return XmlToolDispatcher()
+
+    # Try to detect based on provider
+    if provider is not None:
+        provider_name = provider.provider_name.lower()
+
+        # Providers known to support native tool calls
+        native_providers = {
+            "openai",
+            "anthropic",
+            "claude",
+        }
+
+        if provider_name in native_providers:
+            from nergal.dispatcher.native import NativeToolDispatcher
+            return NativeToolDispatcher()
+
+    # Default to XML dispatcher for unknown providers
+    from nergal.dispatcher.xml import XmlToolDispatcher
+    return XmlToolDispatcher()

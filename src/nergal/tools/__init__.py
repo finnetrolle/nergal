@@ -8,20 +8,39 @@ Exported classes:
     - ToolResult: Dataclass for tool execution results
     - ToolRegistry: Registry for managing available tools
     - get_registry: Factory function for global registry
-
-Exported from submodules:
-    - Tool: From base module
-    - ToolResult: From base module
-    - ToolRegistry: From registry module
-    - get_registry: From registry module
 """
 
 from nergal.tools.base import Tool, ToolResult
+from nergal.tools.exceptions import (
+    SecurityPolicyViolationError,
+    ToolError,
+    ToolExecutionError,
+    ToolTimeoutError,
+    ToolValidationError,
+)
+from nergal.tools.files.read import FileReadTool
+from nergal.tools.files.write import FileWriteTool
+from nergal.tools.http.request import HttpRequestTool
 from nergal.tools.registry import ToolRegistry, get_registry
+from nergal.tools.search.web import WebSearchTool
+from nergal.tools.shell.execute import ShellExecuteTool
 
 __all__ = [
+    # Core
     "Tool",
     "ToolResult",
     "ToolRegistry",
     "get_registry",
+    # Exceptions
+    "ToolError",
+    "ToolExecutionError",
+    "ToolTimeoutError",
+    "ToolValidationError",
+    "SecurityPolicyViolationError",
+    # Tools
+    "HttpRequestTool",
+    "FileReadTool",
+    "FileWriteTool",
+    "ShellExecuteTool",
+    "WebSearchTool",
 ]

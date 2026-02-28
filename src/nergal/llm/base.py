@@ -39,6 +39,7 @@ class LLMResponse:
     usage: dict[str, int] | None = None
     finish_reason: str | None = None
     raw_response: dict[str, Any] | None = None
+    tool_calls: list[dict[str, Any]] | None = None
 
 
 class BaseLLMProvider(ABC):
