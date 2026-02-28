@@ -21,15 +21,13 @@ from nergal.handlers import (
     start_command,
     status_command,
 )
-from nergal.llm import create_llm_provider
 from nergal.monitoring import (
     MetricsServer,
     configure_structlog,
     get_health_checker,
     get_logger,
 )
-from nergal.stt import create_stt_provider
-from nergal.stt.base import BaseSTTProvider
+from stt_lib import BaseSTTProvider
 from nergal.web_search.zai_mcp_http import ZaiMcpHttpSearchProvider
 
 
@@ -73,8 +71,6 @@ class BotApplication:
         """Initialize the bot application."""
         self._container: Container | None = None
         self._startup_time: float | None = None
-        self._admin_server = None  # Admin web interface
-        self._admin_runner = None  # aiohttp runner
         self._logger = get_logger(__name__)
 
     @classmethod
@@ -112,22 +108,9 @@ class BotApplication:
         return self.container.settings()
 
     async def initialize_memory(self) -> None:
-        """Initialize the memory service and database connection."""
+        """Initialize the in-memory service."""
         try:
-            from nergal.container import init_database
-
             settings = self._settings
-
-            # Initialize database connection pool through DI container
-            db = await init_database()
-            self._logger.info(
-                "Database connection pool created",
-                host=settings.database.host,
-                database=settings.database.name,
-            )
-
-            # Run database migrations (always run for integrations)
-            await self._run_database_migrations(db)
 
             # Initialize memory service in dialog manager (if enabled)
             if settings.memory.long_term_enabled:
@@ -139,10 +122,9 @@ class BotApplication:
                 self._logger.info(
                     "Memory service initialized",
                     long_term_enabled=settings.memory.long_term_enabled,
-                    extraction_enabled=settings.memory.long_term_extraction_enabled,
                 )
             else:
-                self._logger.info("Memory service disabled, but database is available for integrations")
+                self._logger.info("Memory service disabled")
 
         except Exception as e:
             self._logger.error(
@@ -152,56 +134,6 @@ class BotApplication:
             )
             # Continue without memory - it's not critical for bot operation
             self._logger.warning("Bot will continue without persistent memory")
-
-    async def _run_database_migrations(self, db) -> None:
-        """Run database migrations for schema updates.
-
-        Args:
-            db: DatabaseConnection instance from DI container.
-        """
-        try:
-            from nergal.database.migrations import run_migrations
-
-            # Migration 1: Add is_allowed column to users table if not exists
-            migration_sql = """
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_name = 'users' AND column_name = 'is_allowed'
-                    ) THEN
-                        ALTER TABLE users ADD COLUMN is_allowed BOOLEAN DEFAULT FALSE;
-                        CREATE INDEX IF NOT EXISTS idx_users_is_allowed ON users(is_allowed) WHERE is_allowed = TRUE;
-                    END IF;
-                END $$;
-            """
-            await db.execute(migration_sql)
-
-            # Run structured migrations
-            applied = await run_migrations(db)
-            if applied:
-                self._logger.info("Applied database migrations", migrations=applied)
-
-            self._logger.info("Database migrations completed successfully")
-        except Exception as e:
-            self._logger.warning(
-                "Database migration warning",
-                error=str(e),
-                note="This may be expected if migrations were already applied",
-            )
-
-    async def shutdown_memory(self) -> None:
-        """Shutdown the memory service and close database connections."""
-        try:
-            from nergal.container import shutdown_database
-
-            await shutdown_database()
-            self._logger.info("Database connections closed")
-        except Exception as e:
-            self._logger.error(
-                "Error during memory shutdown",
-                error=str(e),
-            )
 
     def start_metrics_server(self) -> None:
         """Start the Prometheus metrics server."""
@@ -219,42 +151,6 @@ class BotApplication:
         """Record the application startup time."""
         self._startup_time = time.time()
         get_health_checker().set_startup_time(self._startup_time)
-
-    async def start_admin_server(self) -> None:
-        """Start the admin web interface server."""
-        settings = self._settings
-        if not settings.auth.admin_enabled:
-            return
-
-        try:
-            from aiohttp import web
-
-            from nergal.admin.server import AdminServer
-
-            self._admin_server = AdminServer(
-                port=settings.auth.admin_port,
-            )
-            self._admin_runner = web.AppRunner(self._admin_server.app)
-            await self._admin_runner.setup()
-            site = web.TCPSite(self._admin_runner, "0.0.0.0", settings.auth.admin_port)
-            await site.start()
-
-            self._logger.info(
-                "Admin web interface started",
-                port=settings.auth.admin_port,
-                url=f"http://localhost:{settings.auth.admin_port}/admin",
-            )
-        except Exception as e:
-            self._logger.error(
-                "Failed to start admin server",
-                error=str(e),
-            )
-
-    async def stop_admin_server(self) -> None:
-        """Stop the admin web interface server."""
-        if self._admin_runner:
-            await self._admin_runner.cleanup()
-            self._logger.info("Admin web interface stopped")
 
 
 def configure_logging(log_level: str, json_output: bool = True) -> None:
@@ -315,9 +211,6 @@ def main() -> None:
         """Initialize async resources after application is ready."""
         await app.initialize_memory()
 
-        # Start admin web interface
-        await app.start_admin_server()
-
         # Mark components as healthy
         from nergal.monitoring import HealthStatus, get_health_checker
 
@@ -327,8 +220,7 @@ def main() -> None:
 
     async def post_shutdown(_application: Application) -> None:
         """Cleanup async resources on shutdown."""
-        await app.stop_admin_server()
-        await app.shutdown_memory()
+        pass
 
     # Mark components as healthy (initial)
     from nergal.monitoring import HealthStatus, get_health_checker

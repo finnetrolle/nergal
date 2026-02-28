@@ -16,7 +16,7 @@ from nergal.monitoring.metrics import (
     bot_message_duration_seconds,
     bot_messages_total,
 )
-from nergal.stt import AudioTooLongError, convert_ogg_to_wav
+from stt_lib import AudioTooLongError, convert_ogg_to_wav
 from nergal.utils import markdown_to_telegram_html
 
 

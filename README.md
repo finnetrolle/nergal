@@ -1,13 +1,12 @@
 # Nergal - Telegram AI Bot
 
-Telegram бот с интеграцией LLM, системой агентов, веб-поиском и памятью пользователей для круглосуточной работы на VPS.
+Telegram бот с интеграцией LLM, системой агентов и веб-поиском для круглосуточной работы на VPS.
 
 ## Возможности
 
 - 🤖 **AI-диалоги** - интеграция с различными LLM провайдерами (Zai, OpenAI, Anthropic, MiniMax)
 - 🎯 **Система агентов** - 14 специализированных агентов для разных типов задач
 - 🔍 **Веб-поиск** - поиск информации в интернете с использованием MCP (Model Context Protocol)
-- 🧠 **Система памяти** - краткосрочная и долгосрочная память пользователей
 - 👥 **Групповые чаты** - работа в группах с упоминаниями и ответами на сообщения
 - 🎭 **Стили ответов** - настраиваемые стили ответов (default, silvio_dante)
 - 🐳 **Docker** - готовая контейнеризация для простого деплоя
@@ -20,7 +19,7 @@ Telegram бот с интеграцией LLM, системой агентов, 
 - **python-telegram-bot** - библиотека для работы с Telegram API
 - **pydantic-settings** - управление конфигурацией через переменные окружения
 - **httpx** - асинхронный HTTP клиент
-- **PostgreSQL** - хранение данных памяти пользователей
+- **In-memory storage** - хранение данных в памяти (без базы данных)
 - **MCP** - Model Context Protocol для веб-поиска
 - **Prometheus** - сбор метрик
 - **Grafana** - визуализация и дашборды
@@ -57,7 +56,6 @@ Telegram бот с интеграцией LLM, системой агентов, 
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) - современный менеджер пакетов
-- PostgreSQL (опционально, для системы памяти)
 
 ### Установка
 
@@ -118,16 +116,6 @@ uv run bot
 | `LLM_MAX_TOKENS` | Максимум токенов (опционально) | - |
 | `LLM_TIMEOUT` | Таймаут запроса в секундах | `120.0` |
 
-### База данных
-
-| Переменная | Описание | По умолчанию |
-|------------|----------|--------------|
-| `DB_HOST` | Хост базы данных | `localhost` |
-| `DB_PORT` | Порт базы данных | `5432` |
-| `DB_USER` | Пользователь БД | `nergal` |
-| `DB_PASSWORD` | Пароль БД | `nergal_secret` |
-| `DB_NAME` | Имя базы данных | `nergal` |
-
 ### Веб-поиск
 
 | Переменная | Описание | По умолчанию |
@@ -137,15 +125,6 @@ uv run bot
 | `WEB_SEARCH_MCP_URL` | URL MCP endpoint для поиска | `https://api.z.ai/api/mcp/web_search_prime/mcp` |
 | `WEB_SEARCH_MAX_RESULTS` | Максимальное количество результатов | `5` |
 | `WEB_SEARCH_TIMEOUT` | Таймаут запроса в секундах | `30.0` |
-
-### Система памяти
-
-| Переменная | Описание | По умолчанию |
-|------------|----------|--------------|
-| `MEMORY_SHORT_TERM_MAX_MESSAGES` | Максимум сообщений в истории | `50` |
-| `MEMORY_LONG_TERM_ENABLED` | Включить долгосрочную память | `true` |
-| `MEMORY_LONG_TERM_EXTRACTION_ENABLED` | Включить извлечение фактов | `true` |
-| `MEMORY_CLEANUP_DAYS` | Дней хранения старых сообщений | `30` |
 
 ### Speech-to-Text
 
@@ -277,9 +256,6 @@ docker compose restart
 
 # Обновить после изменений в коде
 docker compose up -d --build
-
-# Бэкап базы данных
-docker compose exec postgres pg_dump -U nergal nergal > backup.sql
 ```
 
 Подробнее в [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
@@ -293,11 +269,7 @@ nergal/
 │   ├── config.py                # Конфигурация (pydantic-settings)
 │   ├── main.py                  # Точка входа, логика бота
 │   ├── exceptions.py            # Исключения
-│   ├── auth.py                  # Авторизация пользователей
-│   ├── database/                # Работа с БД
-│   │   ├── connection.py        # Подключение
-│   │   ├── models.py            # SQLAlchemy модели
-│   │   └── repositories.py      # Репозитории
+│   ├── auth.py                  # Авторизация пользователей (in-memory)
 │   ├── dialog/                  # Управление диалогами
 │   │   ├── base.py              # Базовые классы агентов
 │   │   ├── constants.py         # Константы и промпты
@@ -324,9 +296,6 @@ nergal/
 │   │   ├── factory.py           # Фабрика провайдеров
 │   │   └── providers/           # Реализации провайдеров
 │   │       └── zai.py           # Z.ai реализация
-│   ├── memory/                  # Система памяти
-│   │   ├── service.py           # MemoryService
-│   │   └── extraction.py        # Извлечение фактов
 │   ├── monitoring/              # Мониторинг
 │   │   ├── health.py            # Health checks
 │   │   ├── logging_config.py    # Конфигурация логирования
@@ -344,8 +313,6 @@ nergal/
 │   └── web_search/              # Веб-поиск
 │       ├── base.py
 │       └── zai_mcp_http.py      # MCP HTTP провайдер
-├── database/
-│   └── init.sql                 # Инициализация БД
 ├── docs/
 │   ├── AGENT_ARCHITECTURE.md    # Архитектура агентов
 │   ├── AGENT_RECOMMENDATIONS.md # Рекомендации по агентам

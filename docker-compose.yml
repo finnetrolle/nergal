@@ -5,8 +5,6 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    environment:
-      - DB_HOST=postgres
     logging:
       driver: json-file
       options:
@@ -20,35 +18,6 @@ services:
     ports:
       - "8000:8000"
       - "8001:8001"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  # =============================================================================
-  # Database Stack
-  # =============================================================================
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: nergal-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${DB_USER:-nergal}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-nergal_secret}
-      POSTGRES_DB: ${DB_NAME:-nergal}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    ports:
-      - "${DB_PORT:-5432}:5432"
-    networks:
-      - monitoring
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-nergal} -d ${DB_NAME:-nergal}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
   # =============================================================================
   # Monitoring Stack
@@ -167,7 +136,6 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
   prometheus_data:
   grafana_data:
   loki_data:

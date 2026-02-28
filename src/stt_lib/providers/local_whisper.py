@@ -6,14 +6,22 @@ from typing import BinaryIO
 
 from faster_whisper import WhisperModel
 
-from nergal.stt.base import BaseSTTProvider
+from stt_lib.base import BaseSTTProvider
+from stt_lib.exceptions import STTError
 
 
 class LocalWhisperProvider(BaseSTTProvider):
     """Local Whisper STT provider using faster-whisper.
 
-    This provider runs Whisper locally on CPU or GPU using the faster-whisper library,
-    which is optimized for inference using CTranslate2.
+    This provider runs Whisper locally on CPU or GPU using the faster-whisper
+    library, which is optimized for inference using CTranslate2.
+
+    Example:
+        >>> provider = LocalWhisperProvider(model="base", device="cpu")
+        >>> provider.preload_model()  # Optional: load on startup
+        >>> with open("audio.wav", "rb") as f:
+        ...     text = await provider.transcribe(f, language="ru")
+        >>> print(text)
     """
 
     def __init__(
@@ -27,8 +35,10 @@ class LocalWhisperProvider(BaseSTTProvider):
 
         Args:
             model: Model size to use (tiny, base, small, medium, large-v3).
-            device: Device to run on ( "cpu" or "cuda").
-            compute_type: Computation type ( "int8", "float16", "float32").
+                   Smaller models are faster but less accurate.
+            device: Device to run on ("cpu" or "cuda").
+                   Use "cuda" for GPU acceleration.
+            compute_type: Computation type ("int8", "float16", "float32").
                          Use "int8" for CPU, "float16" for GPU.
             timeout: Timeout in seconds for transcription.
         """
@@ -49,6 +59,10 @@ class LocalWhisperProvider(BaseSTTProvider):
 
         This method should be called at startup to ensure the model is loaded
         before any transcription requests come in.
+
+        Example:
+            >>> provider = LocalWhisperProvider(model="base")
+            >>> provider.preload_model()
         """
         self._logger.info(
             f"Pre-loading Whisper model: {self._model_name}, "
@@ -88,14 +102,14 @@ class LocalWhisperProvider(BaseSTTProvider):
         """Transcribe audio data using local Whisper model.
 
         Args:
-            audio_data: Audio file-like object.
-            language: Language code for transcription.
+            audio_data: Audio file-like object (WAV format recommended).
+            language: Language code for transcription (e.g., "ru", "en").
 
         Returns:
             Transcribed text string.
 
         Raises:
-            RuntimeError: If transcription fails.
+            STTError: If transcription fails.
             asyncio.TimeoutError: If transcription times out.
         """
         loop = asyncio.get_event_loop()
@@ -118,14 +132,13 @@ class LocalWhisperProvider(BaseSTTProvider):
                 return text.strip()
             except Exception as e:
                 self._logger.error(f"Transcription failed: {e}")
-                raise RuntimeError(f"Transcription failed: {e}") from e
+                raise STTError(f"Transcription failed: {e}") from e
 
         # Run in thread pool to avoid blocking the event loop with timeout
         try:
             return await asyncio.wait_for(
-                loop.run_in_executor(None, _transcribe),
-                timeout=self._timeout
+                loop.run_in_executor(None, _transcribe), timeout=self._timeout
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._logger.error(f"Transcription timed out after {self._timeout}s")
             raise

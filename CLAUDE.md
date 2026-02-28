@@ -61,7 +61,7 @@ Nergal is a Telegram AI bot built with Python 3.12 using an agent-based architec
 
 The project uses [`dependency-injector`](src/nergal/container.py:29) for managing application dependencies. The `Container` class ([`container.py`](src/nergal/container.py:53)) provides:
 
-- **Singleton providers**: Database connection, memory service, agent cache, dialog manager, metrics server, STT provider, web search provider
+- **Singleton providers**: Database connection, agent cache, dialog manager, metrics server, STT provider, web search provider
 - **Factory providers**: All repositories (user_repository, conversation_repository, etc.) and LLM provider
 - **Lifecycle management**: Call `init_database()` at startup and `shutdown_database()` at shutdown for proper database connection pool management
 
@@ -96,15 +96,6 @@ The dispatcher creates `ExecutionPlan` objects containing `PlanStep` items. Step
 - **DialogContext**: Per-user state including messages, current agent, user info
 - **ExecutionContext**: Shared data structure for passing results between steps in an execution plan
 
-### Memory System
-
-The memory system ([`src/nergal/memory/`](src/nergal/memory/)) provides:
-
-- **MemoryService**: PostgreSQL-backed storage for messages, facts, profiles
-- **MemoryExtractionService**: Extracts structured facts from conversation history using LLM
-
-Memory is stored in two forms: short-term (in-memory conversation history) and long-term (PostgreSQL with fact extraction).
-
 ### LLM Providers
 
 LLM providers follow a factory pattern ([`src/nergal/llm/`](src/nergal/llm/)):
@@ -121,13 +112,13 @@ Configuration is managed by pydantic-settings ([`config.py`](src/nergal/config.p
 
 - `LLMSettings`: Provider configuration (provider, api_key, model, temperature, etc.)
 - `AgentSettings`: Individual agent enable/disable flags
-- `DatabaseSettings`, `MemorySettings`, `WebSearchSettings`, `MonitoringSettings`, etc.
+- `DatabaseSettings`, `WebSearchSettings`, `MonitoringSettings`, etc.
 
 Use `from nergal.config import get_settings` to access configuration.
 
 ### Testing
 
-Tests are organized by module: `tests/test_dialog/`, `tests/test_memory/`, `tests/test_database/`, etc.
+Tests are organized by module: `tests/test_dialog/`, `tests/test_database/`, etc.
 
 Key fixtures in [`conftest.py`](tests/conftest.py:1):
 - `mock_llm_provider`: Mocked LLM provider with `generate` as AsyncMock

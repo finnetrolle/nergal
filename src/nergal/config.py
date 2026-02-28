@@ -84,71 +84,6 @@ class MonitoringSettings(BaseSettings):
     log_level: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
 
 
-class DatabaseSettings(BaseSettings):
-    """Database connection settings."""
-
-    model_config = SettingsConfigDict(
-        env_prefix="DB_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    host: str = Field(default="localhost", description="Database host")
-    port: int = Field(default=5432, description="Database port")
-    user: str = Field(default="nergal", description="Database user")
-    password: str = Field(default="nergal_secret", description="Database password")
-    name: str = Field(default="nergal", description="Database name")
-    min_pool_size: int = Field(default=5, description="Minimum connection pool size")
-    max_pool_size: int = Field(default=20, description="Maximum connection pool size")
-    connection_timeout: float = Field(default=30.0, description="Connection timeout in seconds")
-
-    @property
-    def dsn(self) -> str:
-        """Get the database connection string (DSN)."""
-        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
-
-    @property
-    def async_dsn(self) -> str:
-        """Get the async database connection string (DSN) for asyncpg."""
-        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
-
-
-class MemorySettings(BaseSettings):
-    """Memory system settings."""
-
-    model_config = SettingsConfigDict(
-        env_prefix="MEMORY_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    # Short-term memory settings
-    short_term_max_messages: int = Field(
-        default=50, description="Maximum number of messages in short-term memory"
-    )
-    short_term_session_timeout: int = Field(
-        default=3600, description="Session timeout in seconds (1 hour)"
-    )
-
-    # Long-term memory settings
-    long_term_enabled: bool = Field(
-        default=True, description="Enable long-term memory (user profiles)"
-    )
-    long_term_extraction_enabled: bool = Field(
-        default=True, description="Enable automatic extraction of facts for long-term memory"
-    )
-    long_term_confidence_threshold: float = Field(
-        default=0.7, ge=0.0, le=1.0, description="Minimum confidence to store extracted fact"
-    )
-
-    # Memory cleanup
-    cleanup_days: int = Field(
-        default=30, description="Days to keep old messages before cleanup"
-    )
-
-
 class AuthSettings(BaseSettings):
     """Authorization settings."""
 
@@ -277,12 +212,6 @@ class Settings(BaseSettings):
 
     # Monitoring settings (nested)
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
-
-    # Database settings (nested)
-    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
-
-    # Memory settings (nested)
-    memory: MemorySettings = Field(default_factory=MemorySettings)
 
     # Agent settings (nested)
     agents: AgentSettings = Field(default_factory=AgentSettings)
