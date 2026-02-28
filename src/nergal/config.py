@@ -134,6 +134,44 @@ class MemorySettings(BaseSettings):
     )
 
 
+class SecuritySettings(BaseSettings):
+    """Security settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="SECURITY_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    autonomy_level: str = Field(
+        default="limited",
+        description="Autonomy level: read_only, limited, full",
+    )
+    workspace_dir: str = Field(
+        default="~/.nergal/workspace",
+        description="Directory for file operations",
+    )
+    workspace_only: bool = Field(
+        default=True,
+        description="Restrict file access to workspace",
+    )
+    allowed_commands: list[str] = Field(
+        default=[],
+        description="Allowlist for shell commands (empty = no commands)",
+    )
+    allowed_domains: list[str] = Field(
+        default=[],
+        description="Allowlist for HTTP domains (empty = no restriction)",
+    )
+    max_actions_per_hour: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        description="Maximum tool actions per hour",
+    )
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -166,6 +204,9 @@ class Settings(BaseSettings):
 
     # Memory settings (nested)
     memory: MemorySettings = Field(default_factory=MemorySettings)
+
+    # Security settings (nested)
+    security: SecuritySettings = Field(default_factory=SecuritySettings)
 
 
 @lru_cache

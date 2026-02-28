@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from nergal.config import Settings
     from nergal.dialog.manager import DialogManager
     from nergal.memory.base import Memory
+    from nergal.security.policy import SecurityPolicy
     from stt_lib import BaseSTTProvider
     from telegram_handlers_lib.base import TelegramHandlerService
     from web_search_lib.base import BaseSearchProvider as BaseWebSearchProvider
@@ -73,6 +74,14 @@ class Container(containers.DeclarativeContainer):
     # Memory backend - Singleton (persistent connection)
     memory = providers.Singleton(
         lambda settings: _create_memory(settings),
+        settings=settings,
+    )
+
+    # ============== Security System ==============
+
+    # Security policy - Singleton (enforces rules)
+    security_policy = providers.Singleton(
+        lambda settings: _create_security_policy(settings),
         settings=settings,
     )
 
@@ -235,6 +244,35 @@ def _create_memory(settings: Settings) -> Memory:
     import asyncio
     asyncio.create_task(memory.initialize())
     return memory
+
+
+def _create_security_policy(settings: Settings) -> SecurityPolicy:
+    """Create security policy instance."""
+    from nergal.security.policy import AutonomyLevel, SecurityPolicy
+
+    # Parse autonomy level
+    try:
+        autonomy_level = AutonomyLevel(settings.security.autonomy_level)
+    except ValueError:
+        logger.warning(
+            f"Invalid autonomy level: {settings.security.autonomy_level}, "
+            "using 'limited' instead"
+        )
+        autonomy_level = AutonomyLevel.LIMITED
+
+    logger.info(
+        "Creating security policy (level: %s, workspace: %s)",
+        autonomy_level.value,
+        settings.security.workspace_dir,
+    )
+
+    return SecurityPolicy(
+        autonomy_level=autonomy_level,
+        workspace_dir=settings.security.workspace_dir,
+        allowed_commands=settings.security.allowed_commands,
+        workspace_only=settings.security.workspace_only,
+        allowed_domains=settings.security.allowed_domains,
+    )
 
 
 def _create_handler_service(
