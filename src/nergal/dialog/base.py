@@ -124,19 +124,6 @@ class AgentResult:
     handoff_agent: AgentType | None = None
     tokens_used: int | None = None  # Total tokens (prompt + completion)
 
-    def get_typed_metadata(self) -> "BaseAgentMetadata | None":
-        """Get typed metadata based on agent type.
-
-        Returns:
-            Typed metadata instance if metadata exists, None otherwise.
-        """
-        if not self.metadata:
-            return None
-
-        from nergal.dialog.metadata import create_metadata_from_dict
-
-        return create_metadata_from_dict(self.agent_type.value, self.metadata)
-
 
 @dataclass
 class StepResult:
