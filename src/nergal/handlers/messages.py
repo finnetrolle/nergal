@@ -206,10 +206,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Log successful processing
         duration = time.time() - start_time
         logger.info(
-            "Message processed successfully: user_id=%s, duration=%.3fs, agent=%s",
+            "Message processed successfully: user_id=%s, duration=%.3fs",
             user_id,
             round(duration, 3),
-            result.agent_type.value,
         )
 
     except Exception as e:

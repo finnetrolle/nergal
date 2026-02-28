@@ -6,12 +6,9 @@ including message history and user state.
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from llm_lib import LLMMessage, MessageRole
-
-if TYPE_CHECKING:
-    from nergal.dialog.base import AgentType, StepResult
 
 
 @dataclass
@@ -32,7 +29,7 @@ class UserInfo:
 
     @property
     def display_name(self) -> str:
-        """Get a display name for the user."""
+        """Get a display name for user."""
         if self.username:
             return f"@{self.username}"
         return self.full_name
@@ -47,155 +44,11 @@ class DialogState:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     message_count: int = 0
-    current_agent: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def touch(self) -> None:
         """Update the updated_at timestamp."""
         self.updated_at = datetime.now(UTC)
-
-
-@dataclass
-class ExecutionContext:
-    """Context for executing a multi-step agent plan.
-
-    This class maintains the state during execution of an ExecutionPlan,
-    allowing agents to access results from previous steps and share data.
-
-    Attributes:
-        original_message: The original user message that triggered the plan.
-        user_context: Additional context about the user (from DialogContext).
-        step_results: Results from executed steps, indexed by step index.
-        plan_id: Optional identifier for the execution plan.
-        started_at: When the execution started.
-    """
-
-    original_message: str
-    user_context: dict[str, Any] = field(default_factory=dict)
-    step_results: dict[int, "StepResult"] = field(default_factory=dict)
-    plan_id: str | None = None
-    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-    def add_result(self, result: "StepResult") -> None:
-        """Add a step result to the context.
-
-        Args:
-            result: The step result to add.
-        """
-        self.step_results[result.step_index] = result
-
-    def get_result(self, step_index: int) -> "StepResult | None":
-        """Get a result by step index.
-
-        Args:
-            step_index: Index of the step.
-
-        Returns:
-            StepResult if found, None otherwise.
-        """
-        return self.step_results.get(step_index)
-
-    def get_result_by_agent(self, agent_type: "AgentType") -> "StepResult | None":
-        """Get the most recent result from a specific agent type.
-
-        Args:
-            agent_type: Type of agent to find results for.
-
-        Returns:
-            Most recent StepResult from that agent type, or None.
-        """
-        for result in reversed(list(self.step_results.values())):
-            if result.agent_type == agent_type:
-                return result
-        return None
-
-    def get_all_results_by_agent(self, agent_type: "AgentType") -> list["StepResult"]:
-        """Get all results from a specific agent type.
-
-        Args:
-            agent_type: Type of agent to find results for.
-
-        Returns:
-            List of all StepResults from that agent type, in order.
-        """
-        return [
-            result
-            for result in self.step_results.values()
-            if result.agent_type == agent_type
-        ]
-
-    def get_accumulated_context(self) -> str:
-        """Build a context string from all completed step results.
-
-        Returns:
-            Formatted string with all step results.
-        """
-        if not self.step_results:
-            return ""
-
-        lines = ["=== Previous Step Results ==="]
-        for index in sorted(self.step_results.keys()):
-            result = self.step_results[index]
-            lines.append(result.to_context_string())
-            lines.append("")
-
-        return "\n".join(lines)
-
-    def get_successful_results(self) -> list["StepResult"]:
-        """Get all successful step results.
-
-        Returns:
-            List of successful StepResults in order.
-        """
-        return [
-            self.step_results[i]
-            for i in sorted(self.step_results.keys())
-            if self.step_results[i].success
-        ]
-
-    def has_failures(self) -> bool:
-        """Check if any steps have failed.
-
-        Returns:
-            True if any step failed, False otherwise.
-        """
-        return any(not r.success for r in self.step_results.values())
-
-    def get_failed_results(self) -> list["StepResult"]:
-        """Get all failed step results.
-
-        Returns:
-            List of failed StepResults.
-        """
-        return [
-            self.step_results[i]
-            for i in sorted(self.step_results.keys())
-            if not self.step_results[i].success
-        ]
-
-    @property
-    def completed_step_count(self) -> int:
-        """Get the number of completed steps.
-
-        Returns:
-            Number of steps with results.
-        """
-        return len(self.step_results)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert context to a dictionary for serialization.
-
-        Returns:
-            Dictionary representation of the context.
-        """
-        return {
-            "original_message": self.original_message,
-            "user_context": self.user_context,
-            "plan_id": self.plan_id,
-            "started_at": self.started_at.isoformat(),
-            "completed_steps": self.completed_step_count,
-            "has_failures": self.has_failures(),
-        }
 
 
 class DialogContext:
@@ -211,7 +64,7 @@ class DialogContext:
         session_id: str | None = None,
         max_history: int = 20,
     ) -> None:
-        """Initialize the dialog context.
+        """Initialize dialog context.
 
         Args:
             user_info: Information about the user.
@@ -277,15 +130,6 @@ class DialogContext:
         self._state.message_count = 0
         self._state.touch()
 
-    def set_current_agent(self, agent_type: str) -> None:
-        """Set the current agent handling the dialog.
-
-        Args:
-            agent_type: Type of the current agent.
-        """
-        self._state.current_agent = agent_type
-        self._state.touch()
-
     def set_metadata(self, key: str, value: Any) -> None:
         """Set a metadata value.
 
@@ -307,21 +151,6 @@ class DialogContext:
             The metadata value or default.
         """
         return self._state.metadata.get(key, default)
-
-    def get_context_for_agent(self) -> dict[str, Any]:
-        """Get context data for agent processing.
-
-        Returns:
-            Dictionary with context information.
-        """
-        return {
-            "session_id": self.session_id,
-            "user_id": self.user_info.user_id,
-            "user_name": self.user_info.full_name,
-            "message_count": self._state.message_count,
-            "current_agent": self._state.current_agent,
-            "metadata": self._state.metadata.copy(),
-        }
 
     def get_history_for_llm(self, include_system: bool = False) -> list[LLMMessage]:
         """Get history formatted for LLM request.
@@ -345,7 +174,7 @@ class ContextManager:
     """
 
     def __init__(self, max_contexts: int = 1000, context_ttl: int = 3600) -> None:
-        """Initialize the context manager.
+        """Initialize context manager.
 
         Args:
             max_contexts: Maximum number of contexts to store.
@@ -423,7 +252,7 @@ class ContextManager:
         self._contexts.clear()
 
     def _cleanup_if_needed(self) -> None:
-        """Remove old contexts if the limit is exceeded."""
+        """Remove old contexts if limit is exceeded."""
         if len(self._contexts) <= self.max_contexts:
             return
 

@@ -1,7 +1,7 @@
 """Dialog management module for handling user conversations.
 
 This module provides a complete system for managing dialogs with users,
-including agent-based message routing, context management, and logging.
+including context management and response generation.
 
 Example usage:
     from nergal.dialog import DialogManager
@@ -22,45 +22,14 @@ Example usage:
     print(result.response)
 """
 
-# Import specialized agents from agents subpackage
-from nergal.dialog.agents import (
-    # Base classes
-    BaseSpecializedAgent,
-    # Information gathering agents
-    WebSearchAgent,
-)
-from nergal.dialog.base import (
-    AgentCategory,
-    AgentRegistry,
-    AgentResult,
-    AgentType,
-    BaseAgent,
-    ExecutionPlan,
-    PlanStep,
-)
 from nergal.dialog.context import ContextManager, DialogContext, DialogState, UserInfo
-from nergal.dialog.default_agent import DefaultAgent
-from nergal.dialog.dispatcher_agent import DispatcherAgent
-from nergal.dialog.manager import DialogManager, PlanExecutionResult, ProcessResult
+from nergal.dialog.manager import DialogManager, ProcessResult
 from nergal.dialog.styles import StyleType, get_style_prompt
 
 __all__ = [
     # Manager
     "DialogManager",
     "ProcessResult",
-    "PlanExecutionResult",
-    # Core agents
-    "BaseAgent",
-    "BaseSpecializedAgent",
-    "DefaultAgent",
-    "DispatcherAgent",
-    "AgentRegistry",
-    "AgentResult",
-    "AgentType",
-    "AgentCategory",
-    # Plan
-    "ExecutionPlan",
-    "PlanStep",
     # Context
     "DialogContext",
     "DialogState",
@@ -69,6 +38,4 @@ __all__ = [
     # Styles
     "StyleType",
     "get_style_prompt",
-    # Information gathering agents
-    "WebSearchAgent",
 ]

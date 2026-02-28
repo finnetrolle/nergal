@@ -97,41 +97,6 @@ class GroupChatSettings(BaseSettings):
     respond_to_mentions: bool = Field(
         default=True, description="Respond when bot name or username is mentioned in message"
     )
-
-
-class CacheSettings(BaseSettings):
-    """Cache settings for agent results."""
-
-    model_config = SettingsConfigDict(
-        env_prefix="CACHE_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    enabled: bool = Field(default=True, description="Enable caching of agent results")
-    ttl_seconds: int = Field(
-        default=300,
-        ge=0,
-        description="Time-to-live for cache entries in seconds (default: 5 minutes)",
-    )
-    max_size: int = Field(default=1000, ge=1, description="Maximum number of entries in the cache")
-
-
-class AgentSettings(BaseSettings):
-    """Agent registration settings."""
-
-    model_config = SettingsConfigDict(
-        env_prefix="AGENTS_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    # Enable/disable specific agents
-    web_search_enabled: bool = Field(default=True, description="Enable WebSearchAgent")
-
-
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -159,14 +124,8 @@ class Settings(BaseSettings):
     # STT settings (nested)
     stt: STTSettings = Field(default_factory=STTSettings)
 
-    # Agent settings (nested)
-    agents: AgentSettings = Field(default_factory=AgentSettings)
-
     # Group chat settings (nested)
     group_chat: GroupChatSettings = Field(default_factory=GroupChatSettings)
-
-    # Cache settings (nested)
-    cache: CacheSettings = Field(default_factory=CacheSettings)
 
 
 @lru_cache

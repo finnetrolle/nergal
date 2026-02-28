@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from llm_lib import BaseLLMProvider, LLMMessage, LLMResponse, MessageRole
-from nergal.dialog.base import AgentRegistry, AgentType, BaseAgent
+
 
 # =============================================================================
 # LLM Provider Fixtures
@@ -50,33 +50,6 @@ def mock_llm_provider_with_response() -> callable:
 
 
 # =============================================================================
-# Agent Fixtures
-# =============================================================================
-
-@pytest.fixture
-def mock_agent() -> BaseAgent:
-    """Create a mock agent for testing."""
-    agent = MagicMock(spec=BaseAgent)
-    agent.agent_type = AgentType.DEFAULT
-    agent.system_prompt = "You are a test agent."
-    agent.can_handle = AsyncMock(return_value=0.8)
-    agent.process = AsyncMock(return_value=MagicMock(
-        response="Test response",
-        agent_type=AgentType.DEFAULT,
-        confidence=0.9,
-    ))
-    return agent
-
-
-@pytest.fixture
-def agent_registry(mock_agent: BaseAgent) -> AgentRegistry:
-    """Create an agent registry with a mock agent."""
-    registry = AgentRegistry()
-    registry.register(mock_agent)
-    return registry
-
-
-# =============================================================================
 # Context Fixtures
 # =============================================================================
 
@@ -84,25 +57,6 @@ def agent_registry(mock_agent: BaseAgent) -> AgentRegistry:
 def empty_context() -> dict[str, Any]:
     """Create an empty dialog context."""
     return {}
-
-
-@pytest.fixture
-def context_with_search_results() -> dict[str, Any]:
-    """Create a context with mock search results."""
-    return {
-        "search_results": "Test search result content about Python programming.",
-        "sources": ["https://example.com/article1", "https://example.com/article2"],
-        "search_queries": ["python test"],
-    }
-
-
-@pytest.fixture
-def context_with_previous_step() -> dict[str, Any]:
-    """Create a context with previous step output."""
-    return {
-        "previous_step_output": "Previous agent output content.",
-        "previous_agent": "web_search",
-    }
 
 
 # =============================================================================
