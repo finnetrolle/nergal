@@ -119,31 +119,8 @@ class BotApplication:
 
     async def initialize_memory(self) -> None:
         """Initialize the memory service."""
-        try:
-            settings = self._settings
-
-            # Initialize memory service in dialog manager (if enabled)
-            if settings.memory.long_term_enabled:
-                memory_service = self.container.memory_service()
-                if memory_service:
-                    self.dialog_manager.set_memory_service(memory_service)
-                    await self.dialog_manager.initialize_memory()
-
-                self._logger.info(
-                    "Memory service initialized",
-                    long_term_enabled=settings.memory.long_term_enabled,
-                )
-            else:
-                self._logger.info("Memory service disabled")
-
-        except Exception as e:
-            self._logger.error(
-                "Failed to initialize memory service",
-                error=str(e),
-                exc_info=True,
-            )
-            # Continue without memory - it's not critical for bot operation
-            self._logger.warning("Bot will continue without persistent memory")
+        # Memory service was removed - no-op
+        self._logger.info("Memory service disabled (removed)")
 
 
 def main() -> None:

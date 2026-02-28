@@ -102,9 +102,9 @@ def _create_llm_provider(settings: Settings) -> BaseLLMProvider:
     from nergal.llm import create_llm_provider
 
     logger.info(
-        "Creating LLM provider",
-        provider=settings.llm.provider,
-        model=settings.llm.model,
+        "Creating LLM provider: %s (model: %s)",
+        settings.llm.provider,
+        settings.llm.model,
     )
 
     return create_llm_provider(
@@ -127,9 +127,9 @@ def _create_stt_provider(settings: Settings) -> BaseSTTProvider | None:
         return None
 
     logger.info(
-        "Creating STT provider",
-        provider=settings.stt.provider,
-        model=settings.stt.model,
+        "Creating STT provider: %s (model: %s)",
+        settings.stt.provider,
+        settings.stt.model,
     )
 
     return create_stt_provider(
@@ -153,8 +153,8 @@ def _create_web_search_provider(settings: Settings) -> BaseWebSearchProvider | N
     api_key = settings.web_search.api_key or settings.llm.api_key
 
     logger.info(
-        "Creating web search provider",
-        mcp_url=settings.web_search.mcp_url,
+        "Creating web search provider (MCP URL: %s)",
+        settings.web_search.mcp_url,
     )
 
     return ZaiMcpHttpSearchProvider(
@@ -169,10 +169,10 @@ def _create_agent_cache(settings: Settings) -> AgentResultCache | None:
     from nergal.dialog.cache import AgentResultCache
 
     logger.info(
-        "Creating agent result cache",
-        enabled=settings.cache.enabled,
-        ttl_seconds=settings.cache.ttl_seconds,
-        max_size=settings.cache.max_size,
+        "Creating agent result cache (enabled: %s, TTL: %s, max_size: %s)",
+        settings.cache.enabled,
+        settings.cache.ttl_seconds,
+        settings.cache.max_size,
     )
 
     return AgentResultCache(
@@ -193,8 +193,8 @@ def _create_dialog_manager(
     from nergal.dialog.manager import DialogManager
 
     logger.info(
-        "Creating dialog manager",
-        style=settings.style.value,
+        "Creating dialog manager (style: %s)",
+        settings.style.value,
     )
 
     manager = DialogManager(
@@ -212,7 +212,7 @@ def _create_dialog_manager(
     )
 
     if registered:
-        logger.info("Registered agents", agents=registered)
+        logger.info("Registered agents: %s", registered)
 
     return manager
 

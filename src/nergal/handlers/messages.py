@@ -51,13 +51,13 @@ def should_respond_in_group(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     bot_name = settings.bot_name
 
     logger.debug(
-        "Checking group chat message",
-        chat_type=chat_type,
-        chat_id=message.chat.id,
-        message_text=message.text[:50] if message.text else None,
-        bot_username=bot_username,
-        bot_name=bot_name,
-        has_reply=message.reply_to_message is not None,
+        "Checking group chat message: chat_type=%s, chat_id=%s, text=%s, username=%s, name=%s, has_reply=%s",
+        chat_type,
+        message.chat.id,
+        message.text[:50] if message.text else None,
+        bot_username,
+        bot_name,
+        message.reply_to_message is not None,
     )
 
     # For group/supergroup chats, check conditions
@@ -143,20 +143,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     # Log all incoming messages for debugging
     logger.info(
-        "Received message",
-        chat_id=update.message.chat.id,
-        chat_type=update.message.chat.type,
-        user_id=update.effective_user.id if update.effective_user else None,
-        message_text=update.message.text[:100] if update.message.text else None,
-        has_reply=update.message.reply_to_message is not None,
+        "Received message: chat_id=%s, chat_type=%s, user_id=%s, text=%s, has_reply=%s",
+        update.message.chat.id,
+        update.message.chat.type,
+        update.effective_user.id if update.effective_user else None,
+        update.message.text[:100] if update.message.text else None,
+        update.message.reply_to_message is not None,
     )
 
     # Check if bot should respond in this context (group chat filtering)
     if not should_respond_in_group(update, context):
         logger.debug(
-            "Skipping message in group chat - no mention or reply",
-            chat_id=update.message.chat.id,
-            chat_type=update.message.chat.type,
+            "Skipping message in group chat - no mention or reply: chat_id=%s, chat_type=%s",
+            update.message.chat.id,
+            update.message.chat.type,
         )
         return
 
@@ -206,18 +206,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Log successful processing
         duration = time.time() - start_time
         logger.info(
-            "Message processed successfully",
-            user_id=user_id,
-            duration_seconds=round(duration, 3),
-            agent_used=result.agent_type.value,
+            "Message processed successfully: user_id=%s, duration=%.3fs, agent=%s",
+            user_id,
+            round(duration, 3),
+            result.agent_type.value,
         )
 
     except Exception as e:
         logger.error(
-            "Error processing message",
-            user_id=user_id,
-            error=str(e),
-            error_type=type(e).__name__,
+            "Error processing message: user_id=%s, error=%s: %s",
+            user_id,
+            type(e).__name__,
+            str(e),
+            exc_info=True,
         )
         await update.message.reply_text(
             "Произошла ошибка при обработке сообщения. Пожалуйста, попробуйте позже."
@@ -235,9 +236,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Check if bot should respond in this context (group chat filtering)
     if not should_respond_in_group(update, context):
         logger.debug(
-            "Skipping voice message in group chat - no mention or reply",
-            chat_id=update.message.chat.id,
-            chat_type=update.message.chat.type,
+            "Skipping voice message in group chat - no mention or reply: chat_id=%s, chat_type=%s",
+            update.message.chat.id,
+            update.message.chat.type,
         )
         return
 
@@ -279,7 +280,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 bytes(audio_bytes),
                 max_duration_seconds=settings.stt.max_duration_seconds,
             )
-            logger.info("Converted voice message", duration_seconds=round(duration, 1))
+            logger.info("Converted voice message: duration=%.1fs", round(duration, 1))
         except AudioTooLongError as e:
             await update.message.reply_text(
                 f"Голосовое сообщение слишком длинное ({e.duration_seconds:.0f}с). "
@@ -295,9 +296,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
         except TimeoutError:
             logger.error(
-                "Voice transcription timed out",
-                user_id=user_id,
-                timeout_seconds=settings.stt.timeout,
+                "Voice transcription timed out: user_id=%s, timeout=%s",
+                user_id,
+                settings.stt.timeout,
             )
             await update.message.reply_text(
                 "Превышено время ожидания расшифровки голосового сообщения. "
@@ -311,7 +312,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
             return
 
-        logger.info("Transcription completed", text_preview=transcription[:100])
+        logger.info("Transcription completed: %s", transcription[:100])
 
         # Process the transcribed text through dialog manager
         user_info = {
@@ -335,17 +336,18 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
             duration = time.time() - start_time
             logger.info(
-                "Voice message processed successfully",
-                user_id=user_id,
-                duration_seconds=round(duration, 3),
-                audio_duration_seconds=round(duration, 1),
+                "Voice message processed successfully: user_id=%s, duration=%.3fs, audio=%.1fs",
+                user_id,
+                round(duration, 3),
+                round(duration, 1),
             )
 
         except Exception as e:
             logger.error(
-                "Error processing voice transcription",
-                user_id=user_id,
-                error=str(e),
+                "Error processing voice transcription: user_id=%s, error=%s",
+                user_id,
+                str(e),
+                exc_info=True,
             )
             await update.message.reply_text(
                 "Произошла ошибка при обработке сообщения. Пожалуйста, попробуйте позже."
@@ -353,9 +355,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     except Exception as e:
         logger.error(
-            "Error processing voice message",
-            error=str(e),
-            error_type=type(e).__name__,
+            "Error processing voice message: %s: %s",
+            type(e).__name__,
+            str(e),
+            exc_info=True,
         )
         await update.message.reply_text(
             "Произошла ошибка при обработке голосового сообщения. "
