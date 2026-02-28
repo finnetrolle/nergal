@@ -8,7 +8,7 @@ import json
 import logging
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from nergal.dialog.base import AgentResult, AgentType, BaseAgent
@@ -20,7 +20,8 @@ from nergal.dialog.constants import (
 )
 from nergal.dialog.styles import StyleType
 from nergal.llm import BaseLLMProvider, LLMMessage, MessageRole
-from nergal.web_search import BaseSearchProvider, SearchError, SearchRequest
+from web_search_lib.base import BaseSearchProvider, SearchRequest
+from web_search_lib.exceptions import SearchError
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +185,7 @@ class WebSearchAgent(BaseAgent):
         if len(queries) <= 1:
             return queries
 
-        unique_queries = []
+        unique_queries: list[str] = []
         seen_normalized = set()
 
         for query in queries:
@@ -505,7 +506,7 @@ class WebSearchAgent(BaseAgent):
             )
             response = await self.generate_response(message, history)
             tokens_used = None
-            if response.usage:
+            if response.usage and isinstance(response.usage, dict):
                 tokens_used = response.usage.get("total_tokens") or (
                     response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
                 )
@@ -648,7 +649,7 @@ class WebSearchAgent(BaseAgent):
 
         response = await self.llm_provider.generate(messages)
         tokens_used = None
-        if response.usage:
+        if response.usage and isinstance(response.usage, dict):
             tokens_used = response.usage.get("total_tokens") or (
                 response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
             )
@@ -686,7 +687,7 @@ class WebSearchAgent(BaseAgent):
 
         response = await self.llm_provider.generate(messages)
         tokens_used = None
-        if response.usage:
+        if response.usage and isinstance(response.usage, dict):
             tokens_used = response.usage.get("total_tokens") or (
                 response.usage.get("prompt_tokens", 0) + response.usage.get("completion_tokens", 0)
             )

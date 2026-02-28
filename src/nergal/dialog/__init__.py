@@ -22,6 +22,13 @@ Example usage:
     print(result.response)
 """
 
+# Import specialized agents from agents subpackage
+from nergal.dialog.agents import (
+    # Base classes
+    BaseSpecializedAgent,
+    # Information gathering agents
+    WebSearchAgent,
+)
 from nergal.dialog.base import (
     AgentCategory,
     AgentRegistry,
@@ -36,14 +43,6 @@ from nergal.dialog.default_agent import DefaultAgent
 from nergal.dialog.dispatcher_agent import DispatcherAgent
 from nergal.dialog.manager import DialogManager, PlanExecutionResult, ProcessResult
 from nergal.dialog.styles import StyleType, get_style_prompt
-
-# Import specialized agents from agents subpackage
-from nergal.dialog.agents import (
-    # Base classes
-    BaseSpecializedAgent,
-    # Information gathering agents
-    WebSearchAgent,
-)
 
 __all__ = [
     # Manager

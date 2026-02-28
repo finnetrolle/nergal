@@ -7,19 +7,16 @@ import pytest
 from nergal.dialog.base import AgentResult, AgentType, BaseAgent
 from nergal.dialog.cancellation import (
     AgentCancelledError,
+    AgentTimeoutError,
+    CancellationStats,
     CancellationToken,
     CancellationTokenSource,
-    CancellationStats,
-    AgentTimeoutError,
 )
 from nergal.dialog.executor import (
     AgentExecutor,
     ExecutionResult,
     TimeoutSettings,
 )
-from nergal.llm import BaseLLMProvider, LLMMessage
-from nergal.dialog.styles import StyleType
-
 
 # ============= CancellationToken Tests =============
 

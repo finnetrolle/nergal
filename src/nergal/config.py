@@ -21,11 +21,17 @@ class STTSettings(BaseSettings):
     enabled: bool = Field(default=True, description="Enable voice message processing")
     provider: str = Field(default="local", description="STT provider (local, openai)")
     api_key: str = Field(default="", description="API key for STT provider (not needed for local)")
-    model: str = Field(default="base", description="STT model (whisper-1 for API, base/small/medium for local)")
+    model: str = Field(
+        default="base", description="STT model (whisper-1 for API, base/small/medium for local)"
+    )
     language: str = Field(default="ru", description="Language code for transcription")
-    max_duration_seconds: int = Field(default=60, description="Maximum audio duration in seconds (1 minute)")
+    max_duration_seconds: int = Field(
+        default=60, description="Maximum audio duration in seconds (1 minute)"
+    )
     device: str = Field(default="cpu", description="Device for local Whisper (cpu, cuda)")
-    compute_type: str = Field(default="int8", description="Compute type for local Whisper (int8, float16, float32)")
+    compute_type: str = Field(
+        default="int8", description="Compute type for local Whisper (int8, float16, float32)"
+    )
     timeout: float = Field(default=60.0, description="Transcription timeout in seconds")
 
 
@@ -39,7 +45,9 @@ class LLMSettings(BaseSettings):
         extra="ignore",
     )
 
-    provider: str = Field(default="zai", description="LLM provider (zai, openai, anthropic, minimax)")
+    provider: str = Field(
+        default="zai", description="LLM provider (zai, openai, anthropic, minimax)"
+    )
     api_key: str = Field(default="", description="API key for the LLM provider")
     model: str = Field(default="glm-4-flash", description="Model identifier to use")
     base_url: str | None = Field(default=None, description="Optional custom API endpoint")
@@ -68,24 +76,6 @@ class WebSearchSettings(BaseSettings):
     timeout: float = Field(default=30.0, description="Request timeout in seconds")
 
 
-class AuthSettings(BaseSettings):
-    """Authorization settings."""
-
-    model_config = SettingsConfigDict(
-        env_prefix="AUTH_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    enabled: bool = Field(
-        default=True, description="Enable user authorization (only allowed users can use bot)"
-    )
-    admin_user_ids: list[int] = Field(
-        default_factory=list, description="List of admin Telegram user IDs"
-    )
-
-
 class GroupChatSettings(BaseSettings):
     """Group chat settings."""
 
@@ -96,12 +86,8 @@ class GroupChatSettings(BaseSettings):
         extra="ignore",
     )
 
-    enabled: bool = Field(
-        default=True, description="Enable bot to work in group chats"
-    )
-    bot_name: str = Field(
-        default="Sil", description="Bot name to detect mentions in messages"
-    )
+    enabled: bool = Field(default=True, description="Enable bot to work in group chats")
+    bot_name: str = Field(default="Sil", description="Bot name to detect mentions in messages")
     bot_username: str = Field(
         default="", description="Bot Telegram username (without @) for mention detection"
     )
@@ -123,15 +109,13 @@ class CacheSettings(BaseSettings):
         extra="ignore",
     )
 
-    enabled: bool = Field(
-        default=True, description="Enable caching of agent results"
-    )
+    enabled: bool = Field(default=True, description="Enable caching of agent results")
     ttl_seconds: int = Field(
-        default=300, ge=0, description="Time-to-live for cache entries in seconds (default: 5 minutes)"
+        default=300,
+        ge=0,
+        description="Time-to-live for cache entries in seconds (default: 5 minutes)",
     )
-    max_size: int = Field(
-        default=1000, ge=1, description="Maximum number of entries in the cache"
-    )
+    max_size: int = Field(default=1000, ge=1, description="Maximum number of entries in the cache")
 
 
 class AgentSettings(BaseSettings):
@@ -145,9 +129,7 @@ class AgentSettings(BaseSettings):
     )
 
     # Enable/disable specific agents
-    web_search_enabled: bool = Field(
-        default=True, description="Enable WebSearchAgent"
-    )
+    web_search_enabled: bool = Field(default=True, description="Enable WebSearchAgent")
 
 
 class Settings(BaseSettings):
@@ -165,7 +147,7 @@ class Settings(BaseSettings):
     # Response style setting
     style: StyleType = Field(
         default=StyleType.DEFAULT,
-        description="Response style (default, silvio_dante)",
+        description="Response style (default)",
     )
 
     # LLM settings (nested)
@@ -179,9 +161,6 @@ class Settings(BaseSettings):
 
     # Agent settings (nested)
     agents: AgentSettings = Field(default_factory=AgentSettings)
-
-    # Authorization settings (nested)
-    auth: AuthSettings = Field(default_factory=AuthSettings)
 
     # Group chat settings (nested)
     group_chat: GroupChatSettings = Field(default_factory=GroupChatSettings)

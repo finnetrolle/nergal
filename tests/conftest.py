@@ -1,13 +1,12 @@
 """Pytest configuration and fixtures for Nergal tests."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
-from nergal.dialog.base import BaseAgent, AgentType, AgentRegistry
-from nergal.dialog.styles import StyleType
-from nergal.llm import BaseLLMProvider, LLMResponse, LLMMessage, MessageRole
+import pytest
 
+from nergal.dialog.base import AgentRegistry, AgentType, BaseAgent
+from nergal.llm import BaseLLMProvider, LLMMessage, LLMResponse, MessageRole
 
 # =============================================================================
 # LLM Provider Fixtures

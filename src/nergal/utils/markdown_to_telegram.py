@@ -4,7 +4,6 @@ Telegram supports HTML or MarkdownV2 parsing, but not standard Markdown.
 This module converts common Markdown syntax to Telegram-compatible HTML.
 """
 
-import re
 from html import escape
 
 

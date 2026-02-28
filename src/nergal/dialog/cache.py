@@ -10,7 +10,7 @@ The cache uses an LRU (Least Recently Used) eviction policy with TTL
 import hashlib
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from threading import RLock
 from typing import Any
 

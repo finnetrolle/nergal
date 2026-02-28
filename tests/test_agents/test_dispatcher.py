@@ -5,9 +5,9 @@ execution plans and route messages to appropriate agents.
 """
 
 import json
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Any
 
 from nergal.dialog.base import (
     AgentRegistry,
@@ -16,10 +16,8 @@ from nergal.dialog.base import (
     ExecutionPlan,
     PlanStep,
 )
-from nergal.dialog.dispatcher_agent import DispatcherAgent, AGENT_DESCRIPTIONS
-from nergal.dialog.styles import StyleType
-from nergal.llm import BaseLLMProvider, LLMResponse, LLMMessage
-
+from nergal.dialog.dispatcher_agent import AGENT_DESCRIPTIONS, DispatcherAgent
+from nergal.llm import BaseLLMProvider, LLMResponse
 
 # =============================================================================
 # Fixtures

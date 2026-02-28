@@ -24,11 +24,11 @@ from dependency_injector import containers, providers
 
 if TYPE_CHECKING:
     from nergal.config import Settings
+    from nergal.dialog.cache import AgentResultCache
+    from nergal.dialog.manager import DialogManager
     from nergal.llm.base import BaseLLMProvider
     from stt_lib import BaseSTTProvider
-    from nergal.web_search.base import BaseWebSearchProvider
-    from nergal.dialog.manager import DialogManager
-    from nergal.dialog.cache import AgentResultCache
+    from web_search_lib.base import BaseSearchProvider as BaseWebSearchProvider
 
 logger = logging.getLogger(__name__)
 
@@ -91,13 +91,13 @@ class Container(containers.DeclarativeContainer):
 
 # ============== Factory Functions ==============
 
-def _load_settings() -> "Settings":
+def _load_settings() -> Settings:
     """Load application settings."""
     from nergal.config import get_settings
     return get_settings()
 
 
-def _create_llm_provider(settings: "Settings") -> "BaseLLMProvider":
+def _create_llm_provider(settings: Settings) -> BaseLLMProvider:
     """Create LLM provider instance."""
     from nergal.llm import create_llm_provider
 
@@ -118,7 +118,7 @@ def _create_llm_provider(settings: "Settings") -> "BaseLLMProvider":
     )
 
 
-def _create_stt_provider(settings: "Settings") -> "BaseSTTProvider | None":
+def _create_stt_provider(settings: Settings) -> BaseSTTProvider | None:
     """Create STT provider instance."""
     from stt_lib import create_stt_provider
 
@@ -142,9 +142,9 @@ def _create_stt_provider(settings: "Settings") -> "BaseSTTProvider | None":
     )
 
 
-def _create_web_search_provider(settings: "Settings") -> "BaseWebSearchProvider | None":
+def _create_web_search_provider(settings: Settings) -> BaseWebSearchProvider | None:
     """Create web search provider instance."""
-    from nergal.web_search.zai_mcp_http import ZaiMcpHttpSearchProvider
+    from web_search_lib.providers import ZaiMcpHttpSearchProvider
 
     if not settings.web_search.enabled:
         logger.info("Web search provider disabled")
@@ -164,7 +164,7 @@ def _create_web_search_provider(settings: "Settings") -> "BaseWebSearchProvider 
     )
 
 
-def _create_agent_cache(settings: "Settings") -> "AgentResultCache | None":
+def _create_agent_cache(settings: Settings) -> AgentResultCache | None:
     """Create agent result cache instance."""
     from nergal.dialog.cache import AgentResultCache
 
@@ -183,14 +183,14 @@ def _create_agent_cache(settings: "Settings") -> "AgentResultCache | None":
 
 
 def _create_dialog_manager(
-    settings: "Settings",
-    llm_provider: "BaseLLMProvider",
-    search_provider: "BaseWebSearchProvider | None",
-    cache: "AgentResultCache | None",
-) -> "DialogManager":
+    settings: Settings,
+    llm_provider: BaseLLMProvider,
+    search_provider: BaseWebSearchProvider | None,
+    cache: AgentResultCache | None,
+) -> DialogManager:
     """Create dialog manager instance."""
-    from nergal.dialog.manager import DialogManager
     from nergal.dialog.agent_loader import register_configured_agents
+    from nergal.dialog.manager import DialogManager
 
     logger.info(
         "Creating dialog manager",

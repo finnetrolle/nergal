@@ -1,7 +1,6 @@
 """Tests for AgentFactory decorator-based registry."""
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from nergal.dialog.base import AgentType, BaseAgent
 from nergal.dialog.styles import StyleType

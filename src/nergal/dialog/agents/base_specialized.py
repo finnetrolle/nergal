@@ -9,7 +9,6 @@ subclasses can override for custom behavior without duplicating logic.
 
 import re
 from abc import abstractmethod
-from functools import lru_cache
 from typing import Any
 
 from nergal.dialog.base import AgentResult, AgentType, BaseAgent

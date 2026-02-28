@@ -3,6 +3,7 @@
 # Suppress pydub SyntaxWarning for invalid escape sequences (third-party library issue)
 # Must be done before any imports that trigger pydub loading
 import warnings
+
 warnings.filterwarnings("ignore", message=".*invalid escape sequence.*", category=SyntaxWarning, module="pydub")
 
 import logging
@@ -20,7 +21,7 @@ from nergal.handlers import (
     start_command,
 )
 from stt_lib import BaseSTTProvider
-from nergal.web_search.zai_mcp_http import ZaiMcpHttpSearchProvider
+from web_search_lib.providers import ZaiMcpHttpSearchProvider
 
 
 class HttpxLogFilter(logging.Filter):

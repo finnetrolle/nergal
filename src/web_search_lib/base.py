@@ -1,20 +1,16 @@
 """Base classes and data models for web search providers."""
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
-from nergal.exceptions import (
-    SearchConnectionError,
-    SearchError,
-    SearchRateLimitError,
-    SearchTimeoutError,
-)
 
+class SearchRecency(StrEnum):
+    """Time filter for search results.
 
-class SearchRecency(str, Enum):
-    """Time filter for search results."""
+    Values match common search API conventions.
+    """
 
     ONE_DAY = "oneDay"
     ONE_WEEK = "oneWeek"
@@ -31,9 +27,9 @@ class SearchResult:
         title: Title of the webpage.
         content: Summary/content of the webpage.
         link: URL of the result.
-        media: Website name.
+        media: Website name (e.g., "Wikipedia", "Stack Overflow").
         icon: Website favicon URL.
-        refer: Index number.
+        refer: Index number or ID from the search provider.
         publish_date: Publication date of the webpage.
     """
 
@@ -46,7 +42,11 @@ class SearchResult:
     publish_date: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert search result to dictionary."""
+        """Convert search result to dictionary.
+
+        Returns:
+            Dictionary representation of the result.
+        """
         return {
             "title": self.title,
             "content": self.content,
@@ -59,7 +59,14 @@ class SearchResult:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SearchResult":
-        """Create SearchResult from dictionary."""
+        """Create SearchResult from dictionary.
+
+        Args:
+            data: Dictionary with search result data.
+
+        Returns:
+            SearchResult instance.
+        """
         return cls(
             title=data.get("title", ""),
             content=data.get("content", ""),
@@ -87,8 +94,8 @@ class SearchResults:
     Attributes:
         results: List of search results.
         query: Original search query.
-        total: Total number of results (if known).
-        search_id: Search task ID from the API.
+        total: Total number of results (if known from provider).
+        search_id: Search task ID from the API (if provided).
         created: Unix timestamp of when the search was created.
     """
 
@@ -99,11 +106,19 @@ class SearchResults:
     created: int | None = None
 
     def is_empty(self) -> bool:
-        """Check if there are no results."""
+        """Check if there are no results.
+
+        Returns:
+            True if results list is empty.
+        """
         return len(self.results) == 0
 
     def has_results(self) -> bool:
-        """Check if there are results."""
+        """Check if there are results.
+
+        Returns:
+            True if results list is not empty.
+        """
         return len(self.results) > 0
 
     def to_text(self, max_results: int | None = None) -> str:
@@ -131,7 +146,11 @@ class SearchResults:
         return "\n".join(lines)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary."""
+        """Convert to dictionary.
+
+        Returns:
+            Dictionary representation of the results.
+        """
         return {
             "results": [r.to_dict() for r in self.results],
             "query": self.query,
@@ -147,9 +166,9 @@ class SearchRequest:
 
     Attributes:
         query: Search query string.
-        count: Number of results to return (1-50).
+        count: Number of results to return (typically 1-50).
         recency: Time filter for results.
-        domain_filter: Domain whitelist filter.
+        domain_filter: Domain whitelist filter (only return results from these domains).
     """
 
     query: str
@@ -158,18 +177,15 @@ class SearchRequest:
     domain_filter: str | None = None
 
     def __post_init__(self) -> None:
-        """Validate parameters."""
+        """Validate parameters.
+
+        Raises:
+            ValueError: If parameters are invalid.
+        """
         if not self.query.strip():
             raise ValueError("Search query cannot be empty")
         if not 1 <= self.count <= 50:
             raise ValueError("Count must be between 1 and 50")
-
-
-# Additional exception class for compatibility
-class SearchProviderError(SearchError):
-    """Raised when the search provider returns an error."""
-
-    pass
 
 
 class BaseSearchProvider(ABC):
@@ -177,6 +193,12 @@ class BaseSearchProvider(ABC):
 
     All search providers should inherit from this class
     and implement the required methods.
+
+    Example:
+        >>> provider = create_search_provider(provider_type="zai")
+        >>> request = SearchRequest(query="python async await")
+        >>> results = await provider.search(request)
+        >>> print(results.to_text())
     """
 
     def __init__(
@@ -199,30 +221,46 @@ class BaseSearchProvider(ABC):
     @property
     @abstractmethod
     def provider_name(self) -> str:
-        """Return the name of this provider."""
+        """Return the name of this provider.
+
+        Returns:
+            Provider name string (e.g., "Z.AI", "Google", "Bing").
+        """
         pass
 
     @abstractmethod
-    async def search(self, request: SearchRequest) -> SearchResults:
+    async def search(
+        self,
+        request: SearchRequest,
+        user_id: int | None = None,
+        session_id: str | None = None,
+    ) -> SearchResults:
         """Perform a web search.
 
         Args:
             request: Search request parameters.
+            user_id: Optional user ID for telemetry/analytics.
+            session_id: Optional session ID for tracking requests.
 
         Returns:
             SearchResults containing the search results.
 
         Raises:
             SearchError: If the search fails.
+            SearchConnectionError: If there's a network issue.
+            SearchTimeoutError: If the request times out.
+            SearchRateLimitError: If rate limit is exceeded.
+            SearchProviderError: If the provider returns an error.
         """
         pass
 
     async def close(self) -> None:
         """Close any resources used by the provider.
 
-        Override this method if the provider needs to clean up resources.
+        Override this method if the provider needs to clean up resources
+        like HTTP clients or database connections.
         """
-        pass
+        # Default implementation does nothing - override if needed
 
     def validate_config(self) -> None:
         """Validate the provider configuration.

@@ -11,6 +11,11 @@ Available agents:
 """
 
 # Import base classes first (from parent module base.py)
+# Import base specialized agent class
+from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
+
+# Import specialized agents
+from nergal.dialog.agents.web_search_agent import WebSearchAgent
 from nergal.dialog.base import (
     AgentCategory,
     AgentRegistry,
@@ -20,12 +25,6 @@ from nergal.dialog.base import (
     ExecutionPlan,
     PlanStep,
 )
-
-# Import base specialized agent class
-from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
-
-# Import specialized agents
-from nergal.dialog.agents.web_search_agent import WebSearchAgent
 
 __all__ = [
     # Base classes and types

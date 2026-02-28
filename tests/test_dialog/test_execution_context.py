@@ -1,6 +1,5 @@
 """Tests for ExecutionContext and StepResult classes."""
 
-import pytest
 from unittest.mock import MagicMock
 
 from nergal.dialog.base import AgentType, StepResult

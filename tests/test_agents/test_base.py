@@ -1,18 +1,19 @@
 """Tests for base agent functionality and registry."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
 from nergal.dialog.base import (
-    AgentRegistry,
-    AgentType,
     AgentCategory,
+    AgentRegistry,
+    AgentResult,
+    AgentType,
     BaseAgent,
     ExecutionPlan,
     PlanStep,
-    AgentResult,
 )
-from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
 
 
 class TestAgentType:

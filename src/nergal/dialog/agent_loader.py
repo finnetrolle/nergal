@@ -12,16 +12,17 @@ Example:
 """
 
 import logging
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from nergal.config import Settings
 from nergal.dialog.base import AgentType, BaseAgent
 from nergal.dialog.styles import StyleType
 
 if TYPE_CHECKING:
-    from nergal.llm.base import BaseLLMProvider
-    from nergal.web_search.base import BaseWebSearchProvider
     from nergal.dialog.base import AgentRegistry
+    from nergal.llm.base import BaseLLMProvider
+    from web_search_lib.base import BaseSearchProvider as BaseWebSearchProvider
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ class AgentFactory:
         cls,
         agent_type: AgentType,
         llm_provider: "BaseLLMProvider",
-        search_provider: "BaseWebSearchProvider | None" = None,
+        search_provider: "BaseWebSearchProvider | None" = None,  # type: ignore[assignment]
         **kwargs,
     ) -> BaseAgent | None:
         """Create an agent instance by type.
@@ -151,7 +152,7 @@ class AgentFactory:
 @AgentFactory.register(AgentType.WEB_SEARCH, requires_search=True)
 def _create_web_search_agent(
     llm_provider: "BaseLLMProvider",
-    search_provider: "BaseWebSearchProvider",
+    search_provider: "BaseWebSearchProvider",  # type: ignore[assignment]
     **kwargs,
 ) -> BaseAgent:
     """Create a WebSearchAgent instance."""

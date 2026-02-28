@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from nergal.dialog.base import AgentResult, AgentType, ExecutionPlan, PlanStep
-from nergal.dialog.manager import DialogManager, PlanExecutionResult
+from nergal.dialog.manager import DialogManager
 
 
 @pytest.fixture
@@ -182,7 +182,7 @@ class TestParallelExecution:
     ) -> None:
         """Test that parallel steps actually execute concurrently."""
         import time
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
         
         execution_times = {}
         
@@ -233,8 +233,7 @@ class TestParallelExecution:
         self, mock_llm_provider, manager: DialogManager
     ) -> None:
         """Test that dependent steps execute sequentially."""
-        import time
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
         
         execution_order = []
         
@@ -283,7 +282,7 @@ class TestInputCombination:
         self, mock_llm_provider, manager: DialogManager
     ) -> None:
         """Test that inputs are combined when step has multiple dependencies."""
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
         
         received_inputs = []
         

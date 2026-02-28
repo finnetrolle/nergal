@@ -4,15 +4,14 @@ This module contains parametrized tests for all specialized agents
 that inherit from BaseSpecializedAgent.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from nergal.dialog.agents.base_specialized import BaseSpecializedAgent
-from nergal.dialog.base import AgentType, AgentResult
-from nergal.dialog.styles import StyleType
+from nergal.dialog.base import AgentResult, AgentType
 from nergal.llm import BaseLLMProvider, LLMResponse
-
 
 # =============================================================================
 # Test Fixtures

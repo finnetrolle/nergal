@@ -21,7 +21,7 @@ from nergal.dialog.base import (
     StepResult,
 )
 from nergal.dialog.cache import AgentResultCache
-from nergal.dialog.context import ContextManager, DialogContext, ExecutionContext, UserInfo
+from nergal.dialog.context import ContextManager, DialogContext, ExecutionContext
 from nergal.dialog.default_agent import DefaultAgent
 from nergal.dialog.dispatcher_agent import DispatcherAgent
 from nergal.dialog.styles import StyleType

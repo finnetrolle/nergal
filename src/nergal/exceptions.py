@@ -13,33 +13,33 @@ Exception Hierarchy:
     │   ├── LLMConnectionError
     │   ├── LLMTimeoutError
     │   └── LLMResponseError
-    ├── SearchError
-    │   ├── SearchConnectionError
-    │   └── SearchTimeoutError
     └── STTError
         ├── STTConnectionError
         └── STTUnsupportedFormatError
+
+Note: Search exceptions (SearchError, SearchConnectionError, SearchTimeoutError, SearchRateLimitError)
+are now provided by web_search_lib.exceptions.
 """
 
 
 class NergalError(Exception):
     """Base exception for all Nergal errors.
-    
+
     All custom exceptions in the application should inherit from this class.
     This allows catching all application-specific errors with a single except clause.
-    
+
     Attributes:
         message: Human-readable error description.
         cause: Optional underlying exception that caused this error.
     """
-    
+
     def __init__(
         self,
         message: str,
         cause: Exception | None = None,
     ) -> None:
-        """Initialize the exception.
-        
+        """Initialize exception.
+
         Args:
             message: Human-readable error description.
             cause: Optional underlying exception that caused this error.
@@ -47,9 +47,9 @@ class NergalError(Exception):
         self.message = message
         self.cause = cause
         super().__init__(message)
-    
+
     def __str__(self) -> str:
-        """Return string representation of the error."""
+        """Return string representation of error."""
         if self.cause:
             return f"{self.message} (caused by: {self.cause})"
         return self.message
@@ -57,21 +57,21 @@ class NergalError(Exception):
 
 class ConfigurationError(NergalError):
     """Error in application configuration.
-    
+
     Raised when configuration is missing, invalid, or cannot be loaded.
     """
-    
+
     def __init__(
         self,
         message: str,
         config_key: str | None = None,
         cause: Exception | None = None,
     ) -> None:
-        """Initialize the configuration error.
-        
+        """Initialize configuration error.
+
         Args:
             message: Human-readable error description.
-            config_key: The configuration key that caused the error.
+            config_key: The configuration key that caused error.
             cause: Optional underlying exception.
         """
         self.config_key = config_key
@@ -82,19 +82,19 @@ class ConfigurationError(NergalError):
 
 class AgentError(NergalError):
     """Base error for agent-related issues.
-    
+
     Attributes:
-        agent_type: The type of agent that encountered the error.
+        agent_type: The type of agent that encountered error.
     """
-    
+
     def __init__(
         self,
         message: str,
         agent_type: str | None = None,
         cause: Exception | None = None,
     ) -> None:
-        """Initialize the agent error.
-        
+        """Initialize agent error.
+
         Args:
             message: Human-readable error description.
             agent_type: The type of agent that encountered the error.
@@ -108,17 +108,17 @@ class AgentError(NergalError):
 
 class AgentNotFoundError(AgentError):
     """Error when a requested agent is not registered.
-    
+
     Raised when trying to get an agent that doesn't exist in the registry.
     """
-    
+
     def __init__(
         self,
         agent_type: str,
         available_agents: list[str] | None = None,
     ) -> None:
-        """Initialize the agent not found error.
-        
+        """Initialize agent not found error.
+
         Args:
             agent_type: The type of agent that was requested.
             available_agents: List of available agent types.
@@ -131,10 +131,10 @@ class AgentNotFoundError(AgentError):
 
 class AgentExecutionError(AgentError):
     """Error during agent execution.
-    
+
     Raised when an agent fails to process a message.
     """
-    
+
     def __init__(
         self,
         message: str,
@@ -142,12 +142,12 @@ class AgentExecutionError(AgentError):
         step_description: str | None = None,
         cause: Exception | None = None,
     ) -> None:
-        """Initialize the agent execution error.
-        
+        """Initialize agent execution error.
+
         Args:
             message: Human-readable error description.
             agent_type: The type of agent that failed.
-            step_description: Description of the step that failed.
+            step_description: Description of step that failed.
             cause: Optional underlying exception.
         """
         self.step_description = step_description
@@ -158,19 +158,19 @@ class AgentExecutionError(AgentError):
 
 class LLMError(NergalError):
     """Base error for LLM provider issues.
-    
+
     Attributes:
         provider_name: Name of the LLM provider that encountered the error.
     """
-    
+
     def __init__(
         self,
         message: str,
         provider_name: str | None = None,
         cause: Exception | None = None,
     ) -> None:
-        """Initialize the LLM error.
-        
+        """Initialize LLM error.
+
         Args:
             message: Human-readable error description.
             provider_name: Name of the LLM provider.
@@ -183,22 +183,22 @@ class LLMError(NergalError):
 
 
 class LLMConnectionError(LLMError):
-    """Error connecting to LLM provider.
-    
+    """Error connecting to the LLM provider.
+
     Raised when network or connection issues prevent reaching the LLM API.
     """
     pass
 
 
 class LLMTimeoutError(LLMError):
-    """Error when LLM request times out.
-    
+    """Error when the LLM request times out.
+
     Raised when the LLM provider takes too long to respond.
-    
+
     Attributes:
         timeout_seconds: The timeout duration that was exceeded.
     """
-    
+
     def __init__(
         self,
         message: str = "LLM request timed out",
@@ -206,8 +206,8 @@ class LLMTimeoutError(LLMError):
         timeout_seconds: float | None = None,
         cause: Exception | None = None,
     ) -> None:
-        """Initialize the timeout error.
-        
+        """Initialize timeout error.
+
         Args:
             message: Human-readable error description.
             provider_name: Name of the LLM provider.
@@ -221,81 +221,8 @@ class LLMTimeoutError(LLMError):
 
 
 class LLMResponseError(LLMError):
-    """Error when LLM response is invalid.
-    
+    """Error when the LLM response is invalid.
+
     Raised when the LLM returns an unexpected or malformed response.
     """
     pass
-
-
-class SearchError(NergalError):
-    """Base error for web search issues.
-    
-    Attributes:
-        query: The search query that caused the error.
-    """
-    
-    def __init__(
-        self,
-        message: str,
-        query: str | None = None,
-        cause: Exception | None = None,
-    ) -> None:
-        """Initialize the search error.
-        
-        Args:
-            message: Human-readable error description.
-            query: The search query that caused the error.
-            cause: Optional underlying exception.
-        """
-        self.query = query
-        if query:
-            # Truncate long queries in error message
-            query_preview = query[:50] + "..." if len(query) > 50 else query
-            message = f"{message} (query: '{query_preview}')"
-        super().__init__(message, cause)
-
-
-class SearchConnectionError(SearchError):
-    """Error connecting to search provider.
-    
-    Raised when network issues prevent reaching the search API.
-    """
-    pass
-
-
-class SearchTimeoutError(SearchError):
-    """Error when search request times out.
-    
-    Attributes:
-        timeout_seconds: The timeout duration that was exceeded.
-    """
-    
-    def __init__(
-        self,
-        message: str = "Search request timed out",
-        query: str | None = None,
-        timeout_seconds: float | None = None,
-        cause: Exception | None = None,
-    ) -> None:
-        """Initialize the timeout error.
-        
-        Args:
-            message: Human-readable error description.
-            query: The search query.
-            timeout_seconds: The timeout duration that was exceeded.
-            cause: Optional underlying exception.
-        """
-        self.timeout_seconds = timeout_seconds
-        if timeout_seconds:
-            message = f"{message} (timeout: {timeout_seconds}s)"
-        super().__init__(message, query, cause)
-
-
-class SearchRateLimitError(SearchError):
-    """Error when search rate limit is exceeded.
-
-    Raised when too many requests are made to the search API.
-    """
-    pass
-

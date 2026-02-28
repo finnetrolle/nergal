@@ -7,14 +7,13 @@ and cancellation capabilities.
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from nergal.dialog.base import AgentResult, AgentType, BaseAgent
 from nergal.dialog.cancellation import (
     AgentCancelledError,
     CancellationToken,
-    AgentTimeoutError,
 )
 from nergal.llm import LLMMessage
 
@@ -174,7 +173,7 @@ class AgentExecutor:
                 timeout_seconds=effective_timeout,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             execution_time_ms = (time.time() - start_time) * 1000
             logger.warning(
                 f"Agent {agent.agent_type.value} timed out after {effective_timeout}s"

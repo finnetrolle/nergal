@@ -3,7 +3,6 @@
 This module contains all message handlers for bot (text and voice messages).
 """
 
-import asyncio
 import logging
 import re
 import time
@@ -11,10 +10,8 @@ import time
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from nergal.auth import check_user_authorized
-from stt_lib import AudioTooLongError, convert_ogg_to_wav
 from nergal.utils import markdown_to_telegram_html
-
+from stt_lib import AudioTooLongError, convert_ogg_to_wav
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +97,7 @@ def should_respond_in_group(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             if message.entities:
                 for entity in message.entities:
                     if entity.type == "mention":
-                        mention_text = text[entity.offset:entity.offset + entity.length]
+                        mention_text = text[entity.offset : entity.offset + entity.length]
                         if bot_username_lower and mention_text.lower() == f"@{bot_username_lower}":
                             logger.debug("Responding: @username in entities")
                             return True
@@ -132,8 +129,8 @@ def clean_message_text(text: str, bot_username: str) -> str:
         return text
 
     # Remove @username mention (case-insensitive)
-    pattern = re.compile(rf'@{re.escape(bot_username)}\b', re.IGNORECASE)
-    return pattern.sub('', text).strip()
+    pattern = re.compile(rf"@{re.escape(bot_username)}\b", re.IGNORECASE)
+    return pattern.sub("", text).strip()
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -167,10 +164,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     # Get bot username for mention cleaning
     app = BotApplication.get_instance()
-    bot_username = app._settings.group_chat.bot_username or (context.bot.username if context.bot else "")
+    bot_username = app._settings.group_chat.bot_username or (
+        context.bot.username if context.bot else ""
+    )
 
     # Clean message text (remove bot username mention)
-    user_text = clean_message_text(update.message.text, bot_username) if bot_username else update.message.text
+    user_text = (
+        clean_message_text(update.message.text, bot_username)
+        if bot_username
+        else update.message.text
+    )
     user_info = {
         "first_name": update.effective_user.first_name if update.effective_user else None,
         "last_name": update.effective_user.last_name if update.effective_user else None,
@@ -178,31 +181,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "language_code": update.effective_user.language_code if update.effective_user else None,
     }
     user_id = update.effective_user.id if update.effective_user else 0
-
-    # Check user authorization
-    if app._settings.auth.enabled:
-        try:
-            is_authorized = await check_user_authorized(user_id)
-            if not is_authorized:
-                logger.warning(
-                    "Unauthorized access attempt",
-                    user_id=user_id,
-                    username=user_info.get("username"),
-                )
-                await update.message.reply_text(
-                    "⛔ У вас нет доступа к этому боту. Обратитесь к администратору для получения доступа."
-                )
-                return
-        except Exception as e:
-            logger.error(
-                "Error checking authorization",
-                user_id=user_id,
-                error=str(e),
-            )
-            await update.message.reply_text(
-                "Ошибка проверки авторизации. Пожалуйста, попробуйте позже."
-            )
-            return
 
     # Log incoming message
     logger.debug(
@@ -268,30 +246,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     user_id = update.effective_user.id if update.effective_user else 0
 
-    # Check user authorization
-    if settings.auth.enabled:
-        try:
-            is_authorized = await check_user_authorized(user_id)
-            if not is_authorized:
-                logger.warning(
-                    "Unauthorized voice access attempt",
-                    user_id=user_id,
-                )
-                await update.message.reply_text(
-                    "⛔ У вас нет доступа к этому боту. Обратитесь к администратору для получения доступа."
-                )
-                return
-        except Exception as e:
-            logger.error(
-                "Error checking authorization",
-                user_id=user_id,
-                error=str(e),
-            )
-            await update.message.reply_text(
-                "Ошибка проверки авторизации. Пожалуйста, попробуйте позже."
-            )
-            return
-
     # Check if STT is enabled
     if not settings.stt.enabled:
         await update.message.reply_text(
@@ -339,7 +293,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 wav_audio,
                 language=settings.stt.language,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(
                 "Voice transcription timed out",
                 user_id=user_id,

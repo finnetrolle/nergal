@@ -1,10 +1,11 @@
 """Tests for DialogManager class."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-from nergal.dialog.manager import DialogManager, ProcessResult, PlanExecutionResult
-from nergal.dialog.base import AgentType, ExecutionPlan, PlanStep, AgentResult
+import pytest
+
+from nergal.dialog.base import AgentType
+from nergal.dialog.manager import DialogManager, PlanExecutionResult, ProcessResult
 from nergal.dialog.styles import StyleType
 
 
@@ -40,7 +41,7 @@ class TestDialogManager:
         initial_count = len(manager.agent_registry.get_all())
         
         # Create a mock agent with a different type to avoid overwriting
-        from nergal.dialog.base import BaseAgent, AgentType
+        from nergal.dialog.base import AgentType, BaseAgent
         custom_agent = MagicMock(spec=BaseAgent)
         custom_agent.agent_type = AgentType.WEB_SEARCH  # Different from DEFAULT
         custom_agent.system_prompt = "You are a web search agent."

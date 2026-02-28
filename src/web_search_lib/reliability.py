@@ -7,13 +7,14 @@ to improve the reliability of web search operations.
 import asyncio
 import logging
 import threading
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any
+from typing import Any, TypeVar
 
-from nergal.web_search.base import SearchError
+from web_search_lib.exceptions import SearchError
+
+T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
 
@@ -76,8 +77,11 @@ def classify_search_error(error: Exception) -> ClassifiedError:
         )
 
     # Service errors (500, 502, 503, 504)
-    if any(code in error_str for code in ["500", "502", "503", "504"]) or \
-       "service unavailable" in error_str or "internal server error" in error_str:
+    if (
+        any(code in error_str for code in ["500", "502", "503", "504"])
+        or "service unavailable" in error_str
+        or "internal server error" in error_str
+    ):
         return ClassifiedError(
             category=SearchErrorCategory.SERVICE_ERROR,
             original_error=error,
@@ -97,8 +101,7 @@ def classify_search_error(error: Exception) -> ClassifiedError:
         )
 
     # Connection errors
-    if "connection" in error_name.lower() or "connection" in error_str or \
-       "network" in error_str:
+    if "connection" in error_name.lower() or "connection" in error_str or "network" in error_str:
         return ClassifiedError(
             category=SearchErrorCategory.TRANSIENT,
             original_error=error,
@@ -200,9 +203,7 @@ class CircuitBreaker:
                 logger.warning("Circuit breaker reopened during recovery")
             elif self._failure_count >= self.failure_threshold:
                 self._state = CircuitState.OPEN
-                logger.warning(
-                    f"Circuit breaker opened after {self._failure_count} failures"
-                )
+                logger.warning(f"Circuit breaker opened after {self._failure_count} failures")
 
     def should_allow_request(self) -> bool:
         """Check if a request should be allowed.
@@ -264,7 +265,7 @@ class RetryConfig:
         max_retries: Maximum number of retry attempts.
         base_delay_ms: Initial delay between retries in milliseconds.
         max_delay_ms: Maximum delay between retries in milliseconds.
-        jitter_ms: Random jitter to add to delays (prevides thundering herd).
+        jitter_ms: Random jitter to add to delays (prevents thundering herd).
         retryable_categories: Error categories that should trigger retry.
     """
 
@@ -296,7 +297,7 @@ async def execute_with_retry(
     config: RetryConfig,
     circuit_breaker: CircuitBreaker | None = None,
     operation_name: str = "operation",
-) -> tuple[Any, RetryStats]:  # tuple[T, RetryStats]
+) -> tuple[T, RetryStats]:
     """Execute an async operation with retry logic.
 
     Args:
@@ -313,7 +314,7 @@ async def execute_with_retry(
         SearchError: If circuit breaker is open.
     """
     stats = RetryStats()
-    last_error: Exception | None = None
+    last_error: BaseException | None = None
 
     for attempt in range(config.max_retries + 1):
         # Check circuit breaker
@@ -333,9 +334,7 @@ async def execute_with_retry(
                 circuit_breaker.record_success()
 
             if attempt > 0:
-                logger.info(
-                    f"{operation_name} succeeded after {attempt} retries"
-                )
+                logger.info(f"{operation_name} succeeded after {attempt} retries")
 
             return result, stats
 
@@ -350,21 +349,17 @@ async def execute_with_retry(
             log_level = logging.WARNING if attempt < config.max_retries else logging.ERROR
             logger.log(
                 log_level,
-                f"{operation_name} attempt {attempt + 1} failed: "
-                f"{type(e).__name__}: {e}",
+                f"{operation_name} attempt {attempt + 1} failed: {type(e).__name__}: {e}",
             )
 
             # Check if we should retry
             if attempt >= config.max_retries:
-                logger.error(
-                    f"{operation_name} failed after {config.max_retries + 1} attempts"
-                )
+                logger.error(f"{operation_name} failed after {config.max_retries + 1} attempts")
                 break
 
             if classified.category not in config.retryable_categories:
                 logger.error(
-                    f"{operation_name} failed with non-retryable error: "
-                    f"{classified.category.value}"
+                    f"{operation_name} failed with non-retryable error: {classified.category.value}"
                 )
                 break
 
@@ -374,8 +369,9 @@ async def execute_with_retry(
 
             # Calculate delay with exponential backoff and jitter
             import random
+
             base_delay = min(
-                config.base_delay_ms * (2 ** attempt),
+                config.base_delay_ms * (2**attempt),
                 config.max_delay_ms,
             )
             jitter = random.randint(0, config.jitter_ms)
@@ -398,4 +394,7 @@ async def execute_with_retry(
     if circuit_breaker:
         circuit_breaker.record_failure()
 
+    # last_error is guaranteed to be set here
+    # (either from exception or we wouldn't reach this point)
+    assert last_error is not None, "last_error must be set before raising"
     raise last_error
