@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from llm_lib import BaseLLMProvider
     from nergal.config import Settings
     from nergal.dialog.manager import DialogManager
+    from nergal.memory.base import Memory
     from stt_lib import BaseSTTProvider
     from telegram_handlers_lib.base import TelegramHandlerService
     from web_search_lib.base import BaseSearchProvider as BaseWebSearchProvider
@@ -64,6 +65,14 @@ class Container(containers.DeclarativeContainer):
     # Web Search Provider - Singleton (maintains connection)
     web_search_provider = providers.Singleton(
         lambda settings: _create_web_search_provider(settings),
+        settings=settings,
+    )
+
+    # ============== Memory System ==============
+
+    # Memory backend - Singleton (persistent connection)
+    memory = providers.Singleton(
+        lambda settings: _create_memory(settings),
         settings=settings,
     )
 
@@ -187,6 +196,45 @@ def _create_dialog_manager(
     )
 
     return manager
+
+
+def _create_memory(settings: Settings) -> Memory:
+    """Create memory backend instance."""
+    from nergal.memory.sqlite import SQLiteMemory
+
+    if not settings.memory.enabled:
+        logger.info("Memory system disabled")
+        # Return a no-op memory
+        from nergal.memory.base import Memory
+
+        class NoOpMemory(Memory):
+            async def store(self, key: str, content: str, category, metadata=None) -> None:
+                pass
+
+            async def recall(self, query: str, limit: int = 5, category=None) -> list:
+                return []
+
+            async def forget(self, key: str) -> None:
+                pass
+
+            async def get_by_key(self, key: str):
+                return None
+
+            async def clear_category(self, category) -> int:
+                return 0
+
+        return NoOpMemory()
+
+    logger.info(
+        "Creating memory backend (path: %s)",
+        settings.memory.db_path,
+    )
+
+    memory = SQLiteMemory(db_path=settings.memory.db_path)
+    # Initialize the database
+    import asyncio
+    asyncio.create_task(memory.initialize())
+    return memory
 
 
 def _create_handler_service(

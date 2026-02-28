@@ -97,6 +97,43 @@ class GroupChatSettings(BaseSettings):
     respond_to_mentions: bool = Field(
         default=True, description="Respond when bot name or username is mentioned in message"
     )
+
+
+class MemorySettings(BaseSettings):
+    """Memory system settings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="MEMORY_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    enabled: bool = Field(default=True, description="Enable persistent memory system")
+    db_path: str = Field(
+        default="~/.nergal/memory.db",
+        description="Path to SQLite database for memory",
+    )
+    max_results: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Maximum results to recall from memory",
+    )
+    chunk_size: int = Field(
+        default=500,
+        ge=100,
+        le=5000,
+        description="Text chunk size in characters",
+    )
+    chunk_overlap: int = Field(
+        default=50,
+        ge=0,
+        le=500,
+        description="Character overlap between chunks",
+    )
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -126,6 +163,9 @@ class Settings(BaseSettings):
 
     # Group chat settings (nested)
     group_chat: GroupChatSettings = Field(default_factory=GroupChatSettings)
+
+    # Memory settings (nested)
+    memory: MemorySettings = Field(default_factory=MemorySettings)
 
 
 @lru_cache
