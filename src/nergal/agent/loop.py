@@ -92,17 +92,21 @@ async def run_tool_call_loop(
         logger.debug(f"Tool call loop iteration {iteration + 1}/{max_iterations}")
 
         # 1. Prepare LLM request
-        tool_specs = [
-            {
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.parameters_schema,
+        tool_specs = (
+            [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.parameters_schema,
+                    },
                 }
-            }
-            for tool in tools
-        ] if dispatcher.should_send_tool_specs() else None
+                for tool in tools
+            ]
+            if dispatcher.should_send_tool_specs()
+            else None
+        )
 
         # 2. Call LLM
         try:
@@ -165,11 +169,13 @@ async def _execute_tools(
                 results.append(result)
             else:
                 logger.warning(f"Tool not found: {call.name}")
-                results.append(ToolResult(
-                    success=False,
-                    output="",
-                    error=f"Tool '{call.name}' not found in registry",
-                ))
+                results.append(
+                    ToolResult(
+                        success=False,
+                        output="",
+                        error=f"Tool '{call.name}' not found in registry",
+                    )
+                )
         return results
 
     # Parallel execution
@@ -197,19 +203,23 @@ async def _execute_tools(
             results.append(result)
         except Exception as e:
             logger.error(f"Tool {name} execution failed: {e}")
-            results.append(ToolResult(
-                success=False,
-                output="",
-                error=str(e),
-            ))
+            results.append(
+                ToolResult(
+                    success=False,
+                    output="",
+                    error=str(e),
+                )
+            )
 
     # Add results for tools not found
     for name in not_found:
-        results.append(ToolResult(
-            success=False,
-            output="",
-            error=f"Tool '{name}' not found in registry",
-        ))
+        results.append(
+            ToolResult(
+                success=False,
+                output="",
+                error=f"Tool '{name}' not found in registry",
+            )
+        )
 
     return results
 

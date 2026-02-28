@@ -173,9 +173,7 @@ class RAGContextBuilder:
             # Search specific categories
             for category in search_categories:
                 try:
-                    category_entries = await self._retrieve_for_category(
-                        query, category, limit
-                    )
+                    category_entries = await self._retrieve_for_category(query, category, limit)
                     entries.extend(category_entries)
                 except Exception as e:
                     logger.warning(f"Failed to retrieve from {category.value}: {e}")
@@ -183,9 +181,7 @@ class RAGContextBuilder:
             # Search all categories
             for category in MemoryCategory:
                 try:
-                    category_entries = await self._retrieve_for_category(
-                        query, category, limit
-                    )
+                    category_entries = await self._retrieve_for_category(query, category, limit)
                     entries.extend(category_entries)
                 except Exception as e:
                     logger.warning(f"Failed to retrieve from {category.value}: {e}")
@@ -256,12 +252,14 @@ class RAGContextBuilder:
 
             if self.config.include_metadata:
                 lines.append(
-                    f"[{entry.category.value}] {self.config.format_template.format(
-                        score=score,
-                        content=entry.content,
-                        key=entry.key,
-                        metadata=entry.metadata or {},
-                    )}"
+                    f"[{entry.category.value}] {
+                        self.config.format_template.format(
+                            score=score,
+                            content=entry.content,
+                            key=entry.key,
+                            metadata=entry.metadata or {},
+                        )
+                    }"
                 )
             else:
                 lines.append(

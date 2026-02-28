@@ -110,9 +110,7 @@ class ToolTimeoutError(ToolError):
         """
         self.tool_name = tool_name
         self.timeout = timeout
-        super().__init__(
-            f"[{tool_name}] Execution timed out after {timeout:.1f} seconds"
-        )
+        super().__init__(f"[{tool_name}] Execution timed out after {timeout:.1f} seconds")
 
 
 class ToolValidationError(ToolError):

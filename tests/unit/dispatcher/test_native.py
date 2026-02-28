@@ -137,7 +137,7 @@ class TestNativeToolDispatcher:
                         "name": "file_read",
                         "arguments": '{"path": "/tmp/file2.txt"}',
                     },
-                }
+                },
             ],
         )
 
@@ -231,9 +231,7 @@ class TestNativeToolDispatcher:
         response = LLMResponse(
             content="",
             model="test-model",
-            tool_calls=[
-                {"id": "call_1", "unknown_field": "value"}
-            ],
+            tool_calls=[{"id": "call_1", "unknown_field": "value"}],
         )
 
         text, calls = dispatcher.parse_response(response)

@@ -70,8 +70,7 @@ def create_llm_provider(
     if provider_class is None:
         supported = ", ".join(_PROVIDER_REGISTRY.keys())
         raise LLMError(
-            f"Unsupported provider type: {provider_type}. "
-            f"Supported providers: {supported}"
+            f"Unsupported provider type: {provider_type}. Supported providers: {supported}"
         )
 
     return provider_class(

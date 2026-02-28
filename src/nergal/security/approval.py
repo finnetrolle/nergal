@@ -144,9 +144,7 @@ class ApprovalManager:
             This base implementation denies all requests. Override
             in subclasses to implement channel-specific approval UI.
         """
-        logger.warning(
-            f"Approval requested for {tool_name}, but no UI available. Denying."
-        )
+        logger.warning(f"Approval requested for {tool_name}, but no UI available. Denying.")
 
         return ApprovalResponse(
             approved=False,

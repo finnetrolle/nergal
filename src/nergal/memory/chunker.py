@@ -195,11 +195,13 @@ class TextChunker:
             else:
                 # Save current chunk and start a new one
                 if current_chunk:
-                    chunks.append(Chunk(
-                        text=current_chunk,
-                        index=chunk_index,
-                        total_chunks=0,  # Will update at the end
-                    ))
+                    chunks.append(
+                        Chunk(
+                            text=current_chunk,
+                            index=chunk_index,
+                            total_chunks=0,  # Will update at the end
+                        )
+                    )
                     chunk_index += 1
 
                 # Add overlap from previous chunk
@@ -211,11 +213,13 @@ class TextChunker:
 
         # Don't forget the last chunk
         if current_chunk:
-            chunks.append(Chunk(
-                text=current_chunk,
-                index=chunk_index,
-                total_chunks=0,
-            ))
+            chunks.append(
+                Chunk(
+                    text=current_chunk,
+                    index=chunk_index,
+                    total_chunks=0,
+                )
+            )
 
         # Update total_chunks for all chunks
         total = len(chunks)

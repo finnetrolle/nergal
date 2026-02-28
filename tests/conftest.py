@@ -12,6 +12,7 @@ from llm_lib import BaseLLMProvider, LLMMessage, LLMResponse, MessageRole
 # LLM Provider Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def mock_llm_response() -> LLMResponse:
     """Create a mock LLM response."""
@@ -35,6 +36,7 @@ def mock_llm_provider(mock_llm_response: LLMResponse) -> BaseLLMProvider:
 @pytest.fixture
 def mock_llm_provider_with_response() -> callable:
     """Factory fixture to create a mock LLM provider with custom response."""
+
     def _create_provider(response_content: str) -> BaseLLMProvider:
         response = LLMResponse(
             content=response_content,
@@ -46,12 +48,14 @@ def mock_llm_provider_with_response() -> callable:
         provider.provider_name = "mock-provider"
         provider.generate = AsyncMock(return_value=response)
         return provider
+
     return _create_provider
 
 
 # =============================================================================
 # Context Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def empty_context() -> dict[str, Any]:
@@ -62,6 +66,7 @@ def empty_context() -> dict[str, Any]:
 # =============================================================================
 # Message Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def user_message() -> LLMMessage:
@@ -76,7 +81,9 @@ def assistant_message() -> LLMMessage:
 
 
 @pytest.fixture
-def conversation_history(user_message: LLMMessage, assistant_message: LLMMessage) -> list[LLMMessage]:
+def conversation_history(
+    user_message: LLMMessage, assistant_message: LLMMessage
+) -> list[LLMMessage]:
     """Create a conversation history."""
     return [user_message, assistant_message]
 
@@ -85,11 +92,14 @@ def conversation_history(user_message: LLMMessage, assistant_message: LLMMessage
 # Async Test Helpers
 # =============================================================================
 
+
 @pytest.fixture
 def async_return():
     """Helper to create an async function that returns a value."""
+
     def _async_return(value):
         f = AsyncMock()
         f.return_value = value
         return f
+
     return _async_return

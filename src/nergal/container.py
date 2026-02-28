@@ -24,12 +24,13 @@ from dependency_injector import containers, providers
 
 if TYPE_CHECKING:
     from llm_lib import BaseLLMProvider
+    from nergal.agent.runtime import AgentRuntime
     from nergal.config import Settings
-    from nergal.dialog.manager import DialogManager
     from nergal.memory.base import Memory
     from nergal.security.policy import SecurityPolicy
     from nergal.skills.base import Skill
     from nergal.skills.loader import SkillLoader
+    from nergal.tools.base import Tool
     from stt_lib import BaseSTTProvider
     from telegram_handlers_lib.base import TelegramHandlerService
     from web_search_lib.base import BaseSearchProvider as BaseWebSearchProvider
@@ -95,36 +96,51 @@ class Container(containers.DeclarativeContainer):
         settings=settings,
     )
 
-    # ============== Dialog Manager ==============
+    # Tools list - Factory (recreates on each call)
+    tools = providers.Factory(
+        lambda settings, stt, search_provider, security_policy: _create_tools(
+            settings, stt, search_provider, security_policy
+        ),
+        settings=settings,
+        stt=stt_provider,
+        search_provider=web_search_provider,
+        security_policy=security_policy,
+    )
 
-    # Dialog manager - Singleton (manages conversation state)
-    dialog_manager = providers.Singleton(
-        lambda settings, llm, search_provider: _create_dialog_manager(
-            settings, llm, search_provider
+    # ============== Agent Runtime ==============
+
+    # Agent runtime - Singleton (new ZeroClaw architecture)
+    agent_runtime = providers.Singleton(
+        lambda settings, llm, tools, memory, security_policy: _create_agent_runtime(
+            settings, llm, tools, memory, security_policy
         ),
         settings=settings,
         llm=llm_provider,
-        search_provider=web_search_provider,
+        tools=tools,
+        memory=memory,
+        security_policy=security_policy,
     )
 
     # ============== Telegram Handlers ==============
 
     # Handler service - Singleton (stateless, but keeps reference consistency)
     handler_service = providers.Singleton(
-        lambda settings, dialog_manager, stt_provider: _create_handler_service(
-            settings, dialog_manager, stt_provider
+        lambda settings, stt_provider, agent_runtime: _create_handler_service(
+            settings, stt_provider, agent_runtime
         ),
         settings=settings,
-        dialog_manager=dialog_manager,
         stt_provider=stt_provider,
+        agent_runtime=agent_runtime,
     )
 
 
 # ============== Factory Functions ==============
 
+
 def _load_settings() -> Settings:
     """Load application settings."""
     from nergal.config import get_settings
+
     return get_settings()
 
 
@@ -195,28 +211,6 @@ def _create_web_search_provider(settings: Settings) -> BaseWebSearchProvider | N
     )
 
 
-def _create_dialog_manager(
-    settings: Settings,
-    llm_provider: BaseLLMProvider,
-    search_provider: BaseWebSearchProvider | None,
-) -> DialogManager:
-    """Create dialog manager instance."""
-    from nergal.dialog.manager import DialogManager
-
-    logger.info(
-        "Creating dialog manager (style: %s)",
-        settings.style.value,
-    )
-
-    manager = DialogManager(
-        llm_provider=llm_provider,
-        style_type=settings.style,
-        web_search_provider=search_provider,
-    )
-
-    return manager
-
-
 def _create_memory(settings: Settings) -> Memory:
     """Create memory backend instance."""
     from nergal.memory.sqlite import SQLiteMemory
@@ -250,9 +244,7 @@ def _create_memory(settings: Settings) -> Memory:
     )
 
     memory = SQLiteMemory(db_path=settings.memory.db_path)
-    # Initialize the database
-    import asyncio
-    asyncio.create_task(memory.initialize())
+    # Memory will be initialized lazily on first use
     return memory
 
 
@@ -265,8 +257,7 @@ def _create_security_policy(settings: Settings) -> SecurityPolicy:
         autonomy_level = AutonomyLevel(settings.security.autonomy_level)
     except ValueError:
         logger.warning(
-            f"Invalid autonomy level: {settings.security.autonomy_level}, "
-            "using 'limited' instead"
+            f"Invalid autonomy level: {settings.security.autonomy_level}, using 'limited' instead"
         )
         autonomy_level = AutonomyLevel.LIMITED
 
@@ -287,18 +278,18 @@ def _create_security_policy(settings: Settings) -> SecurityPolicy:
 
 def _create_handler_service(
     settings: Settings,
-    dialog_manager: DialogManager,
     stt_provider: BaseSTTProvider | None,
+    agent_runtime: AgentRuntime,
 ) -> TelegramHandlerService:
     """Create Telegram handler service instance."""
     from telegram_handlers_lib import create_handler_service
 
-    logger.info("Creating Telegram handler service")
+    logger.info("Creating Telegram handler service (using AgentRuntime)")
 
     return create_handler_service(
-        dialog_manager=dialog_manager,
         settings=settings,
         stt_provider=stt_provider,
+        agent_runtime=agent_runtime,
     )
 
 
@@ -322,6 +313,95 @@ def _create_skills_loader(settings: Settings) -> SkillLoader:
     )
 
     return SkillLoader(skills_dir=settings.skills.skills_dir)
+
+
+def _create_agent_runtime(
+    settings: Settings,
+    llm_provider: BaseLLMProvider,
+    tools: list[Tool],
+    memory: Memory,
+    security_policy: SecurityPolicy,
+) -> AgentRuntime:
+    """Create agent runtime instance (ZeroClaw architecture)."""
+    from nergal.agent.runtime import AgentRuntime
+
+    logger.info("Creating agent runtime (ZeroClaw architecture)")
+
+    return AgentRuntime(
+        llm_provider=llm_provider,
+        tools=tools,
+        memory=memory,
+        security_policy=security_policy,
+        max_history=settings.llm.max_history,
+    )
+
+
+def _create_tools(
+    settings: Settings,
+    stt_provider: BaseSTTProvider | None,
+    search_provider: BaseWebSearchProvider | None,
+    security_policy: SecurityPolicy,
+) -> list[Tool]:
+    """Create list of available tools."""
+    from nergal.tools import (
+        FileReadTool,
+        FileWriteTool,
+        HttpRequestTool,
+        ShellExecuteTool,
+        TranscribeTool,
+        WebSearchTool,
+    )
+
+    tools: list[Tool] = []
+
+    def _add_tool_if_allowed(tool: Tool, tool_name: str, reason: str = "enabled") -> None:
+        """Add tool if allowed by security policy."""
+        allowed, policy_reason = security_policy.is_tool_allowed(tool_name)
+        if allowed:
+            tools.append(tool)
+            logger.info(f"Adding {tool_name} ({reason})")
+        else:
+            logger.info(f"{tool_name} disabled by security policy: {policy_reason or 'no reason'}")
+
+    # Web search tool
+    if search_provider and settings.web_search.enabled:
+        _add_tool_if_allowed(
+            WebSearchTool(search_provider=search_provider),
+            "web_search",
+            "web search enabled",
+        )
+
+    # STT tool (transcribe audio)
+    if stt_provider and settings.stt.enabled:
+        _add_tool_if_allowed(
+            TranscribeTool(
+                stt_provider=stt_provider,
+                default_language=settings.stt.language,
+            ),
+            "transcribe_audio",
+            "STT enabled",
+        )
+
+    # File tools
+    _add_tool_if_allowed(
+        FileReadTool(workspace_dir=security_policy.workspace_dir),
+        "file_read",
+        "file operations",
+    )
+    _add_tool_if_allowed(
+        FileWriteTool(workspace_dir=security_policy.workspace_dir),
+        "file_write",
+        "file operations",
+    )
+
+    # HTTP request tool
+    _add_tool_if_allowed(HttpRequestTool(), "http_request", "HTTP operations")
+
+    # Shell execute tool
+    _add_tool_if_allowed(ShellExecuteTool(), "shell_execute", "shell operations")
+
+    logger.info(f"Total tools created: {len(tools)}")
+    return tools
 
 
 # ============== Container Instance ==============

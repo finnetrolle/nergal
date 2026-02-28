@@ -172,9 +172,7 @@ class ZaiProvider(BaseLLMProvider):
         """
         client = self._get_client()
         url = f"{self.base_url}/chat/completions"
-        body = self._build_request_body(
-            messages, temperature, max_tokens, stream=False, **kwargs
-        )
+        body = self._build_request_body(messages, temperature, max_tokens, stream=False, **kwargs)
 
         logger.debug(f"Sending request to Z.ai: {url}")
 
@@ -200,9 +198,7 @@ class ZaiProvider(BaseLLMProvider):
                 raw_response=data,
             )
         except (KeyError, IndexError) as e:
-            raise LLMError(
-                f"Invalid response format: {e}", provider=self.provider_name
-            ) from e
+            raise LLMError(f"Invalid response format: {e}", provider=self.provider_name) from e
 
     async def generate_stream(
         self,
@@ -230,9 +226,7 @@ class ZaiProvider(BaseLLMProvider):
         """
         client = self._get_client()
         url = f"{self.base_url}/chat/completions"
-        body = self._build_request_body(
-            messages, temperature, max_tokens, stream=True, **kwargs
-        )
+        body = self._build_request_body(messages, temperature, max_tokens, stream=True, **kwargs)
 
         logger.debug(f"Sending streaming request to Z.ai: {url}")
 

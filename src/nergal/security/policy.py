@@ -104,9 +104,7 @@ class SecurityPolicy:
         """
         self.autonomy_level = autonomy_level
         self.workspace_dir = (
-            Path(workspace_dir).expanduser()
-            if isinstance(workspace_dir, str)
-            else workspace_dir
+            Path(workspace_dir).expanduser() if isinstance(workspace_dir, str) else workspace_dir
         )
         self.allowed_commands = allowed_commands or []
         self.workspace_only = workspace_only

@@ -12,6 +12,7 @@ from unittest.mock import Mock
 @dataclass
 class MockToolCall:
     """Mock tool call structure."""
+
     id: str
     name: str
     arguments: dict
@@ -20,6 +21,7 @@ class MockToolCall:
 @dataclass
 class MockChatResponse:
     """Mock LLM response."""
+
     text: str | None = None
     tool_calls: list[MockToolCall] | None = None
 

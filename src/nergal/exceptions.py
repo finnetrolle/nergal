@@ -166,12 +166,14 @@ from llm_lib.exceptions import (
     LLMRateLimitError,
 )
 
+
 # Keep Nergal-specific LLM error subclasses
 class LLMConnectionError(LLMError):
     """Error connecting to the LLM provider.
 
     Raised when network or connection issues prevent reaching the LLM API.
     """
+
     pass
 
 
@@ -211,4 +213,5 @@ class LLMResponseError(LLMError):
 
     Raised when the LLM returns an unexpected or malformed response.
     """
+
     pass

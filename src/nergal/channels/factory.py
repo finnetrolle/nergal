@@ -12,28 +12,53 @@ from typing import TYPE_CHECKING
 from nergal.channels.base import Channel
 
 if TYPE_CHECKING:
-    pass
+    from telegram.ext import Application
 
 logger = logging.getLogger(__name__)
 
 
-def create_channel() -> Channel:
+def create_channel(
+    application: "Application | None" = None,
+    bot_token: str | None = None,
+    use_polling: bool = True,
+) -> Channel:
     """Create the appropriate channel instance.
 
     Currently only Telegram is implemented. Other channels
     (Slack, Discord, etc.) can be added in the future.
+
+    Args:
+        application: Telegram Application instance.
+        bot_token: Telegram bot token.
+        use_polling: Whether to use polling (True) or webhooks (False).
 
     Returns:
         Channel instance.
 
     Example:
         >>> from nergal.channels.factory import create_channel
-        >>> channel = create_channel()
+        >>> channel = create_channel(
+        ...     application=app,
+        ...     bot_token="TOKEN",
+        ...     use_polling=True
+        ... )
     """
-    # For now, always return Telegram channel
-    # In the future, this can be based on configuration
-    from telegram_handlers_lib.base import TelegramHandlerService
+    if not bot_token:
+        from nergal.config import get_settings
 
-    # We'll use the existing handler service as the channel
-    # This is a thin wrapper for now
-    return TelegramHandlerService  # type: ignore
+        settings = get_settings()
+        bot_token = settings.telegram_bot_token
+
+    # Create Telegram channel
+    from nergal.channels.telegram import TelegramChannel
+
+    if application is None:
+        from telegram.ext import Application
+
+        application = Application.builder().token(bot_token).build()
+
+    return TelegramChannel(
+        application=application,
+        bot_token=bot_token,
+        use_polling=use_polling,
+    )

@@ -2,6 +2,6 @@
 
 __version__ = "0.1.0"
 
-from nergal.dialog import DialogManager
+from nergal.agent.runtime import AgentRuntime
 
-__all__ = ["DialogManager"]
+__all__ = ["AgentRuntime"]

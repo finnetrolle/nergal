@@ -91,9 +91,7 @@ class TestWebSearchTool:
     def test_description_with_domain_filter(self):
         """Test description with domain filtering."""
         provider = MockSearchProvider()
-        tool = WebSearchTool(
-            search_provider=provider, allowed_domains=["example.com"]
-        )
+        tool = WebSearchTool(search_provider=provider, allowed_domains=["example.com"])
 
         desc = tool.description
         assert "example.com" in desc
@@ -134,9 +132,7 @@ class TestWebSearchTool:
         provider = MockSearchProvider()
         tool = WebSearchTool(search_provider=provider)
 
-        with pytest.raises(
-            ToolValidationError, match="Query must be a non-empty string"
-        ):
+        with pytest.raises(ToolValidationError, match="Query must be a non-empty string"):
             await tool.execute({})
 
     @pytest.mark.asyncio
@@ -145,14 +141,10 @@ class TestWebSearchTool:
         provider = MockSearchProvider()
         tool = WebSearchTool(search_provider=provider)
 
-        with pytest.raises(
-            ToolValidationError, match="Query cannot be empty or whitespace"
-        ):
+        with pytest.raises(ToolValidationError, match="Query cannot be empty or whitespace"):
             await tool.execute({"query": ""})
 
-        with pytest.raises(
-            ToolValidationError, match="Query cannot be empty or whitespace"
-        ):
+        with pytest.raises(ToolValidationError, match="Query cannot be empty or whitespace"):
             await tool.execute({"query": "   "})
 
     @pytest.mark.asyncio
@@ -161,9 +153,7 @@ class TestWebSearchTool:
         provider = MockSearchProvider()
         tool = WebSearchTool(search_provider=provider)
 
-        with pytest.raises(
-            ToolValidationError, match="Query must be a non-empty string"
-        ):
+        with pytest.raises(ToolValidationError, match="Query must be a non-empty string"):
             await tool.execute({"query": 123})
 
     @pytest.mark.asyncio
@@ -245,9 +235,7 @@ class TestWebSearchTool:
         """Test execute that returns no results."""
         from web_search_lib.base import SearchResults
 
-        provider = MockSearchProvider(
-            results=SearchResults(results=[], query="test")
-        )
+        provider = MockSearchProvider(results=SearchResults(results=[], query="test"))
         tool = WebSearchTool(search_provider=provider)
 
         result = await tool.execute({"query": "test"})
@@ -268,9 +256,7 @@ class TestWebSearchTool:
             )
             for i in range(5)
         ]
-        provider = MockSearchProvider(
-            results=SearchResults(results=results, query="test")
-        )
+        provider = MockSearchProvider(results=SearchResults(results=results, query="test"))
         tool = WebSearchTool(search_provider=provider)
 
         result = await tool.execute({"query": "test", "count": 3})
@@ -302,11 +288,7 @@ class TestWebSearchTool:
         )
         tool = WebSearchTool(search_provider=provider)
 
-        result = await tool.execute({
-            "query": "test",
-            "count": 5,
-            "recency": "oneWeek"
-        })
+        result = await tool.execute({"query": "test", "count": 5, "recency": "oneWeek"})
 
         metadata = result.metadata
         assert metadata["provider"] == "MockSearch"

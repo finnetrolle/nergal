@@ -14,8 +14,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 if TYPE_CHECKING:
+    from nergal.agent.runtime import AgentRuntime
     from nergal.config import Settings
-    from nergal.dialog.manager import DialogManager
     from stt_lib.base import BaseSTTProvider
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class TelegramHandlerService:
     of Telegram updates.
 
     Args:
-        dialog_manager: Dialog manager for processing messages.
+        agent_runtime: Agent runtime for processing messages (ZeroClaw architecture).
         settings: Application settings configuration.
         stt_provider: Optional STT provider for voice messages.
 
@@ -38,7 +38,7 @@ class TelegramHandlerService:
         >>>
         >>> # Create service
         >>> handler_service = create_handler_service(
-        ...     dialog_manager=my_dialog_manager,
+        ...     agent_runtime=my_agent_runtime,
         ...     settings=my_settings,
         ...     stt_provider=my_stt_provider
         ... )
@@ -51,18 +51,18 @@ class TelegramHandlerService:
 
     def __init__(
         self,
-        dialog_manager: "DialogManager",
+        agent_runtime: "AgentRuntime",
         settings: "Settings",
         stt_provider: "BaseSTTProvider | None" = None,
     ) -> None:
         """Initialize the handler service.
 
         Args:
-            dialog_manager: Dialog manager for processing messages.
+            agent_runtime: Agent runtime for processing messages (ZeroClaw architecture).
             settings: Application settings configuration.
             stt_provider: Optional STT provider for voice messages.
         """
-        self._dialog_manager = dialog_manager
+        self._agent_runtime = agent_runtime
         self._settings = settings
         self._stt_provider = stt_provider
 
@@ -242,22 +242,21 @@ class TelegramHandlerService:
         user_id = update.effective_user.id if update.effective_user else 0
 
         # Log incoming message
-        logger.debug(
-            f"Processing message, user_id={user_id}, message_length={len(user_text)}"
-        )
+        logger.debug(f"Processing message, user_id={user_id}, message_length={len(user_text)}")
 
         start_time = time.time()
         try:
-            result = await self._dialog_manager.process_message(
+            # Use AgentRuntime for processing
+            logger.debug("Using AgentRuntime for processing")
+            response_text = await self._agent_runtime.process_message(
                 user_id=user_id,
                 message=user_text,
-                user_info=user_info,
             )
 
             # Convert Markdown to Telegram HTML format
             from nergal.utils import markdown_to_telegram_html
 
-            html_response = markdown_to_telegram_html(result.response)
+            html_response = markdown_to_telegram_html(response_text)
 
             # Send with HTML parsing enabled
             await update.message.reply_text(html_response, parse_mode="HTML")
@@ -372,9 +371,7 @@ class TelegramHandlerService:
 
             # Process the transcribed text through dialog manager
             user_info = {
-                "first_name": update.effective_user.first_name
-                if update.effective_user
-                else None,
+                "first_name": update.effective_user.first_name if update.effective_user else None,
                 "last_name": update.effective_user.last_name if update.effective_user else None,
                 "username": update.effective_user.username if update.effective_user else None,
                 "language_code": update.effective_user.language_code
@@ -384,16 +381,17 @@ class TelegramHandlerService:
 
             start_time = time.time()
             try:
-                result = await self._dialog_manager.process_message(
+                # Use AgentRuntime for voice processing
+                logger.debug("Using AgentRuntime for voice processing")
+                response_text = await self._agent_runtime.process_message(
                     user_id=user_id,
                     message=transcription,
-                    user_info=user_info,
                 )
 
                 # Convert Markdown to Telegram HTML format
                 from nergal.utils import markdown_to_telegram_html
 
-                html_response = markdown_to_telegram_html(result.response)
+                html_response = markdown_to_telegram_html(response_text)
                 await update.message.reply_text(html_response, parse_mode="HTML")
 
                 duration = time.time() - start_time

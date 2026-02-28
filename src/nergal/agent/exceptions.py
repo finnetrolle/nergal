@@ -18,6 +18,4 @@ class MaxIterationsExceeded(Exception):
 
     def __init__(self, max_iterations: int) -> None:
         self.max_iterations = max_iterations
-        super().__init__(
-            f"Tool call loop exceeded maximum of {max_iterations} iterations"
-        )
+        super().__init__(f"Tool call loop exceeded maximum of {max_iterations} iterations")

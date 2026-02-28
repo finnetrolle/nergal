@@ -42,9 +42,7 @@ class NativeToolDispatcher(ToolDispatcher):
         >>> formatted = dispatcher.format_results(tool_results)
     """
 
-    def parse_response(
-        self, response: LLMResponse
-    ) -> tuple[str, list[ParsedToolCall]]:
+    def parse_response(self, response: LLMResponse) -> tuple[str, list[ParsedToolCall]]:
         """Parse LLM response to extract text and tool calls.
 
         For native providers, tool calls are in the tool_calls field.

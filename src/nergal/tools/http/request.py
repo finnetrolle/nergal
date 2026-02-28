@@ -148,6 +148,7 @@ class HttpRequestTool(Tool):
         # Security check: domain filtering
         if self.allowed_domains:
             from urllib.parse import urlparse
+
             parsed = urlparse(url)
             hostname = parsed.hostname
             if hostname and hostname not in self.allowed_domains:

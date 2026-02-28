@@ -24,6 +24,7 @@ from nergal.tools.http.request import HttpRequestTool
 from nergal.tools.registry import ToolRegistry, get_registry
 from nergal.tools.search.web import WebSearchTool
 from nergal.tools.shell.execute import ShellExecuteTool
+from nergal.tools.stt.transcribe import TranscribeTool
 
 __all__ = [
     # Core
@@ -43,4 +44,5 @@ __all__ = [
     "FileWriteTool",
     "ShellExecuteTool",
     "WebSearchTool",
+    "TranscribeTool",
 ]

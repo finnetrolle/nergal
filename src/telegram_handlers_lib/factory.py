@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 from telegram_handlers_lib.base import TelegramHandlerService
 
 if TYPE_CHECKING:
+    from nergal.agent.runtime import AgentRuntime
     from nergal.config import Settings
-    from nergal.dialog.manager import DialogManager
     from stt_lib.base import BaseSTTProvider
 
 
 def create_handler_service(
-    dialog_manager: "DialogManager",
+    agent_runtime: "AgentRuntime",
     settings: "Settings",
     stt_provider: "BaseSTTProvider | None" = None,
 ) -> TelegramHandlerService:
@@ -23,7 +23,7 @@ def create_handler_service(
     via constructor for proper dependency injection.
 
     Args:
-        dialog_manager: Dialog manager for processing messages.
+        agent_runtime: Agent runtime for processing messages (ZeroClaw architecture).
         settings: Application settings configuration.
         stt_provider: Optional STT provider for voice messages.
 
@@ -34,7 +34,7 @@ def create_handler_service(
         >>> from telegram_handlers_lib import create_handler_service
         >>>
         >>> handler_service = create_handler_service(
-        ...     dialog_manager=my_dialog_manager,
+        ...     agent_runtime=my_agent_runtime,
         ...     settings=my_settings,
         ...     stt_provider=my_stt_provider
         ... )
@@ -50,7 +50,7 @@ def create_handler_service(
     logger.info("Creating TelegramHandlerService")
 
     return TelegramHandlerService(
-        dialog_manager=dialog_manager,
+        agent_runtime=agent_runtime,
         settings=settings,
         stt_provider=stt_provider,
     )

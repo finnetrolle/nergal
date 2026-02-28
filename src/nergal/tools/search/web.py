@@ -126,8 +126,7 @@ class WebSearchTool(Tool):
                 "count": {
                     "type": "integer",
                     "description": (
-                        "Number of results to return. "
-                        f"Must be between 1 and {self._max_results}."
+                        f"Number of results to return. Must be between 1 and {self._max_results}."
                     ),
                     "minimum": 1,
                     "maximum": self._max_results,

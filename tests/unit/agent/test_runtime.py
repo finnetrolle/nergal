@@ -61,7 +61,9 @@ def agent_runtime(mock_llm_provider, mock_memory, mock_security_policy, mock_too
 class TestAgentRuntimeInitialization:
     """Tests for AgentRuntime initialization."""
 
-    def test_init_creates_runtime(self, agent_runtime, mock_llm_provider, mock_memory, mock_security_policy):
+    def test_init_creates_runtime(
+        self, agent_runtime, mock_llm_provider, mock_memory, mock_security_policy
+    ):
         """Test that init creates runtime with all dependencies."""
         assert agent_runtime.llm_provider == mock_llm_provider
         assert agent_runtime.memory == mock_memory
@@ -70,7 +72,9 @@ class TestAgentRuntimeInitialization:
         assert agent_runtime.max_history == 20
         assert agent_runtime.dispatcher is not None
 
-    def test_init_default_max_history(self, mock_llm_provider, mock_memory, mock_security_policy, mock_tool):
+    def test_init_default_max_history(
+        self, mock_llm_provider, mock_memory, mock_security_policy, mock_tool
+    ):
         """Test that default max_history is used."""
         runtime = AgentRuntime(
             llm_provider=mock_llm_provider,
@@ -121,7 +125,9 @@ class TestAgentRuntimeProcessMessage:
         )
         mock_memory.recall.return_value = [entry]
 
-        with patch("nergal.agent.runtime.run_tool_call_loop", return_value="I'll use dark mode.") as mock_loop:
+        with patch(
+            "nergal.agent.runtime.run_tool_call_loop", return_value="I'll use dark mode."
+        ) as mock_loop:
             response = await agent_runtime.process_message(123, "Configure my UI.")
 
             assert response == "I'll use dark mode."
@@ -135,7 +141,9 @@ class TestAgentRuntimeProcessMessage:
         ]
 
         with patch("nergal.agent.runtime.run_tool_call_loop", return_value="Response") as mock_loop:
-            response = await agent_runtime.process_message(123, "New message", conversation_history=history)
+            response = await agent_runtime.process_message(
+                123, "New message", conversation_history=history
+            )
 
             assert response == "Response"
 
@@ -151,7 +159,9 @@ class TestAgentRuntimeProcessMessage:
             assert response == "Response"
 
     @pytest.mark.asyncio
-    async def test_process_message_tool_loop_error(self, agent_runtime, mock_memory, mock_llm_provider):
+    async def test_process_message_tool_loop_error(
+        self, agent_runtime, mock_memory, mock_llm_provider
+    ):
         """Test handling tool call loop errors."""
         mock_memory.recall.return_value = []
         mock_llm_provider.generate.side_effect = Exception("LLM error")
@@ -246,7 +256,9 @@ class TestAgentRuntimeGetAvailableToolsInfo:
         assert "Reason: Dangerous tool" in info
 
     @pytest.mark.asyncio
-    async def test_get_available_tools_info_multiple_tools(self, agent_runtime, mock_security_policy):
+    async def test_get_available_tools_info_multiple_tools(
+        self, agent_runtime, mock_security_policy
+    ):
         """Test getting info with multiple tools."""
         tool2 = Mock(spec=Tool)
         tool2.name = "tool2"
@@ -275,7 +287,9 @@ class TestAgentRuntimeIntegration:
         mock_memory.recall.return_value = [entry]
 
         # Mock the tool call loop
-        with patch("nergal.agent.runtime.run_tool_call_loop", return_value="Final response") as mock_loop:
+        with patch(
+            "nergal.agent.runtime.run_tool_call_loop", return_value="Final response"
+        ) as mock_loop:
             response = await agent_runtime.process_message(456, "What can you do?")
 
             assert response == "Final response"

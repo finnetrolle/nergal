@@ -53,9 +53,7 @@ class SkillLoader:
             skills_dir: Directory containing skill definitions.
         """
         self.skills_dir = (
-            Path(skills_dir).expanduser()
-            if isinstance(skills_dir, str)
-            else skills_dir
+            Path(skills_dir).expanduser() if isinstance(skills_dir, str) else skills_dir
         )
 
     def load_all(self) -> dict[str, Skill]:

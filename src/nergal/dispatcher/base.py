@@ -91,9 +91,7 @@ class ToolDispatcher(ABC):
     """
 
     @abstractmethod
-    def parse_response(
-        self, response: LLMResponse
-    ) -> tuple[str, list[ParsedToolCall]]:
+    def parse_response(self, response: LLMResponse) -> tuple[str, list[ParsedToolCall]]:
         """Parse LLM response to extract text and tool calls.
 
         This method processes the LLM response and separates:
@@ -219,6 +217,7 @@ def get_dispatcher(
     """
     if force_xml:
         from nergal.dispatcher.xml import XmlToolDispatcher
+
         return XmlToolDispatcher()
 
     # Try to detect based on provider
@@ -234,8 +233,10 @@ def get_dispatcher(
 
         if provider_name in native_providers:
             from nergal.dispatcher.native import NativeToolDispatcher
+
             return NativeToolDispatcher()
 
     # Default to XML dispatcher for unknown providers
     from nergal.dispatcher.xml import XmlToolDispatcher
+
     return XmlToolDispatcher()

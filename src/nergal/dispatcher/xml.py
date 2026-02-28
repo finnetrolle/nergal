@@ -24,8 +24,7 @@ logger = logging.getLogger(__name__)
 # Pattern: <tool_name>arg1="value1" arg2="value2"</tool_name>
 # or <tool_name>{"key": "value"}</tool_name>
 TOOL_CALL_PATTERN = re.compile(
-    r'<(?P<name>\w+)(?:\s+[^>]*)?>\s*(?P<content>.*?)\s*</\1>',
-    re.DOTALL
+    r"<(?P<name>\w+)(?:\s+[^>]*)?>\s*(?P<content>.*?)\s*</\1>", re.DOTALL
 )
 
 
@@ -56,9 +55,7 @@ class XmlToolDispatcher(ToolDispatcher):
         """
         self.tool_tags = set(tool_tags) if tool_tags else None
 
-    def parse_response(
-        self, response: LLMResponse
-    ) -> tuple[str, list[ParsedToolCall]]:
+    def parse_response(self, response: LLMResponse) -> tuple[str, list[ParsedToolCall]]:
         """Parse LLM response to extract text and tool calls.
 
         For XML dispatchers, tool calls are embedded in the text
@@ -88,11 +85,13 @@ class XmlToolDispatcher(ToolDispatcher):
                 # Try to parse as JSON first, then as attributes
                 arguments = self._parse_tool_arguments(inner_content)
 
-                calls.append(ParsedToolCall(
-                    name=name,
-                    arguments=arguments,
-                    tool_call_id=None,  # XML dispatchers don't have IDs
-                ))
+                calls.append(
+                    ParsedToolCall(
+                        name=name,
+                        arguments=arguments,
+                        tool_call_id=None,  # XML dispatchers don't have IDs
+                    )
+                )
             except Exception as e:
                 logger.error(f"Failed to parse tool call from XML: {e}")
                 continue
@@ -128,11 +127,18 @@ class XmlToolDispatcher(ToolDispatcher):
 
             # Format with XML tags
             if result.success:
-                output_escaped = result.output.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                formatted_parts.append(f"<tool_result index=\"{i}\">{output_escaped}</tool_result>")
+                output_escaped = (
+                    result.output.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                )
+                formatted_parts.append(f'<tool_result index="{i}">{output_escaped}</tool_result>')
             else:
-                error_escaped = (result.error or "Unknown error").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                formatted_parts.append(f"<tool_error index=\"{i}\">{error_escaped}</tool_error>")
+                error_escaped = (
+                    (result.error or "Unknown error")
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                )
+                formatted_parts.append(f'<tool_error index="{i}">{error_escaped}</tool_error>')
 
         return "\n\n".join(formatted_parts)
 
@@ -158,23 +164,25 @@ class XmlToolDispatcher(ToolDispatcher):
             tool_desc = getattr(tool, "description", "No description")
             instructions.append(f"\n**{tool_name}**: {tool_desc}")
 
-        instructions.extend([
-            "\n\n## Tool Usage",
-            "To use a tool, format your tool call as follows:",
-            "\n```xml",
-            "<tool_name>",
-            '  {"key": "value"}',
-            "</tool_name>",
-            "```",
-            "\nOr with XML attributes:",
-            "\n```xml",
-            '<tool_name key="value" />',
-            "```",
-            "\nTool results will be returned as:",
-            "\n```xml",
-            '<tool_result index="0">Result output</tool_result>',
-            "```",
-        ])
+        instructions.extend(
+            [
+                "\n\n## Tool Usage",
+                "To use a tool, format your tool call as follows:",
+                "\n```xml",
+                "<tool_name>",
+                '  {"key": "value"}',
+                "</tool_name>",
+                "```",
+                "\nOr with XML attributes:",
+                "\n```xml",
+                '<tool_name key="value" />',
+                "```",
+                "\nTool results will be returned as:",
+                "\n```xml",
+                '<tool_result index="0">Result output</tool_result>',
+                "```",
+            ]
+        )
 
         return "\n".join(instructions)
 

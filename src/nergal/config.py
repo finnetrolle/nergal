@@ -5,8 +5,6 @@ from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from nergal.dialog.styles import StyleType
-
 
 class STTSettings(BaseSettings):
     """Speech-to-Text provider settings."""
@@ -53,6 +51,7 @@ class LLMSettings(BaseSettings):
     base_url: str | None = Field(default=None, description="Optional custom API endpoint")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: int | None = Field(default=None, description="Maximum tokens to generate")
+    max_history: int = Field(default=20, ge=1, le=100, description="Maximum message history length")
     timeout: float = Field(default=120.0, description="Request timeout in seconds")
 
 
@@ -170,6 +169,12 @@ class SecuritySettings(BaseSettings):
         le=1000,
         description="Maximum tool actions per hour",
     )
+    max_tool_iterations: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum tool iteration loops per message",
+    )
 
 
 class SkillsSettings(BaseSettings):
@@ -204,12 +209,6 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str
     log_level: str = "INFO"
-
-    # Response style setting
-    style: StyleType = Field(
-        default=StyleType.DEFAULT,
-        description="Response style (default)",
-    )
 
     # LLM settings (nested)
     llm: LLMSettings = Field(default_factory=LLMSettings)

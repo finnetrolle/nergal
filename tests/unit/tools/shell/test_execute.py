@@ -84,9 +84,7 @@ class TestShellExecuteTool:
         """Test execute with missing command argument."""
         tool = ShellExecuteTool()
 
-        with pytest.raises(
-            ToolValidationError, match="Command must be a non-empty string"
-        ):
+        with pytest.raises(ToolValidationError, match="Command must be a non-empty string"):
             await tool.execute({})
 
     @pytest.mark.asyncio
@@ -94,14 +92,10 @@ class TestShellExecuteTool:
         """Test execute with empty command."""
         tool = ShellExecuteTool()
 
-        with pytest.raises(
-            ToolValidationError, match="Command cannot be empty or whitespace"
-        ):
+        with pytest.raises(ToolValidationError, match="Command cannot be empty or whitespace"):
             await tool.execute({"command": ""})
 
-        with pytest.raises(
-            ToolValidationError, match="Command cannot be empty or whitespace"
-        ):
+        with pytest.raises(ToolValidationError, match="Command cannot be empty or whitespace"):
             await tool.execute({"command": "   "})
 
     @pytest.mark.asyncio
@@ -109,9 +103,7 @@ class TestShellExecuteTool:
         """Test execute with non-string command."""
         tool = ShellExecuteTool()
 
-        with pytest.raises(
-            ToolValidationError, match="Command must be a non-empty string"
-        ):
+        with pytest.raises(ToolValidationError, match="Command must be a non-empty string"):
             await tool.execute({"command": 123})
 
     @pytest.mark.asyncio
@@ -119,9 +111,7 @@ class TestShellExecuteTool:
         """Test execute with command not in whitelist."""
         tool = ShellExecuteTool(allowed_commands=["ls", "cat"])
 
-        with pytest.raises(
-            SecurityPolicyViolationError, match="not in the allowed commands list"
-        ):
+        with pytest.raises(SecurityPolicyViolationError, match="not in the allowed commands list"):
             await tool.execute({"command": "rm -rf /"})
 
     @pytest.mark.asyncio

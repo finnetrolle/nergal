@@ -84,8 +84,7 @@ class MemoryRecallTool(Tool):
                     "type": "string",
                     "enum": ["conversation", "knowledge", "user", "system"],
                     "description": (
-                        "Optional category filter. If not specified, "
-                        "searches all categories."
+                        "Optional category filter. If not specified, searches all categories."
                     ),
                 },
             },
@@ -146,9 +145,7 @@ class MemoryRecallTool(Tool):
             output_lines = [f"Found {len(entries)} relevant memories:"]
             for entry in entries:
                 score_str = f" (score: {entry.score:.2f})" if entry.score else ""
-                output_lines.append(
-                    f"- [{entry.category.value}] {entry.content}{score_str}"
-                )
+                output_lines.append(f"- [{entry.category.value}] {entry.content}{score_str}")
 
             logger.info(f"Recalled {len(entries)} memory entries for query: {query}")
             return ToolResult(

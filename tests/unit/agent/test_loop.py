@@ -56,9 +56,7 @@ class MockDispatcher(ToolDispatcher):
         self.call_count = 0
         self.format_count = 0
 
-    def parse_response(
-        self, response: LLMResponse
-    ) -> tuple[str, list[ParsedToolCall]]:
+    def parse_response(self, response: LLMResponse) -> tuple[str, list[ParsedToolCall]]:
         # Determine what to return
         if self.call_count < len(self.responses_to_return):
             text = self.responses_to_return[self.call_count]
@@ -141,11 +139,13 @@ class TestToolCallLoop:
 
         mock_tool = MockTool("test_tool")
         mock_dispatcher = MockDispatcher(
-            tool_calls=[ParsedToolCall(
-                name="test_tool",
-                arguments={},
-                tool_call_id="call_1",
-            )],
+            tool_calls=[
+                ParsedToolCall(
+                    name="test_tool",
+                    arguments={},
+                    tool_call_id="call_1",
+                )
+            ],
             responses=["", "Final"],
         )
 
@@ -175,11 +175,13 @@ class TestToolCallLoop:
 
         mock_tool = MockTool("test_tool")
         mock_dispatcher = MockDispatcher(
-            tool_calls=[ParsedToolCall(
-                name="test_tool",
-                arguments={},
-                tool_call_id="call_1",
-            )],
+            tool_calls=[
+                ParsedToolCall(
+                    name="test_tool",
+                    arguments={},
+                    tool_call_id="call_1",
+                )
+            ],
             responses=["", ""],
             always_return_calls=True,
         )
@@ -233,11 +235,13 @@ class TestToolCallLoop:
 
         mock_tool = ErrorTool()
         mock_dispatcher = MockDispatcher(
-            tool_calls=[ParsedToolCall(
-                name="error_tool",
-                arguments={},
-                tool_call_id="call_1",
-            )],
+            tool_calls=[
+                ParsedToolCall(
+                    name="error_tool",
+                    arguments={},
+                    tool_call_id="call_1",
+                )
+            ],
             responses=["", "Error handled"],
         )
 

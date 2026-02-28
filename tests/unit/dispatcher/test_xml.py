@@ -152,7 +152,7 @@ class TestXmlToolDispatcher:
         """Test formatting results with special XML characters."""
         dispatcher = XmlToolDispatcher()
         results = [
-            ToolResult(success=True, output="Value: <test> & \"quote\""),
+            ToolResult(success=True, output='Value: <test> & "quote"'),
         ]
 
         formatted = dispatcher.format_results(results)
@@ -238,7 +238,7 @@ class TestXmlToolDispatcher:
         """Test parsing XML with nested content."""
         dispatcher = XmlToolDispatcher()
         response = LLMResponse(
-            content='<search><query>python async</query><count>5</count></search>',
+            content="<search><query>python async</query><count>5</count></search>",
             model="test-model",
         )
 
@@ -255,7 +255,7 @@ class TestXmlToolDispatcher:
         """Test parsing tool call with empty content."""
         dispatcher = XmlToolDispatcher()
         response = LLMResponse(
-            content='<execute></execute>',
+            content="<execute></execute>",
             model="test-model",
         )
 

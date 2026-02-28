@@ -4,7 +4,9 @@
 # Must be done before any imports that trigger pydub loading
 import warnings
 
-warnings.filterwarnings("ignore", message=".*invalid escape sequence.*", category=SyntaxWarning, module="pydub")
+warnings.filterwarnings(
+    "ignore", message=".*invalid escape sequence.*", category=SyntaxWarning, module="pydub"
+)
 
 import logging
 import re
@@ -13,7 +15,6 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from nergal.config import get_settings
 from nergal.container import Container, get_container, init_container
-from nergal.dialog import DialogManager
 from stt_lib import BaseSTTProvider
 from web_search_lib.providers import ZaiMcpHttpSearchProvider
 
@@ -66,7 +67,7 @@ def configure_logging(log_level: str) -> None:
 class BotApplication:
     """Telegram bot application with singleton pattern.
 
-    Manages dialog manager and web search provider lifecycle.
+    Manages web search provider and STT provider lifecycle.
     This class now delegates to the DI container for dependency management.
     """
 
@@ -92,11 +93,6 @@ class BotApplication:
         return self._container
 
     @property
-    def dialog_manager(self) -> DialogManager:
-        """Get or create the dialog manager instance from DI container."""
-        return self.container.dialog_manager()
-
-    @property
     def web_search_provider(self) -> ZaiMcpHttpSearchProvider | None:
         """Get or create the web search provider instance from DI container."""
         return self.container.web_search_provider()
@@ -113,8 +109,8 @@ class BotApplication:
 
     async def initialize_memory(self) -> None:
         """Initialize the memory service."""
-        # Memory service was removed - no-op
-        self._logger.info("Memory service disabled (removed)")
+        # Memory is initialized by the container
+        self._logger.info("Memory system initialized by DI container")
 
 
 def main() -> None:
@@ -132,9 +128,6 @@ def main() -> None:
 
     # Initialize bot application
     app = BotApplication.get_instance()
-
-    # Pre-initialize dialog manager
-    _ = app.dialog_manager
 
     # Pre-load Whisper model if STT is enabled to avoid timeout on first transcription
     if settings.stt.enabled:

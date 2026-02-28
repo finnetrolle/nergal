@@ -94,9 +94,7 @@ class TestToolError:
 
     def test_tool_validation_error_with_field(self):
         """Test ToolValidationError with field specified."""
-        error = ToolValidationError(
-            tool_name="my_tool", field="count", message="must be positive"
-        )
+        error = ToolValidationError(tool_name="my_tool", field="count", message="must be positive")
         assert error.tool_name == "my_tool"
         assert error.field == "count"
         assert "count" in str(error)
@@ -104,9 +102,7 @@ class TestToolError:
 
     def test_tool_validation_error_without_field(self):
         """Test ToolValidationError without field."""
-        error = ToolValidationError(
-            tool_name="my_tool", message="Invalid arguments"
-        )
+        error = ToolValidationError(tool_name="my_tool", message="Invalid arguments")
         assert error.field is None
         assert str(error) == "[my_tool] Validation failed: Invalid arguments"
 

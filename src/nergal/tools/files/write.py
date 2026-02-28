@@ -110,9 +110,7 @@ class FileWriteTool(Tool):
 
             # Security check: ensure path is within workspace
             if not resolved_path.is_relative_to(self.workspace_dir):
-                logger.warning(
-                    f"Attempted to write outside workspace: {resolved_path}"
-                )
+                logger.warning(f"Attempted to write outside workspace: {resolved_path}")
                 return ToolResult(
                     success=False,
                     output="",

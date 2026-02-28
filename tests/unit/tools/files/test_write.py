@@ -20,10 +20,7 @@ class TestFileWriteTool:
         """Test successfully writing a file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tool = FileWriteTool(workspace_dir=tmpdir)
-            result = await tool.execute({
-                "path": "test.txt",
-                "content": "Hello, World!"
-            })
+            result = await tool.execute({"path": "test.txt", "content": "Hello, World!"})
 
             assert result.success is True
             assert result.output is not None
@@ -33,10 +30,7 @@ class TestFileWriteTool:
         """Test writing file that requires creating subdirectory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tool = FileWriteTool(workspace_dir=tmpdir)
-            result = await tool.execute({
-                "path": "subdir/new_file.txt",
-                "content": "Content"
-            })
+            result = await tool.execute({"path": "subdir/new_file.txt", "content": "Content"})
 
             assert result.success is True
             assert "written" in result.output.lower()
@@ -52,24 +46,17 @@ class TestFileWriteTool:
             test_file.write_text("Original content")
 
             tool = FileWriteTool(workspace_dir=tmpdir)
-            result = await tool.execute({
-                "path": "test.txt",
-                "content": "New content"
-            })
+            result = await tool.execute({"path": "test.txt", "content": "New content"})
 
             assert result.success is True
             assert test_file.read_text() == "New content"
-
 
     @pytest.mark.asyncio
     async def test_write_file_empty_content(self) -> None:
         """Test writing empty file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tool = FileWriteTool(workspace_dir=tmpdir)
-            result = await tool.execute({
-                "path": "empty.txt",
-                "content": ""
-            })
+            result = await tool.execute({"path": "empty.txt", "content": ""})
 
             assert result.success is True
             file_path = Path(tmpdir) / "empty.txt"
@@ -82,10 +69,7 @@ class TestFileWriteTool:
         content = "Привет мир! 你好世界"
         with tempfile.TemporaryDirectory() as tmpdir:
             tool = FileWriteTool(workspace_dir=tmpdir)
-            result = await tool.execute({
-                "path": "unicode.txt",
-                "content": content
-            })
+            result = await tool.execute({"path": "unicode.txt", "content": content})
 
             assert result.success is True
             file_path = Path(tmpdir) / "unicode.txt"
@@ -108,10 +92,12 @@ class TestFileWriteTool:
         with tempfile.TemporaryDirectory() as tmpdir:
             tool = FileWriteTool(workspace_dir=tmpdir)
             binary_content = b"\x00\x01\x02\x03"
-            result = await tool.execute({
-                "path": "binary.bin",
-                "content": binary_content,
-            })
+            result = await tool.execute(
+                {
+                    "path": "binary.bin",
+                    "content": binary_content,
+                }
+            )
 
             assert result.success is True
             # Binary content should be written correctly
@@ -134,10 +120,7 @@ class TestFileWriteTool:
         """Test that path traversal is blocked."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tool = FileWriteTool(workspace_dir=tmpdir)
-            result = await tool.execute({
-                "path": "../../../outside.txt",
-                "content": "Dangerous"
-            })
+            result = await tool.execute({"path": "../../../outside.txt", "content": "Dangerous"})
 
             assert result.success is False
             assert "outside workspace" in result.error.lower()
@@ -149,18 +132,22 @@ class TestFileWriteTool:
             tool = FileWriteTool(workspace_dir=tmpdir)
 
             # First write to create file
-            result1 = await tool.execute({
-                "path": "test.txt",
-                "content": "First write",
-            })
+            result1 = await tool.execute(
+                {
+                    "path": "test.txt",
+                    "content": "First write",
+                }
+            )
             assert result1.success is True
 
             # Second write with create=True should fail
-            result2 = await tool.execute({
-                "path": "test.txt",
-                "content": "Second write",
-                "create": True,
-            })
+            result2 = await tool.execute(
+                {
+                    "path": "test.txt",
+                    "content": "Second write",
+                    "create": True,
+                }
+            )
             assert result2.success is False
             assert "already exists" in result2.error.lower()
 
@@ -180,10 +167,7 @@ class TestFileWriteTool:
         large_content = "A" * 100000
         with tempfile.TemporaryDirectory() as tmpdir:
             tool = FileWriteTool(workspace_dir=tmpdir)
-            result = await tool.execute({
-                "path": "large.txt",
-                "content": large_content
-            })
+            result = await tool.execute({"path": "large.txt", "content": large_content})
 
             assert result.success is True
             file_path = Path(tmpdir) / "large.txt"
@@ -198,10 +182,7 @@ class TestFileWriteToolEdgeCases:
         """Test writing file with special characters in name."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tool = FileWriteTool(workspace_dir=tmpdir)
-            result = await tool.execute({
-                "path": "file with spaces.txt",
-                "content": "Content"
-            })
+            result = await tool.execute({"path": "file with spaces.txt", "content": "Content"})
 
             assert result.success is True
             file_path = Path(tmpdir) / "file with spaces.txt"
@@ -214,10 +195,7 @@ class TestFileWriteToolEdgeCases:
         content = "Line 1\nLine 2\nLine 3"
         with tempfile.TemporaryDirectory() as tmpdir:
             tool = FileWriteTool(workspace_dir=tmpdir)
-            result = await tool.execute({
-                "path": "newlines.txt",
-                "content": content
-            })
+            result = await tool.execute({"path": "newlines.txt", "content": content})
 
             assert result.success is True
             file_path = Path(tmpdir) / "newlines.txt"

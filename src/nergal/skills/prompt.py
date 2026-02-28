@@ -41,9 +41,7 @@ def build_skills_prompt(
 
     # Determine which skills to include
     if skill_names:
-        selected_skills = [
-            skills[name] for name in skill_names if name in skills
-        ]
+        selected_skills = [skills[name] for name in skill_names if name in skills]
     else:
         selected_skills = list(skills.values())
 
@@ -64,7 +62,7 @@ def build_skills_prompt(
             tools_str = ", ".join([t.name for t in skill.tools])
             lines.append(f"  Tools: {tools_str}")
 
-    # Add prompts if any
+        # Add prompts if any
         all_prompts = []
         for skill in selected_skills:
             all_prompts.extend(skill.prompts)
